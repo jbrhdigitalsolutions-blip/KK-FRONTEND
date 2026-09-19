@@ -22,8 +22,13 @@ const CSS_KEYS=[
 ];
 
 function slug(s){return String(s||"item").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,48)||"item"}
-function cssDecls(style={}){
-  return CSS_KEYS.filter(k=>style[k]&&style[k]!=="initial").map(k=>`  ${k}: ${style[k]};`).join("\n");
+function cssDecls(style={},options={}){
+  return CSS_KEYS.filter(k=>{
+    const v=style[k];
+    if(!v||v==="initial")return false;
+    if(/url\s*\(/i.test(String(v))&&options.includeReferenceAssetUrls!==true)return false;
+    return true;
+  }).map(k=>`  ${k}: ${style[k]};`).join("\n");
 }
 function escText(s){return String(s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
 function frameworkOf(sourceAudit){
@@ -71,14 +76,14 @@ function sourceHints(sourceAudit,selected){
 function reactMarkup(items,includeLiteralText){
   return items.map(({e,className})=>{
     const tag=tagFor(e),text=literal(e,includeLiteralText);
-    if(tag==="img")return`      <img className="${className}" alt="" />`;
+    if(["img","input"].includes(tag))return`      <${tag} className="${className}" ${tag==="img"?'alt=""':""} />`;
     return`      <${tag} className="${className}">${text||"{/* target content */}"}</${tag}>`;
   }).join("\n");
 }
 function htmlMarkup(items,includeLiteralText){
   return items.map(({e,className})=>{
     const tag=tagFor(e),text=literal(e,includeLiteralText);
-    if(tag==="img")return`  <img class="${className}" alt="">`;
+    if(["img","input"].includes(tag))return`  <${tag} class="${className}"${tag==="img"?' alt=""':""}>`;
     return`  <${tag} class="${className}">${text||"<!-- target content -->"}</${tag}>`;
   }).join("\n");
 }
@@ -94,7 +99,7 @@ export async function generateSelectionSource({catalog,entityIds,outDir,targetSo
   const items=selected.map((e,i)=>({e,className:`kk-ref-${slug(e.type)}-${String(i+1).padStart(2,"0")}`}));
   let css="/* KK-FRONTEND v0.3.0 — runtime-evidence reconstruction. Not original third-party source. */\n\n";
   items.forEach(({e,className},i)=>{
-    css+=`/* ${e.type}: ${String(e.title||e.selector||"").replace(/\*\//g,"")} | ${e.route} | ${e.viewport?.name||""} */\n.${className} {\n${cssDecls(e.style)}\n}\n\n`;
+    css+=`/* ${e.type}: ${String(e.title||e.selector||"").replace(/\*\//g,"")} | ${e.route} | ${e.viewport?.name||""} */\n.${className} {\n${cssDecls(e.style,options)}\n}\n\n`;
     if(e.type==="animation")css+=animationCss(e,className,i)+"\n";
   });
 
@@ -128,7 +133,7 @@ export async function generateSelectionSource({catalog,entityIds,outDir,targetSo
       {path:componentFile,kind:"component"}
     ],
     targetHints:sourceHints(targetSourceAudit,selected),
-    options:{includeLiteralText},
+    options:{includeLiteralText,includeReferenceAssetUrls:options.includeReferenceAssetUrls===true},
     preview:{css,componentFile,component}
   };
   await writeJson(path.join(outDir,"generation.json"),generation);
