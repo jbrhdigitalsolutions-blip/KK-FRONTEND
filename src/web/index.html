@@ -3,213 +3,297 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>KK-FRONTEND</title>
+  <meta name="color-scheme" content="dark"/>
+  <title>KK-FRONTEND — Frontend Intelligence Studio</title>
   <link rel="stylesheet" href="/styles.css"/>
 </head>
 <body>
   <header class="topbar">
-    <div><b>KK-FRONTEND</b><span>Frontend Reference Intelligence & Upgrade Studio</span></div>
-    <div id="health" class="pill">Connecting…</div>
-  </header>
-  <main>
-    <section class="workflowBar" aria-label="Workflow">
-      <div class="workflowStep" data-step="reference"><b>1</b><span>Reference</span></div>
-      <div class="workflowArrow">→</div>
-      <div class="workflowStep" data-step="target"><b>2</b><span>Target</span></div>
-      <div class="workflowArrow">→</div>
-      <div class="workflowStep" data-step="pick"><b>3</b><span>Pick Design</span></div>
-      <div class="workflowArrow">→</div>
-      <div class="workflowStep" data-step="compare"><b>4</b><span>Compare</span></div>
-      <div class="workflowArrow">→</div>
-      <div class="workflowStep" data-step="plan"><b>5</b><span>Plan</span></div>
-      <div class="workflowArrow">→</div>
-      <div class="workflowStep" data-step="execute"><b>6</b><span>Implement</span></div>
-    </section>
-    <div id="notice" class="notice" hidden></div>
-    <section class="panel hero">
-      <h1>Reference → Target → Compare → Select → Upgrade → Verify</h1>
-      <p>Runtime evidence first. No blind cloning. No mutation without approval and Git safety.</p>
-      <div class="row compact">
-        <button id="newSession" class="primary">New Session</button>
-        <button id="resumeLatest">Resume Latest Session</button>
-        <code id="sessionId">No session</code>
+    <div class="brandBlock">
+      <div class="brandMark" aria-hidden="true">K</div>
+      <div>
+        <div class="brandName">KK-FRONTEND</div>
+        <div class="brandTagline">Frontend Intelligence Studio</div>
       </div>
-    </section>
+    </div>
+    <div class="topbarRight">
+      <span class="versionBadge">v0.3.1</span>
+      <div id="health" class="healthPill"><span class="healthDot"></span><span>Connecting…</span></div>
+    </div>
+  </header>
 
-    <section class="grid2">
-      <article class="panel">
-        <h2>1. Reference Frontend</h2>
-        <label>Reference website URL<input id="referenceUrl" value="https://suno.com/discover"/></label>
-        <div class="row">
-          <label>Scan mode
-            <select id="scanMode">
-              <option value="blueprint-fast" selected>Blueprint Fast — fastest + single DESIGN.md</option>
-              <option value="design-only">Design Only — deeper</option>
-              <option value="fast-deep">Fast Deep</option>
-              <option value="standard">Standard</option>
-              <option value="extreme">Extreme</option>
+  <div class="appShell">
+    <aside class="workflowRail" aria-label="Workflow navigation">
+      <div class="railTitle">Workflow</div>
+      <a class="workflowNav active" href="#workspace" data-step-link="workspace"><span>01</span><div><b>Workspace</b><small>Session & control</small></div></a>
+      <a class="workflowNav" href="#reference" data-step-link="reference"><span>02</span><div><b>Reference</b><small>Capture design</small></div></a>
+      <a class="workflowNav" href="#target" data-step-link="target"><span>03</span><div><b>Target</b><small>Connect project</small></div></a>
+      <a class="workflowNav" href="#progress" data-step-link="progress"><span>04</span><div><b>Progress</b><small>Live execution</small></div></a>
+      <a class="workflowNav" href="#picker" data-step-link="picker"><span>05</span><div><b>Design Picker</b><small>Select exact UI</small></div></a>
+      <a class="workflowNav" href="#compare" data-step-link="compare"><span>06</span><div><b>Compare</b><small>Reference vs target</small></div></a>
+      <a class="workflowNav" href="#implement" data-step-link="implement"><span>07</span><div><b>Implement</b><small>Plan, apply, verify</small></div></a>
+      <div class="railHint">Evidence-first. Source-safe. No blind cloning.</div>
+    </aside>
+
+    <main class="workspaceMain">
+      <div id="notice" class="notice" hidden></div>
+
+      <section id="workspace" class="workspaceHero sectionAnchor">
+        <div class="heroCopy">
+          <div class="eyebrow">REFERENCE → INTELLIGENCE → SOURCE</div>
+          <h1>Turn any reference frontend into a precise, selectable implementation blueprint.</h1>
+          <p>Scan real runtime evidence, pick exact sections, components, text styles or animations, map them to your target project, then implement inside a protected workspace.</p>
+          <div class="heroActions">
+            <button id="newSession" class="primary primaryLarge">New Workspace</button>
+            <button id="resumeLatest" class="secondaryLarge">Resume Latest</button>
+          </div>
+        </div>
+        <div class="sessionCard">
+          <div class="sessionCardTop"><span>ACTIVE SESSION</span><span class="liveMiniDot"></span></div>
+          <code id="sessionId">No session</code>
+          <div class="sessionFacts">
+            <div><b>Runtime evidence</b><span>Computed layout + responsive states</span></div>
+            <div><b>Safe execution</b><span>Worktree or isolated safe copy</span></div>
+            <div><b>Generated source</b><span>Target-aware reconstruction</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="setupGrid">
+        <article id="reference" class="panel setupCard sectionAnchor">
+          <div class="panelHeader">
+            <div class="stepBadge">02</div>
+            <div><div class="panelKicker">SOURCE OF DESIGN</div><h2>Reference Frontend</h2><p>Capture structure, styles, states, responsive behavior and animations from the reference site.</p></div>
+          </div>
+
+          <label class="field fieldPrimary">Reference website URL
+            <input id="referenceUrl" value="https://suno.com/discover" placeholder="https://example.com"/>
+          </label>
+
+          <div class="formGrid three">
+            <label class="field">Scan mode
+              <select id="scanMode">
+                <option value="blueprint-fast" selected>Blueprint Fast — Recommended</option>
+                <option value="design-only">Design Only — Deeper</option>
+                <option value="fast-deep">Fast Deep</option>
+                <option value="standard">Standard</option>
+                <option value="extreme">Extreme</option>
+              </select>
+            </label>
+            <label class="field">Max route templates
+              <input id="referenceRoutes" type="number" value="30" min="1" max="120"/>
+            </label>
+            <label class="field">Browser
+              <select id="headless"><option value="false">Visible browser</option><option value="true">Headless</option></select>
+            </label>
+          </div>
+
+          <details class="advancedCard">
+            <summary>Advanced scan controls</summary>
+            <div class="advancedBody">
+              <div class="formGrid two">
+                <label class="field">Include route regex<input id="includeRoutes" placeholder="Optional, e.g. ^/(discover|search)"/></label>
+                <label class="field">Exclude route regex<input id="excludeRoutes" placeholder="Optional"/></label>
+              </div>
+              <label class="checkRow"><input type="checkbox" id="designOnly" checked/><span><b>Design-only route templates</b><small>Collapse repeated content routes into representative layouts.</small></span></label>
+              <label class="checkRow"><input type="checkbox" id="scanLocales"/><span><b>Scan locale variants separately</b><small>Off is faster and avoids duplicate visual layouts.</small></span></label>
+            </div>
+          </details>
+
+          <div class="infoStrip"><b>Recommended:</b> Blueprint Fast captures exact deep evidence at mobile, tablet and desktop anchors while keeping scan time practical.</div>
+          <button id="scanReference" class="primary fullWidth">Scan / Resume Reference</button>
+        </article>
+
+        <article id="target" class="panel setupCard sectionAnchor">
+          <div class="panelHeader">
+            <div class="stepBadge">03</div>
+            <div><div class="panelKicker">DESTINATION</div><h2>Target Project</h2><p>Connect the project that should receive the selected reference-inspired design changes.</p></div>
+          </div>
+
+          <label class="field">Source type
+            <select id="targetType">
+              <option value="local">Local project folder — Git optional</option>
+              <option value="github">GitHub repository</option>
+              <option value="url">Live / localhost URL — scan & handoff</option>
             </select>
           </label>
-          <label>Max design-route templates<input id="referenceRoutes" type="number" value="30" min="1" max="120"/></label>
-          <label>Browser<select id="headless"><option value="false">Visible</option><option value="true">Headless</option></select></label>
+          <label id="targetValueLabel" class="field">Project folder <input id="targetValue" placeholder="C:\project\my-app"/></label>
+          <label id="runtimeUrlLabel" class="field">Runtime URL <span class="fieldHint">recommended for visual comparison</span><input id="runtimeUrl" placeholder="http://localhost:3000"/></label>
+
+          <div id="targetModeHint" class="modeHint"></div>
+          <div id="githubTools" class="githubCard">
+            <div id="githubState" class="small"></div>
+            <div class="buttonRow"><button id="githubAuth">Authorize GitHub</button><button id="githubRefresh">Refresh Status</button></div>
+          </div>
+          <button id="scanTarget" class="primary fullWidth">Scan Target</button>
+        </article>
+      </section>
+
+      <section id="progress" class="panel progressPanel sectionAnchor">
+        <div class="panelHeader compactHeader">
+          <div class="stepBadge">04</div>
+          <div><div class="panelKicker">LIVE EXECUTION</div><h2>Progress</h2></div>
+          <div class="progressMeta"><b id="jobStatus">Idle</b><span id="jobStage"></span><span id="jobPct">0%</span></div>
         </div>
-        <div class="row">
-          <label>Include route regex <input id="includeRoutes" placeholder="optional, e.g. ^/(discover|search|create)"/></label>
-          <label>Exclude route regex <input id="excludeRoutes" placeholder="optional"/></label>
-        </div>
-        <label class="check"><input type="checkbox" id="designOnly" checked/> Design-only route templates (collapse /song/:id, /playlist/:id, /album/:id, /profile/:slug…)</label>
-        <label class="check"><input type="checkbox" id="scanLocales"/> Deep-scan locale variants separately (off = collapse /ja, /ko, /pt-pt…)</label>
-        <div class="small"><b>Blueprint Fast:</b> fingerprints every design template at desktop + mobile, then captures exact full evidence only at 390×844, 820×1180 and 1440×900 for each unique visual layout. It records exact CSS breakpoint declarations but skips expensive breakpoint-by-breakpoint rendering. Assets are inventoried without downloading every byte. On completion KK-FRONTEND creates a compact <b>DESIGN.md</b> plus <b>DESIGN-PACK/</b> with exact JSON, screenshots and the coding-agent prompt.</div>
-        <button id="scanReference" class="primary">Scan / Resume Reference</button>
-      </article>
-
-      <article class="panel">
-        <h2>2. Target</h2>
-        <label>Source type
-          <select id="targetType">
-            <option value="local">Local project folder — Git optional</option>
-            <option value="github">GitHub repository</option>
-            <option value="url">Live / localhost URL — scan & handoff</option>
-          </select>
-        </label>
-        <label id="targetValueLabel">Project folder<input id="targetValue" placeholder="C:\project\my-app"/></label>
-        <label id="runtimeUrlLabel">Runtime URL <span class="muted">(recommended for visual comparison)</span><input id="runtimeUrl" placeholder="http://localhost:3000"/></label>
-        <div id="targetModeHint" class="modeHint"></div>
-        <div id="githubTools"><div id="githubState" class="small"></div><div class="row"><button id="githubAuth">Authorize GitHub</button><button id="githubRefresh">Refresh GitHub Status</button></div></div>
-        <button id="scanTarget" class="primary">Scan Target</button>
-      </article>
-    </section>
-
-    <section class="panel">
-      <h2>Live Progress</h2>
-      <div class="progress"><div id="progressBar"></div></div>
-      <div class="statusline"><b id="jobStatus">Idle</b><span id="jobStage"></span><span id="jobPct">0%</span><span id="jobUnits"></span><span id="jobEta"></span></div>
-      <div class="row compact progressActions">
-        <button id="pauseJob">Pause</button>
-        <button id="resumeJob">Resume</button>
-        <button id="stopJob" class="danger">Stop Scan Safely</button>
-      </div>
-      <pre id="jobLog"></pre>
-    </section>
-
-    <section class="panel pickerPanel">
-      <div class="row between pickerHeader">
-        <div>
-          <h2>3. Reference Design Picker</h2>
-          <p>Select exact <b>Sections, Components, Text designs or Animations</b> directly from the scanned Reference UI, inspect verified runtime evidence, then generate target-aware source code.</p>
-          <div id="pickerSummary" class="small">Scan the Reference, then load the Design Picker.</div>
-        </div>
-        <button id="loadPicker" class="primary">Load Design Picker</button>
-      </div>
-
-      <div class="pickerToolbar">
-        <label>Route<select id="pickerRoute"></select></label>
-        <label>Viewport<select id="pickerViewport"></select></label>
-        <label>Selectable layer
-          <select id="pickerType">
-            <option value="section">Sections</option>
-            <option value="component">Components</option>
-            <option value="text">Text Design</option>
-            <option value="animation">Animations</option>
-            <option value="all">All</option>
-          </select>
-        </label>
-        <div class="pickerCounter"><b id="pickerVisibleCount">0</b><span>visible</span></div>
-      </div>
-
-      <div class="pickerWorkspace">
-        <div class="pickerViewportShell">
-          <div id="pickerCanvas" class="pickerCanvas" aria-label="Interactive reference screenshot">
-            <img id="pickerImage" alt="Scanned reference viewport"/>
-            <div id="pickerOverlay" class="pickerOverlay"></div>
+        <div class="progressTrack"><div id="progressBar"></div></div>
+        <div class="progressSubline"><span id="jobUnits"></span><span id="jobEta"></span></div>
+        <div class="progressGrid">
+          <pre id="jobLog" class="terminalLog">Ready. Start with a Reference scan.</pre>
+          <div class="progressControls">
+            <button id="pauseJob">Pause</button>
+            <button id="resumeJob">Resume</button>
+            <button id="stopJob" class="danger">Stop Safely</button>
           </div>
         </div>
-        <aside class="pickerInspectorPanel">
-          <div class="row between">
-            <h3>Evidence Inspector</h3>
-            <span class="modeBadge">VERIFIED runtime</span>
+      </section>
+
+      <section id="picker" class="panel pickerPanel sectionAnchor">
+        <div class="panelHeader pickerHeader">
+          <div class="stepBadge highlight">05</div>
+          <div class="grow">
+            <div class="panelKicker accentText">CORE WORKSPACE</div>
+            <h2>Reference Design Picker</h2>
+            <p>Select exact sections, components, typography or animation behavior directly from the captured reference UI.</p>
+            <div id="pickerSummary" class="summaryLine">Scan the Reference, then load the Design Picker.</div>
           </div>
-          <pre id="pickerInspector">Click a highlighted reference design entity.</pre>
-        </aside>
-      </div>
-
-      <div class="pickerSelectionBar">
-        <div><b><span id="pickerSelectedCount">0</span> selected</b><div class="small">Selection can span routes, viewports and design layers.</div></div>
-        <div class="row compact">
-          <label class="check pickerTextOption"><input id="includeReferenceText" type="checkbox"/> Include literal reference text</label>
-          <button id="clearPicker">Clear</button>
-          <button id="savePickerSelection">Save Selection</button>
-          <button id="generateSource" class="primary">Generate Source Code</button>
+          <button id="loadPicker" class="primary">Load Design Picker</button>
         </div>
-      </div>
-      <div id="pickerSelectionList" class="pickerSelectionList"></div>
 
-      <details class="generatedSourcePanel">
-        <summary>Generated Source Preview</summary>
-        <pre id="generatedSource">Select reference design entities and click Generate Source Code.</pre>
-      </details>
-      <p class="small"><b>Source meaning:</b> generated equivalent implementation from observed DOM geometry, computed styles, interactions and animation evidence. It does not claim to be the reference site's proprietary original source code.</p>
-    </section>
-
-    <section class="panel">
-      <div class="row between">
-        <div><h2>4. Compare</h2><p>Reference completion creates <b>DESIGN.md</b> + <b>DESIGN-PACK/</b> — exact JSON, screenshots, asset manifest and coding-agent prompt.</p></div>
-        <button id="compareBtn" class="primary">Build Comparison</button>
-      </div>
-      <div class="filters">
-        <input id="filterText" placeholder="Filter route/category/difference"/>
-        <select id="filterCategory"><option value="">All categories</option></select>
-        <button id="selectAll">Select all</button>
-        <button id="selectVisible">Select visible</button>
-        <select id="groupBy" title="Select all differences matching the checked rows">
-          <option value="category">Same category</option>
-          <option value="subcategory">Same subcategory</option>
-          <option value="route">Same route</option>
-        </select>
-        <button id="selectSameGroup">Select same group</button>
-        <button id="clearSelection">Clear</button>
-      </div>
-      <div class="tableWrap">
-        <table>
-          <thead><tr><th><input id="selectAllHeader" type="checkbox" title="Select / clear all differences"/></th><th>Route</th><th>Category</th><th>Subcategory</th><th>Reference</th><th>Target</th><th>Difference</th><th>Impact</th><th>Risk</th></tr></thead>
-          <tbody id="comparisonBody"></tbody>
-        </table>
-      </div>
-      <h3>Visual Evidence</h3>
-      <div id="visualDiffs" class="visualDiffs"></div>
-    </section>
-
-    <section class="grid2">
-      <article class="panel">
-        <h2>5. Upgrade Plan</h2>
-        <p><span id="selectedCount">0</span> differences selected.</p>
-        <button id="planBtn" class="primary">Build Safe Plan</button>
-        <pre id="planPreview"></pre>
-      </article>
-      <article class="panel executePanel">
-        <div class="row between"><h2>6. Implement</h2><span id="executionModeBadge" class="modeBadge">Waiting for target</span></div>
-        <div id="executionCapability" class="capabilityCard">Scan a target and build a plan to see the safest implementation path.</div>
-        <div class="executionLegend">
-          <span>Git clean → isolated worktree</span>
-          <span>Non-Git / dirty Git → isolated safe copy</span>
-          <span>URL only / no agent → coding handoff</span>
+        <div class="pickerToolbar">
+          <label class="field">Route<select id="pickerRoute"></select></label>
+          <label class="field">Viewport<select id="pickerViewport"></select></label>
+          <label class="field">Selectable layer
+            <select id="pickerType">
+              <option value="section">Sections</option>
+              <option value="component">Components</option>
+              <option value="text">Text Design</option>
+              <option value="animation">Animations</option>
+              <option value="all">All Layers</option>
+            </select>
+          </label>
+          <div class="pickerCounter"><b id="pickerVisibleCount">0</b><span>detected</span></div>
         </div>
-        <label class="check"><input type="checkbox" id="approveExecute"/> I approve implementation in the safe workspace.</label>
-        <div class="actionGrid">
-          <button id="handoffBtn">Generate Coding Handoff</button>
-          <button id="executeBtn" class="primary">Implement in Safe Workspace</button>
-          <button id="applyLocalBtn" class="danger" hidden>Apply Verified Changes to Original</button>
-        </div>
-        <p id="applyLocalNote" class="small" hidden>Apply-back creates a file backup first and automatically restores it if verification fails.</p>
-      </article>
-    </section>
 
-    <section class="panel">
-      <h2>Artifacts</h2>
-      <button id="refreshArtifacts">Refresh</button>
-      <div id="artifacts" class="artifacts"></div>
-    </section>
-  </main>
-<script src="/app.js" type="module"></script>
+        <div class="layerLegend">
+          <span class="legendSection">Section</span><span class="legendComponent">Component</span><span class="legendText">Text</span><span class="legendAnimation">Animation</span>
+          <small>Click a highlighted region to select it. Hover to inspect evidence.</small>
+        </div>
+
+        <div class="pickerWorkspace">
+          <div class="pickerViewportShell">
+            <div class="viewportChrome"><span></span><span></span><span></span><div>Reference capture</div></div>
+            <div id="pickerCanvas" class="pickerCanvas" aria-label="Interactive reference screenshot">
+              <img id="pickerImage" alt="Scanned reference viewport"/>
+              <div id="pickerOverlay" class="pickerOverlay"></div>
+            </div>
+          </div>
+
+          <aside class="pickerInspectorPanel">
+            <div class="inspectorTitle"><div><small>SELECTION EVIDENCE</small><h3>Inspector</h3></div><span class="verifiedBadge">VERIFIED</span></div>
+            <pre id="pickerInspector">Click a highlighted reference design entity.</pre>
+          </aside>
+        </div>
+
+        <div class="selectionDock">
+          <div class="selectionCountBlock"><b><span id="pickerSelectedCount">0</span></b><span>selected</span></div>
+          <div id="pickerSelectionList" class="pickerSelectionList"></div>
+          <div class="selectionActions">
+            <label class="checkInline"><input id="includeReferenceText" type="checkbox"/><span>Include literal text</span></label>
+            <button id="clearPicker">Clear</button>
+            <button id="savePickerSelection">Save</button>
+            <button id="generateSource" class="primary">Generate Source Code</button>
+          </div>
+        </div>
+
+        <details class="generatedSourcePanel" open>
+          <summary><span>Generated Source Preview</span><small>Target-aware reconstruction</small></summary>
+          <pre id="generatedSource">Select reference design entities and click Generate Source Code.</pre>
+        </details>
+        <div class="sourceNotice">Generated output reconstructs the observed design from runtime evidence. It does not claim to expose the reference site's proprietary original source.</div>
+      </section>
+
+      <section id="compare" class="panel sectionAnchor">
+        <div class="panelHeader">
+          <div class="stepBadge">06</div>
+          <div class="grow"><div class="panelKicker">DIFFERENCE ENGINE</div><h2>Compare Reference vs Target</h2><p>Filter measurable differences and choose exactly what belongs in the upgrade plan.</p></div>
+          <button id="compareBtn" class="primary">Build Comparison</button>
+        </div>
+
+        <div class="filters">
+          <input id="filterText" placeholder="Search route, category or difference…"/>
+          <select id="filterCategory"><option value="">All categories</option></select>
+          <button id="selectVisible">Select visible</button>
+          <select id="groupBy" title="Select all differences matching checked rows">
+            <option value="category">Same category</option>
+            <option value="subcategory">Same subcategory</option>
+            <option value="route">Same route</option>
+          </select>
+          <button id="selectSameGroup">Select group</button>
+          <button id="selectAll">Select all</button>
+          <button id="clearSelection">Clear</button>
+        </div>
+
+        <div class="tableWrap">
+          <table>
+            <thead><tr><th><input id="selectAllHeader" type="checkbox" title="Select / clear all differences"/></th><th>Route</th><th>Category</th><th>Subcategory</th><th>Reference</th><th>Target</th><th>Difference</th><th>Impact</th><th>Risk</th></tr></thead>
+            <tbody id="comparisonBody"></tbody>
+          </table>
+        </div>
+
+        <div class="subsectionTitle"><div><small>SCREENSHOT EVIDENCE</small><h3>Visual Diffs</h3></div></div>
+        <div id="visualDiffs" class="visualDiffs"></div>
+      </section>
+
+      <section id="implement" class="implementationGrid sectionAnchor">
+        <article class="panel">
+          <div class="panelHeader compactHeader">
+            <div class="stepBadge">07A</div>
+            <div><div class="panelKicker">PLAN</div><h2>Upgrade Plan</h2></div>
+          </div>
+          <div class="selectedMetric"><b id="selectedCount">0</b><span>comparison differences selected</span></div>
+          <button id="planBtn" class="primary fullWidth">Build Safe Plan</button>
+          <pre id="planPreview" class="planPreview">No plan generated yet.</pre>
+        </article>
+
+        <article class="panel executePanel">
+          <div class="panelHeader compactHeader">
+            <div class="stepBadge">07B</div>
+            <div class="grow"><div class="panelKicker">EXECUTION</div><h2>Implement Safely</h2></div>
+            <span id="executionModeBadge" class="modeBadge">Waiting for target</span>
+          </div>
+
+          <div id="executionCapability" class="capabilityCard">Scan a target and build a plan to see the safest implementation path.</div>
+
+          <div class="safetyFlow">
+            <div><b>Clean Git</b><span>Isolated worktree</span></div>
+            <div><b>Dirty / Non-Git</b><span>Protected safe copy</span></div>
+            <div><b>URL only</b><span>Coding handoff</span></div>
+          </div>
+
+          <label class="approvalCard"><input type="checkbox" id="approveExecute"/><span><b>Approve implementation</b><small>Run only inside the prepared safe workspace.</small></span></label>
+
+          <div class="actionGrid">
+            <button id="handoffBtn">Generate Coding Handoff</button>
+            <button id="executeBtn" class="primary">Implement in Safe Workspace</button>
+            <button id="applyLocalBtn" class="danger" hidden>Apply Verified Changes to Original</button>
+          </div>
+          <p id="applyLocalNote" class="small" hidden>Apply-back creates a file backup first and automatically restores it if verification fails.</p>
+        </article>
+      </section>
+
+      <section class="panel artifactsPanel">
+        <div class="panelHeader compactHeader">
+          <div class="stepBadge neutral">↗</div>
+          <div class="grow"><div class="panelKicker">OUTPUT</div><h2>Artifacts</h2></div>
+          <button id="refreshArtifacts">Refresh</button>
+        </div>
+        <div id="artifacts" class="artifacts"></div>
+      </section>
+
+      <footer class="appFooter"><span>KK-FRONTEND</span><span>Runtime evidence → Selective design intelligence → Safe implementation</span></footer>
+    </main>
+  </div>
+
+  <script src="/app.js" type="module"></script>
 </body>
 </html>
