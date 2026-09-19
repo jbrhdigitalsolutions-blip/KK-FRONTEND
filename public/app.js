@@ -30,13 +30,32 @@ async function tryRestoreSession(){
   const saved=localStorage.getItem("kkFrontendSessionId");if(!saved)return false;
   try{const s=await api(`/api/session/${saved}`);setSession(s.id);return true}catch{localStorage.removeItem("kkFrontendSessionId");return false}
 }
-async function resumeLatestSession(){const rows=await api("/api/sessions/recent");if(!rows.length)throw new Error("No previous KK-FRONTEND sessions found.");setSession(rows[0].id);await refreshArtifacts();await refreshExecutionCapability();return rows[0]}
+async function resumeLatestSession(){const rows=await api("/api/sessions/recent");if(!rows.length)throw new Error("No previous KK-FRONTEND sessions found.");setSession(rows[0].id);await refreshArtifacts();await refreshExecutionCapability();await loadReferenceCatalog().catch(()=>{});return rows[0]}
 async function init(){
-  const h=await api("/api/health");$("#health").textContent=`v${h.version} • ${h.platform} • agent ${h.agentConfigured?"ready":"not configured"}`;
+  const h=await api("/api/health");
+  $("#health").innerHTML=`<span class="healthDot"></span><span>v${esc(h.version)} • ${esc(h.platform)} • agent ${h.agentConfigured?"ready":"not configured"}</span>`;
   updateTargetModeUI();
   await refreshGithub();
   await tryRestoreSession();
   await refreshExecutionCapability().catch(()=>{});
+  initWorkflowNavigation();
+}
+
+function initWorkflowNavigation(){
+  const links=[...document.querySelectorAll("[data-step-link]")];
+  const sections=links.map(link=>document.getElementById(link.getAttribute("href").slice(1))).filter(Boolean);
+  if(!links.length||!sections.length)return;
+  const activate=id=>{
+    for(const link of links)link.classList.toggle("active",link.dataset.stepLink===id);
+  };
+  for(const link of links){
+    link.addEventListener("click",()=>activate(link.dataset.stepLink));
+  }
+  const observer=new IntersectionObserver(entries=>{
+    const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];
+    if(visible?.target?.id)activate(visible.target.id);
+  },{rootMargin:"-18% 0px -68% 0px",threshold:[0,.1,.25,.5]});
+  for(const section of sections)observer.observe(section);
 }
 
 function updateTargetModeUI(){
@@ -59,7 +78,7 @@ async function refreshExecutionCapability(){
 }
 $("#githubAuth").onclick=async()=>{try{const r=await api("/api/github/auth/start",{method:"POST",body:"{}"});alert(r.message);setTimeout(refreshGithub,4000)}catch(e){alert(e.message)}};
 $("#githubRefresh").onclick=()=>refreshGithub().catch(e=>alert(e.message));
-$("#newSession").onclick=async()=>{const s=await api("/api/session",{method:"POST",body:"{}"});setSession(s.id);currentComparison=null;renderComparison();await refreshArtifacts();await refreshExecutionCapability()};
+$("#newSession").onclick=async()=>{const s=await api("/api/session",{method:"POST",body:"{}"});setSession(s.id);currentComparison=null;referenceCatalog=null;pickerSelected.clear();renderComparison();updatePickerSelected();$("#pickerInspector").textContent="Scan the Reference, then load the Design Picker.";$("#generatedSource").textContent="Select reference design entities and click Generate Source Code.";await refreshArtifacts();await refreshExecutionCapability();showNotice("New workspace created. Start with the Reference scan.","success")};
 $("#resumeLatest").onclick=async()=>{try{await resumeLatestSession()}catch(e){alert(e.message)}};
 function scanOptions(){return{maxRoutes:+$("#referenceRoutes").value,headless:$("#headless").value==="true",downloadAssets:true,mode:$("#scanMode").value,designOnly:$("#designOnly").checked,scanLocaleVariants:$("#scanLocales").checked,includeRoutePattern:$("#includeRoutes").value.trim(),excludeRoutePattern:$("#excludeRoutes").value.trim(),resume:true}}
 $("#scanReference").onclick=async()=>{try{needSession();const x=await api("/api/scan/reference",{method:"POST",body:JSON.stringify({sessionId,url:$("#referenceUrl").value,options:scanOptions()})});watchJob(x.jobId,async j=>{if(j.status==="passed"){await loadReferenceCatalog();showNotice("Reference scan complete. Design Picker is ready.","success")}})}catch(e){alert(e.message)}};
@@ -161,8 +180,12 @@ $("#generateSource").onclick=async()=>{try{
 
 $("#compareBtn").onclick=async()=>{try{needSession();const x=await api("/api/compare",{method:"POST",body:JSON.stringify({sessionId})});watchJob(x.jobId,async j=>{if(j.status==="passed"){currentComparison=await api(`/api/comparison/${sessionId}`);renderComparison()}})}catch(e){alert(e.message)}};
 function renderComparison(){
-  const body=$("#comparisonBody");body.innerHTML="";const entries=currentComparison?.entries||[];const categories=[...new Set(entries.map(e=>e.category))].sort();$("#filterCategory").innerHTML='<option value="">All categories</option>'+categories.map(c=>`<option>${esc(c)}</option>`).join("");
-  const q=$("#filterText").value.toLowerCase(),cat=$("#filterCategory").value;const visible=entries.filter(e=>(!cat||e.category===cat)&&(!q||JSON.stringify(e).toLowerCase().includes(q)));
+  const body=$("#comparisonBody");body.innerHTML="";const entries=currentComparison?.entries||[];
+  const categoryControl=$("#filterCategory"),previousCategory=categoryControl.value;
+  const categories=[...new Set(entries.map(e=>e.category))].sort();
+  categoryControl.innerHTML='<option value="">All categories</option>'+categories.map(c=>`<option>${esc(c)}</option>`).join("");
+  if(categories.includes(previousCategory))categoryControl.value=previousCategory;
+  const q=$("#filterText").value.toLowerCase(),cat=categoryControl.value;const visible=entries.filter(e=>(!cat||e.category===cat)&&(!q||JSON.stringify(e).toLowerCase().includes(q)));
   for(const e of visible){const tr=document.createElement("tr");tr.dataset.id=e.id;tr.innerHTML=`<td><input class="pick" type="checkbox" ${e.selected?"checked":""}></td><td class="groupCell" data-group="route" title="Double-click to select this route group">${esc(e.route)}</td><td class="groupCell" data-group="category" title="Double-click to select this category">${esc(e.category)}</td><td class="groupCell" data-group="subcategory" title="Double-click to select this subcategory">${esc(e.subcategory)}</td><td>${esc(short(e.reference))}</td><td>${esc(short(e.target))}</td><td>${esc(e.difference)}</td><td class="impact-${e.impact}">${esc(e.impact)}</td><td class="risk-${e.risk}">${esc(e.risk)}</td>`;tr.querySelector(".pick").onchange=ev=>{e.selected=ev.target.checked;updateSelected()};tr.querySelectorAll(".groupCell").forEach(cell=>cell.ondblclick=()=>{const field=cell.dataset.group,value=String(e[field]??"");for(const x of currentComparison.entries)if(String(x[field]??"")===value)x.selected=true;renderComparison()});body.appendChild(tr)}
   updateSelected();renderVisualDiffs();
 }
