@@ -17,7 +17,7 @@ assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","web","index.html")))
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","browser","scanner.mjs")));
 const pkg=JSON.parse(fs.readFileSync(path.join(CONFIG.packageRoot,"package.json"),"utf8"));
 assert.equal(pkg.name,"kk-frontend");
-assert.equal(pkg.version,"0.3.0");
+assert.equal(pkg.version,"0.3.1");
 assert.equal(pkg.packageManager,"pnpm@10.28.0");
 assert.ok(pkg.dependencies.playwright);
 const scanner=fs.readFileSync(path.join(CONFIG.packageRoot,"src","browser","scanner.mjs"),"utf8");
@@ -37,4 +37,4 @@ assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","intelligence","desig
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","intelligence","source-generator.mjs")));
 const web=fs.readFileSync(path.join(CONFIG.packageRoot,"src","web","index.html"),"utf8");
 for(const marker of ["Reference Design Picker","Generate Source Code","pickerOverlay"]) assert.ok(web.includes(marker),`design picker marker missing: ${marker}`);
-console.log("KK-FRONTEND v0.3 selftest PASS");
+console.log("KK-FRONTEND v0.3.1 selftest PASS");
