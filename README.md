@@ -1,3 +1,49 @@
+# KK-FRONTEND v0.3.0 — DESIGN PICKER + SOURCE GENERATOR
+
+v0.3.0 adds a visual reference-design extraction workflow on top of the existing scanner/comparison/safe-execution system.
+
+After a Reference Scan, the WebApp can now expose scanned design evidence as selectable:
+
+- Sections
+- Components
+- Text design
+- Animations
+
+The Design Picker overlays these entities directly on the captured reference screenshot. Each selection retains its exact route, viewport, selector, DOMRect, computed style and animation evidence.
+
+**Generate Source Code** reconstructs an equivalent implementation for the connected target technology:
+
+- React / Next.js → JSX + CSS
+- Vue / Nuxt → Vue + CSS
+- Svelte → Svelte + CSS
+- Other targets → HTML + CSS
+
+Generated source is reconstructed from VERIFIED runtime evidence. It is not represented as the reference site's proprietary original source code. Literal reference text is excluded by default, and reference asset URLs are not embedded unless explicitly authorized.
+
+Artifacts include:
+
+```text
+reference-entities.json
+design-selection.json
+generated-source/
+├─ generation.json
+├─ reference-design-selection.css
+└─ framework-specific component
+```
+
+## v0.3.0 flow
+
+```text
+Reference Scan
+→ Load Design Picker
+→ choose Route + Viewport
+→ select Section / Component / Text / Animation
+→ inspect VERIFIED evidence
+→ Generate Source Code
+→ map into target project
+→ existing Plan / Safe Workspace / Verification flow
+```
+
 ## v0.2.3 DESIGN-PACK
 
 After a successful Reference Scan, hand `data/runs/<session-id>/DESIGN-PACK/` to the coding agent.
@@ -111,7 +157,7 @@ reference/
 
 The scanner does not click destructive controls or submit forms. Hover/focus inspection remains non-destructive. Inaccessible evidence stays marked `UNAVAILABLE`/`RESTRICTED` rather than being invented.
 
-Target implementation still requires explicit user approval and a clean Git tree, then runs inside an isolated worktree. The original project remains unchanged until the user deliberately chooses what to integrate.
+Target implementation still requires explicit user approval. Clean Git projects use an isolated worktree; non-Git or dirty-Git projects use a protected safe copy. The original project remains unchanged until the user deliberately chooses what to integrate.
 
 ## Windows 11 start
 
