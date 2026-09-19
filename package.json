@@ -1,9 +1,9 @@
 {
   "name": "kk-frontend",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "KK-FRONTEND \u2014 Git-optional safe execution, handoff fallback and user-friendly workflow",
+  "description": "KK-FRONTEND — visual design picker, runtime-evidence source generator and Git-optional safe execution",
   "engines": {
     "node": ">=22"
   },
@@ -11,8 +11,9 @@
     "start": "node src/server.mjs",
     "dev": "node --watch src/server.mjs",
     "selftest": "node tests/selftest.mjs",
-    "check": "node --check src/server.mjs && node --check src/browser/scanner.mjs && node --check src/target/repo.mjs && node --check src/intelligence/compare.mjs && node --check src/execution/git-safety.mjs",
-    "test:internal": "node --test tests/optimization.test.mjs"
+    "check": "node --check src/server.mjs && node --check src/browser/scanner.mjs && node --check src/target/repo.mjs && node --check src/intelligence/compare.mjs && node --check src/intelligence/design-entities.mjs && node --check src/intelligence/source-generator.mjs && node --check src/execution/git-safety.mjs",
+    "test:internal": "node --test tests/optimization.test.mjs",
+    "test:design-picker": "node --test tests/design-picker.test.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",
