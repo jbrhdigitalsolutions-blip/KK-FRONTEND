@@ -147,7 +147,7 @@ app.post("/api/scan/reference",async(req,res)=>{
       referenceAudit:sessionFile(sessionId,"reference-audit.json"),
       referenceUrl:url,anchors:designResult.anchors
     });
-    progressFor(job)({stage:"design-entities",progress:98,message:"Building selectable Section / Component / Text / Animation catalog"});
+    progressFor(job)({stage:"design-entities",progress:100,message:"Building selectable Section / Component / Text / Animation catalog"});
     const entityCatalog=await buildReferenceEntityCatalog({referenceRoot:out,outFile:sessionFile(sessionId,"reference-entities.json")});
     s.reference={url,root:out,auditFile:"reference-audit.json",designFile:"DESIGN.md",designBytes:designResult.bytes,designPack:"DESIGN-PACK",designPackFiles:packResult.manifest.counts.files,designPackScreenshots:packResult.manifest.counts.screenshots,entityCatalog:"reference-entities.json",entityCount:entityCatalog.counts.total,partial:false,cancelled:false};
     await saveSession(s);return s.reference;
