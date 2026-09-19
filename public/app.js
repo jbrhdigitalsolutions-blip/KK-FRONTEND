@@ -1,4 +1,5 @@
-let sessionId=null,currentComparison=null,currentJob=null,lastLogId=null,currentCapability=null;
+let sessionId=null,currentComparison=null,currentJob=null,lastLogId=null,currentCapability=null,referenceCatalog=null;
+const pickerSelected=new Set();
 const $=s=>document.querySelector(s);
 const showNotice=(message,type="info")=>{const n=$("#notice");if(!n)return;n.hidden=false;n.className=`notice ${type}`;n.textContent=message;clearTimeout(showNotice._t);showNotice._t=setTimeout(()=>{n.hidden=true},9000)};
 const log=(m)=>{$("#jobLog").textContent=($("#jobLog").textContent+"\n"+m).trim().slice(-24000);$("#jobLog").scrollTop=$("#jobLog").scrollHeight};
@@ -61,7 +62,7 @@ $("#githubRefresh").onclick=()=>refreshGithub().catch(e=>alert(e.message));
 $("#newSession").onclick=async()=>{const s=await api("/api/session",{method:"POST",body:"{}"});setSession(s.id);currentComparison=null;renderComparison();await refreshArtifacts();await refreshExecutionCapability()};
 $("#resumeLatest").onclick=async()=>{try{await resumeLatestSession()}catch(e){alert(e.message)}};
 function scanOptions(){return{maxRoutes:+$("#referenceRoutes").value,headless:$("#headless").value==="true",downloadAssets:true,mode:$("#scanMode").value,designOnly:$("#designOnly").checked,scanLocaleVariants:$("#scanLocales").checked,includeRoutePattern:$("#includeRoutes").value.trim(),excludeRoutePattern:$("#excludeRoutes").value.trim(),resume:true}}
-$("#scanReference").onclick=async()=>{try{needSession();const x=await api("/api/scan/reference",{method:"POST",body:JSON.stringify({sessionId,url:$("#referenceUrl").value,options:scanOptions()})});watchJob(x.jobId)}catch(e){alert(e.message)}};
+$("#scanReference").onclick=async()=>{try{needSession();const x=await api("/api/scan/reference",{method:"POST",body:JSON.stringify({sessionId,url:$("#referenceUrl").value,options:scanOptions()})});watchJob(x.jobId,async j=>{if(j.status==="passed"){await loadReferenceCatalog();showNotice("Reference scan complete. Design Picker is ready.","success")}})}catch(e){alert(e.message)}};
 $("#scanTarget").onclick=async()=>{try{
   needSession();const type=$("#targetType").value;let value=$("#targetValue").value.trim(),runtimeUrl=$("#runtimeUrl").value.trim();
   if(type==="url"){value=value||runtimeUrl;if(!value)throw new Error("Enter the live/localhost URL.");runtimeUrl=runtimeUrl||value}
@@ -73,6 +74,91 @@ $("#scanTarget").onclick=async()=>{try{
 $("#pauseJob").onclick=async()=>{if(!currentJob)return;await api(`/api/jobs/${currentJob}/pause`,{method:"POST",body:"{}"}).catch(e=>alert(e.message))};
 $("#resumeJob").onclick=async()=>{if(!currentJob)return;await api(`/api/jobs/${currentJob}/resume`,{method:"POST",body:"{}"}).catch(e=>alert(e.message))};
 $("#stopJob").onclick=async()=>{if(!currentJob)return;if(!confirm("Stop this scan safely? Completed artifacts will be retained and the same session can resume later."))return;await api(`/api/jobs/${currentJob}/stop`,{method:"POST",body:"{}"}).catch(e=>alert(e.message))};
+
+const pickerAssetUrl=p=>`/data/runs/${encodeURIComponent(sessionId)}/reference/${String(p||"").split("/").map(encodeURIComponent).join("/")}`;
+
+async function loadReferenceCatalog(){
+  needSession();
+  referenceCatalog=await api(`/api/reference/entities/${sessionId}`);
+  const routeSelect=$("#pickerRoute");
+  routeSelect.innerHTML=(referenceCatalog.routes||[]).map((r,i)=>`<option value="${esc(r.url)}"${i===0?" selected":""}>${esc(new URL(r.url).pathname||"/")}</option>`).join("");
+  refreshPickerViewports();
+  renderPicker();
+  $("#pickerSummary").textContent=`${referenceCatalog.counts?.total||0} selectable design entities • Sections ${referenceCatalog.counts?.section||0} • Components ${referenceCatalog.counts?.component||0} • Text ${referenceCatalog.counts?.text||0} • Animations ${referenceCatalog.counts?.animation||0}`;
+  return referenceCatalog;
+}
+function refreshPickerViewports(){
+  const route=$("#pickerRoute").value;
+  const r=(referenceCatalog?.routes||[]).find(x=>x.url===route);
+  $("#pickerViewport").innerHTML=(r?.viewports||[]).map((v,i)=>`<option value="${esc(v.name||"")}"${i===0?" selected":""}>${esc(v.name||`${v.width}×${v.height}`)}</option>`).join("");
+}
+function pickerEntities(){
+  if(!referenceCatalog)return[];
+  const route=$("#pickerRoute").value,vp=$("#pickerViewport").value,type=$("#pickerType").value;
+  return (referenceCatalog.entities||[]).filter(e=>e.route===route&&e.viewport?.name===vp&&(type==="all"||e.type===type));
+}
+function setPickerInspector(e){
+  if(!e){$("#pickerInspector").textContent="Click a highlighted reference design entity.";return}
+  const detail={
+    id:e.id,type:e.type,title:e.title,route:e.route,viewport:e.viewport,selector:e.selector,
+    rect:e.rect,style:e.style,animation:e.animation||null,evidence:e.evidence
+  };
+  $("#pickerInspector").textContent=JSON.stringify(detail,null,2);
+}
+function updatePickerSelected(){
+  $("#pickerSelectedCount").textContent=pickerSelected.size;
+  const list=$("#pickerSelectionList");
+  const map=new Map((referenceCatalog?.entities||[]).map(e=>[e.id,e]));
+  list.innerHTML=[...pickerSelected].slice(0,40).map(id=>{const e=map.get(id);return e?`<button class="selectionChip" data-id="${esc(id)}" title="${esc(e.selector||"")}">${esc(e.type)} · ${esc(e.title||e.selector||id)}</button>`:""}).join("");
+  list.querySelectorAll(".selectionChip").forEach(b=>b.onclick=()=>{pickerSelected.delete(b.dataset.id);updatePickerSelected();renderPicker()});
+}
+function renderPicker(){
+  const canvas=$("#pickerCanvas"),img=$("#pickerImage"),overlay=$("#pickerOverlay");
+  if(!referenceCatalog){overlay.innerHTML="";setPickerInspector(null);return}
+  const entities=pickerEntities();
+  const first=entities[0]||(referenceCatalog.entities||[]).find(e=>e.route===$("#pickerRoute").value&&e.viewport?.name===$("#pickerViewport").value);
+  if(!first?.screenshot){overlay.innerHTML="";showNotice("No screenshot is available for this route/viewport.","error");return}
+  img.src=pickerAssetUrl(first.screenshot);
+  const draw=()=>{
+    overlay.innerHTML="";
+    const docW=Number(first.documentViewport?.width||first.viewport?.width||img.naturalWidth||1);
+    const docH=Number(first.documentViewport?.scrollHeight||first.viewport?.height||img.naturalHeight||1);
+    for(const e of entities.slice(0,700)){
+      const r=e.rect;if(!r||!r.width||!r.height)continue;
+      const box=document.createElement("button");
+      box.type="button";box.className=`pickerBox type-${e.type}${pickerSelected.has(e.id)?" selected":""}`;
+      box.dataset.id=e.id;box.title=`${e.type}: ${e.title||e.selector||e.id}`;
+      box.style.left=`${Math.max(0,(r.x/docW)*100)}%`;
+      box.style.top=`${Math.max(0,(r.y/docH)*100)}%`;
+      box.style.width=`${Math.max(.35,(r.width/docW)*100)}%`;
+      box.style.height=`${Math.max(.15,(r.height/docH)*100)}%`;
+      box.onclick=ev=>{ev.stopPropagation();if(pickerSelected.has(e.id))pickerSelected.delete(e.id);else pickerSelected.add(e.id);setPickerInspector(e);updatePickerSelected();box.classList.toggle("selected",pickerSelected.has(e.id))};
+      box.onmouseenter=()=>setPickerInspector(e);
+      overlay.appendChild(box);
+    }
+    $("#pickerVisibleCount").textContent=entities.length;
+  };
+  img.onload=draw;
+  if(img.complete)draw();
+}
+async function savePickerSelection(){
+  if(!pickerSelected.size)throw new Error("Select at least one reference Section, Component, Text or Animation.");
+  return await api("/api/selection",{method:"POST",body:JSON.stringify({sessionId,entityIds:[...pickerSelected]})});
+}
+$("#loadPicker").onclick=()=>loadReferenceCatalog().catch(e=>showNotice(e.message,"error"));
+$("#pickerRoute").onchange=()=>{refreshPickerViewports();renderPicker()};
+$("#pickerViewport").onchange=renderPicker;
+$("#pickerType").onchange=renderPicker;
+$("#clearPicker").onclick=()=>{pickerSelected.clear();updatePickerSelected();renderPicker();$("#generatedSource").textContent=""};
+$("#savePickerSelection").onclick=async()=>{try{const r=await savePickerSelection();showNotice(`Saved ${r.count} reference design selections.`,"success");await refreshArtifacts()}catch(e){showNotice(e.message,"error")}};
+$("#generateSource").onclick=async()=>{try{
+  await savePickerSelection();
+  const generation=await api("/api/code/generate",{method:"POST",body:JSON.stringify({sessionId,entityIds:[...pickerSelected],options:{includeLiteralText:$("#includeReferenceText").checked}})});
+  $("#generatedSource").textContent=`Framework: ${generation.framework}\nMode: ${generation.mode}\n\n=== ${generation.preview.componentFile} ===\n${generation.preview.component}\n\n=== reference-design-selection.css ===\n${generation.preview.css}\n\nTarget hints:\n${JSON.stringify(generation.targetHints,null,2)}`;
+  showNotice(`Generated source for ${generation.selectedEntityIds.length} selected design entities.`,"success");
+  await refreshArtifacts();
+}catch(e){showNotice(e.message,"error")}};
+
 $("#compareBtn").onclick=async()=>{try{needSession();const x=await api("/api/compare",{method:"POST",body:JSON.stringify({sessionId})});watchJob(x.jobId,async j=>{if(j.status==="passed"){currentComparison=await api(`/api/comparison/${sessionId}`);renderComparison()}})}catch(e){alert(e.message)}};
 function renderComparison(){
   const body=$("#comparisonBody");body.innerHTML="";const entries=currentComparison?.entries||[];const categories=[...new Set(entries.map(e=>e.category))].sort();$("#filterCategory").innerHTML='<option value="">All categories</option>'+categories.map(c=>`<option>${esc(c)}</option>`).join("");
