@@ -13,6 +13,8 @@ import { buildPlan } from "./intelligence/plan.mjs";
 import { writeAuditMarkdown, writeComparisonMarkdown } from "./intelligence/reporter.mjs";
 import { writeDesignBlueprint } from "./intelligence/design-blueprint.mjs";
 import { buildDesignPack } from "./intelligence/design-pack.mjs";
+import { buildReferenceEntityCatalog } from "./intelligence/design-entities.mjs";
+import { generateSelectionSource } from "./intelligence/source-generator.mjs";
 import { prepareExecutionWorkspace, compareTrees, applySafeCopyToOriginal, rollbackSafeCopyApply } from "./execution/workspace.mjs";
 import { runConfiguredAgent } from "./execution/agent-runner.mjs";
 import { verifyProject } from "./execution/verify.mjs";
@@ -58,7 +60,7 @@ function progressFor(job){
   }
 }
 async function newSession(){
-  const s={id:id("session"),createdAt:new Date().toISOString(),reference:null,target:null,comparison:null,plan:null,execution:null};
+  const s={id:id("session"),createdAt:new Date().toISOString(),reference:null,target:null,comparison:null,designSelection:null,codeGeneration:null,plan:null,execution:null};
   await ensureDir(sessionDir(s.id));sessions.set(s.id,s);await saveSession(s);return s
 }
 
@@ -87,7 +89,7 @@ async function executionCapability(s){
   };
 }
 
-app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.2.5",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"]}));
+app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.3.0",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true}));
 app.get("/api/github/status",async(req,res)=>res.json(await githubStatus()));
 app.post("/api/github/auth/start",async(req,res)=>{
   try{
@@ -145,7 +147,9 @@ app.post("/api/scan/reference",async(req,res)=>{
       referenceAudit:sessionFile(sessionId,"reference-audit.json"),
       referenceUrl:url,anchors:designResult.anchors
     });
-    s.reference={url,root:out,auditFile:"reference-audit.json",designFile:"DESIGN.md",designBytes:designResult.bytes,designPack:"DESIGN-PACK",designPackFiles:packResult.manifest.counts.files,designPackScreenshots:packResult.manifest.counts.screenshots,partial:false,cancelled:false};
+    progressFor(job)({stage:"design-entities",progress:98,message:"Building selectable Section / Component / Text / Animation catalog"});
+    const entityCatalog=await buildReferenceEntityCatalog({referenceRoot:out,outFile:sessionFile(sessionId,"reference-entities.json")});
+    s.reference={url,root:out,auditFile:"reference-audit.json",designFile:"DESIGN.md",designBytes:designResult.bytes,designPack:"DESIGN-PACK",designPackFiles:packResult.manifest.counts.files,designPackScreenshots:packResult.manifest.counts.screenshots,entityCatalog:"reference-entities.json",entityCount:entityCatalog.counts.total,partial:false,cancelled:false};
     await saveSession(s);return s.reference;
   }).catch(()=>{});
 });
@@ -196,6 +200,59 @@ app.post("/api/compare",async(req,res)=>{
 app.get("/api/comparison/:sessionId",async(req,res)=>{
   try{const p=sessionFile(req.params.sessionId,"comparison.json");res.json(JSON.parse(await fs.readFile(p,"utf8")))}
   catch(e){res.status(404).json({error:e.message})}
+});
+
+app.get("/api/reference/entities/:sessionId",async(req,res)=>{
+  try{
+    const s=await ensureSession(req.params.sessionId);
+    if(!s.reference?.root)throw new Error("Reference scan is required.");
+    const file=sessionFile(req.params.sessionId,"reference-entities.json");
+    let catalog=await readJson(file);
+    if(!catalog)catalog=await buildReferenceEntityCatalog({referenceRoot:s.reference.root,outFile:file});
+    res.json(catalog);
+  }catch(e){res.status(400).json({error:String(e.message||e)})}
+});
+
+app.post("/api/selection",async(req,res)=>{
+  try{
+    const {sessionId,entityIds=[]}=req.body;
+    const s=await ensureSession(sessionId);
+    const catalog=await readJson(sessionFile(sessionId,"reference-entities.json"));
+    if(!catalog)throw new Error("Reference design entity catalog is not ready. Scan the reference first.");
+    const valid=new Set((catalog.entities||[]).map(e=>e.id));
+    const selected=[...new Set(entityIds)].filter(x=>valid.has(x));
+    if(!selected.length)throw new Error("Select at least one Section, Component, Text or Animation.");
+    const payload={schema:"kk-frontend-design-selection/v1",createdAt:new Date().toISOString(),entityIds:selected,entities:(catalog.entities||[]).filter(e=>selected.includes(e.id)).map(e=>({id:e.id,type:e.type,route:e.route,viewport:e.viewport,title:e.title,selector:e.selector,evidence:e.evidence}))};
+    await writeJson(sessionFile(sessionId,"design-selection.json"),payload);
+    s.designSelection={file:"design-selection.json",count:selected.length,entityIds:selected,createdAt:payload.createdAt};
+    await saveSession(s);
+    res.json(s.designSelection);
+  }catch(e){res.status(400).json({error:String(e.message||e)})}
+});
+
+app.post("/api/code/generate",async(req,res)=>{
+  try{
+    const {sessionId,entityIds=[],options={}}=req.body;
+    const s=await ensureSession(sessionId);
+    const catalog=await readJson(sessionFile(sessionId,"reference-entities.json"));
+    if(!catalog)throw new Error("Reference design entity catalog is not ready.");
+    const ids=entityIds.length?entityIds:(s.designSelection?.entityIds||[]);
+    if(!ids.length)throw new Error("Select reference design entities first.");
+    const sourceAudit=s.target?.sourceAuditFile?await readJson(path.join(sessionDir(sessionId),s.target.sourceAuditFile)):null;
+    const outDir=sessionFile(sessionId,"generated-source");
+    const generation=await generateSelectionSource({catalog,entityIds:ids,outDir,targetSourceAudit:sourceAudit,options});
+    s.codeGeneration={dir:"generated-source",file:"generated-source/generation.json",framework:generation.framework,count:generation.selectedEntityIds.length,createdAt:generation.createdAt};
+    await saveSession(s);
+    res.json(generation);
+  }catch(e){res.status(400).json({error:String(e.message||e)})}
+});
+
+app.get("/api/code/:sessionId",async(req,res)=>{
+  try{
+    const generation=await readJson(sessionFile(req.params.sessionId,"generated-source/generation.json"));
+    if(!generation)throw new Error("No generated source exists for this session.");
+    res.json(generation);
+  }catch(e){res.status(404).json({error:String(e.message||e)})}
 });
 
 app.post("/api/plan",async(req,res)=>{
@@ -329,6 +386,18 @@ app.get("/api/artifacts/:sessionId",async(req,res)=>{
     for(const name of ["DESIGN.md","CODING-AGENT-PROMPT.md","PACK-MANIFEST.json","PACK-README.md"]){
       const p=path.join(dir,"DESIGN-PACK",name);
       if(await exists(p))rows.unshift({name:`DESIGN-PACK/${name}`,type:"file",featured:true,url:`/data/runs/${sid}/DESIGN-PACK/${encodeURIComponent(name)}`});
+    }
+    for(const name of ["reference-entities.json","design-selection.json"]){
+      const p=path.join(dir,name);
+      if(await exists(p))rows.unshift({name,type:"file",featured:true,url:`/data/runs/${sid}/${encodeURIComponent(name)}`});
+    }
+    const generated=path.join(dir,"generated-source");
+    if(await exists(generated)){
+      rows.unshift({name:"generated-source/",type:"dir",featured:true,url:`/data/runs/${sid}/generated-source/`});
+      for(const name of ["generation.json","reference-design-selection.css","ReferenceDesignSelection.jsx","ReferenceDesignSelection.vue","ReferenceDesignSelection.svelte","selection.html"]){
+        const p=path.join(generated,name);
+        if(await exists(p))rows.unshift({name:`generated-source/${name}`,type:"file",featured:true,url:`/data/runs/${sid}/generated-source/${encodeURIComponent(name)}`});
+      }
     }
     res.json(rows);
   }catch(e){res.status(404).json({error:e.message})}
