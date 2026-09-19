@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KK-FRONTEND Implementation Plan",
+  "type": "object",
+  "required": [
+    "schema",
+    "selectedComparisonIds",
+    "affectedRoutes",
+    "risk"
+  ],
+  "properties": {
+    "schema": {
+      "const": "kk-frontend-implementation-plan/v1"
+    },
+    "selectedComparisonIds": {
+      "type": "array"
+    },
+    "affectedRoutes": {
+      "type": "array"
+    },
+    "risk": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    }
+  }
+}

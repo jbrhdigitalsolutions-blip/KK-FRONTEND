@@ -1,0 +1,24 @@
+{
+  "name": "kk-frontend",
+  "version": "0.2.5",
+  "private": true,
+  "type": "module",
+  "description": "KK-FRONTEND \u2014 Git-optional safe execution, handoff fallback and user-friendly workflow",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "dev": "node --watch src/server.mjs",
+    "selftest": "node tests/selftest.mjs",
+    "check": "node --check src/server.mjs && node --check src/browser/scanner.mjs && node --check src/target/repo.mjs && node --check src/intelligence/compare.mjs && node --check src/execution/git-safety.mjs",
+    "test:internal": "node --test tests/optimization.test.mjs"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "playwright": "^1.55.0",
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0"
+  },
+  "packageManager": "pnpm@10.28.0"
+}

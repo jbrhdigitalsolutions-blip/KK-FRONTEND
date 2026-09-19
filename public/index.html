@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>KK-FRONTEND</title>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+  <header class="topbar">
+    <div><b>KK-FRONTEND</b><span>Frontend Reference Intelligence & Upgrade Studio</span></div>
+    <div id="health" class="pill">Connecting…</div>
+  </header>
+  <main>
+    <section class="workflowBar" aria-label="Workflow">
+      <div class="workflowStep" data-step="reference"><b>1</b><span>Reference</span></div>
+      <div class="workflowArrow">→</div>
+      <div class="workflowStep" data-step="target"><b>2</b><span>Target</span></div>
+      <div class="workflowArrow">→</div>
+      <div class="workflowStep" data-step="compare"><b>3</b><span>Compare</span></div>
+      <div class="workflowArrow">→</div>
+      <div class="workflowStep" data-step="plan"><b>4</b><span>Plan</span></div>
+      <div class="workflowArrow">→</div>
+      <div class="workflowStep" data-step="execute"><b>5</b><span>Implement</span></div>
+    </section>
+    <div id="notice" class="notice" hidden></div>
+    <section class="panel hero">
+      <h1>Reference → Target → Compare → Select → Upgrade → Verify</h1>
+      <p>Runtime evidence first. No blind cloning. No mutation without approval and Git safety.</p>
+      <div class="row compact">
+        <button id="newSession" class="primary">New Session</button>
+        <button id="resumeLatest">Resume Latest Session</button>
+        <code id="sessionId">No session</code>
+      </div>
+    </section>
+
+    <section class="grid2">
+      <article class="panel">
+        <h2>1. Reference Frontend</h2>
+        <label>Reference website URL<input id="referenceUrl" value="https://suno.com/discover"/></label>
+        <div class="row">
+          <label>Scan mode
+            <select id="scanMode">
+              <option value="blueprint-fast" selected>Blueprint Fast — fastest + single DESIGN.md</option>
+              <option value="design-only">Design Only — deeper</option>
+              <option value="fast-deep">Fast Deep</option>
+              <option value="standard">Standard</option>
+              <option value="extreme">Extreme</option>
+            </select>
+          </label>
+          <label>Max design-route templates<input id="referenceRoutes" type="number" value="30" min="1" max="120"/></label>
+          <label>Browser<select id="headless"><option value="false">Visible</option><option value="true">Headless</option></select></label>
+        </div>
+        <div class="row">
+          <label>Include route regex <input id="includeRoutes" placeholder="optional, e.g. ^/(discover|search|create)"/></label>
+          <label>Exclude route regex <input id="excludeRoutes" placeholder="optional"/></label>
+        </div>
+        <label class="check"><input type="checkbox" id="designOnly" checked/> Design-only route templates (collapse /song/:id, /playlist/:id, /album/:id, /profile/:slug…)</label>
+        <label class="check"><input type="checkbox" id="scanLocales"/> Deep-scan locale variants separately (off = collapse /ja, /ko, /pt-pt…)</label>
+        <div class="small"><b>Blueprint Fast:</b> fingerprints every design template at desktop + mobile, then captures exact full evidence only at 390×844, 820×1180 and 1440×900 for each unique visual layout. It records exact CSS breakpoint declarations but skips expensive breakpoint-by-breakpoint rendering. Assets are inventoried without downloading every byte. On completion KK-FRONTEND creates a compact <b>DESIGN.md</b> plus <b>DESIGN-PACK/</b> with exact JSON, screenshots and the coding-agent prompt.</div>
+        <button id="scanReference" class="primary">Scan / Resume Reference</button>
+      </article>
+
+      <article class="panel">
+        <h2>2. Target</h2>
+        <label>Source type
+          <select id="targetType">
+            <option value="local">Local project folder — Git optional</option>
+            <option value="github">GitHub repository</option>
+            <option value="url">Live / localhost URL — scan & handoff</option>
+          </select>
+        </label>
+        <label id="targetValueLabel">Project folder<input id="targetValue" placeholder="C:\project\my-app"/></label>
+        <label id="runtimeUrlLabel">Runtime URL <span class="muted">(recommended for visual comparison)</span><input id="runtimeUrl" placeholder="http://localhost:3000"/></label>
+        <div id="targetModeHint" class="modeHint"></div>
+        <div id="githubTools"><div id="githubState" class="small"></div><div class="row"><button id="githubAuth">Authorize GitHub</button><button id="githubRefresh">Refresh GitHub Status</button></div></div>
+        <button id="scanTarget" class="primary">Scan Target</button>
+      </article>
+    </section>
+
+    <section class="panel">
+      <h2>Live Progress</h2>
+      <div class="progress"><div id="progressBar"></div></div>
+      <div class="statusline"><b id="jobStatus">Idle</b><span id="jobStage"></span><span id="jobPct">0%</span><span id="jobUnits"></span><span id="jobEta"></span></div>
+      <div class="row compact progressActions">
+        <button id="pauseJob">Pause</button>
+        <button id="resumeJob">Resume</button>
+        <button id="stopJob" class="danger">Stop Scan Safely</button>
+      </div>
+      <pre id="jobLog"></pre>
+    </section>
+
+    <section class="panel">
+      <div class="row between">
+        <div><h2>3. Compare</h2><p>Reference completion creates <b>DESIGN.md</b> + <b>DESIGN-PACK/</b> — exact JSON, screenshots, asset manifest and coding-agent prompt.</p></div>
+        <button id="compareBtn" class="primary">Build Comparison</button>
+      </div>
+      <div class="filters">
+        <input id="filterText" placeholder="Filter route/category/difference"/>
+        <select id="filterCategory"><option value="">All categories</option></select>
+        <button id="selectAll">Select all</button>
+        <button id="selectVisible">Select visible</button>
+        <select id="groupBy" title="Select all differences matching the checked rows">
+          <option value="category">Same category</option>
+          <option value="subcategory">Same subcategory</option>
+          <option value="route">Same route</option>
+        </select>
+        <button id="selectSameGroup">Select same group</button>
+        <button id="clearSelection">Clear</button>
+      </div>
+      <div class="tableWrap">
+        <table>
+          <thead><tr><th><input id="selectAllHeader" type="checkbox" title="Select / clear all differences"/></th><th>Route</th><th>Category</th><th>Subcategory</th><th>Reference</th><th>Target</th><th>Difference</th><th>Impact</th><th>Risk</th></tr></thead>
+          <tbody id="comparisonBody"></tbody>
+        </table>
+      </div>
+      <h3>Visual Evidence</h3>
+      <div id="visualDiffs" class="visualDiffs"></div>
+    </section>
+
+    <section class="grid2">
+      <article class="panel">
+        <h2>4. Upgrade Plan</h2>
+        <p><span id="selectedCount">0</span> differences selected.</p>
+        <button id="planBtn" class="primary">Build Safe Plan</button>
+        <pre id="planPreview"></pre>
+      </article>
+      <article class="panel executePanel">
+        <div class="row between"><h2>5. Implement</h2><span id="executionModeBadge" class="modeBadge">Waiting for target</span></div>
+        <div id="executionCapability" class="capabilityCard">Scan a target and build a plan to see the safest implementation path.</div>
+        <div class="executionLegend">
+          <span>Git clean → isolated worktree</span>
+          <span>Non-Git / dirty Git → isolated safe copy</span>
+          <span>URL only / no agent → coding handoff</span>
+        </div>
+        <label class="check"><input type="checkbox" id="approveExecute"/> I approve implementation in the safe workspace.</label>
+        <div class="actionGrid">
+          <button id="handoffBtn">Generate Coding Handoff</button>
+          <button id="executeBtn" class="primary">Implement in Safe Workspace</button>
+          <button id="applyLocalBtn" class="danger" hidden>Apply Verified Changes to Original</button>
+        </div>
+        <p id="applyLocalNote" class="small" hidden>Apply-back creates a file backup first and automatically restores it if verification fails.</p>
+      </article>
+    </section>
+
+    <section class="panel">
+      <h2>Artifacts</h2>
+      <button id="refreshArtifacts">Refresh</button>
+      <div id="artifacts" class="artifacts"></div>
+    </section>
+  </main>
+<script src="/app.js" type="module"></script>
+</body>
+</html>

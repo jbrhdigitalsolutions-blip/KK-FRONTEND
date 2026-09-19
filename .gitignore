@@ -1,0 +1,16 @@
+node_modules/
+data/
+.env
+*.log
+.DS_Store
+
+.vercel
+.env*
+
+# KK-FRONTEND local / generated / secret files
+.env.*
+!.env.example
+.vercel/
+*.backup-*
+src/*.backup-*
+Thumbs.db
