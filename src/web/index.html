@@ -17,11 +17,13 @@
       <div class="workflowArrow">→</div>
       <div class="workflowStep" data-step="target"><b>2</b><span>Target</span></div>
       <div class="workflowArrow">→</div>
-      <div class="workflowStep" data-step="compare"><b>3</b><span>Compare</span></div>
+      <div class="workflowStep" data-step="pick"><b>3</b><span>Pick Design</span></div>
       <div class="workflowArrow">→</div>
-      <div class="workflowStep" data-step="plan"><b>4</b><span>Plan</span></div>
+      <div class="workflowStep" data-step="compare"><b>4</b><span>Compare</span></div>
       <div class="workflowArrow">→</div>
-      <div class="workflowStep" data-step="execute"><b>5</b><span>Implement</span></div>
+      <div class="workflowStep" data-step="plan"><b>5</b><span>Plan</span></div>
+      <div class="workflowArrow">→</div>
+      <div class="workflowStep" data-step="execute"><b>6</b><span>Implement</span></div>
     </section>
     <div id="notice" class="notice" hidden></div>
     <section class="panel hero">
@@ -90,9 +92,68 @@
       <pre id="jobLog"></pre>
     </section>
 
+    <section class="panel pickerPanel">
+      <div class="row between pickerHeader">
+        <div>
+          <h2>3. Reference Design Picker</h2>
+          <p>Select exact <b>Sections, Components, Text designs or Animations</b> directly from the scanned Reference UI, inspect verified runtime evidence, then generate target-aware source code.</p>
+          <div id="pickerSummary" class="small">Scan the Reference, then load the Design Picker.</div>
+        </div>
+        <button id="loadPicker" class="primary">Load Design Picker</button>
+      </div>
+
+      <div class="pickerToolbar">
+        <label>Route<select id="pickerRoute"></select></label>
+        <label>Viewport<select id="pickerViewport"></select></label>
+        <label>Selectable layer
+          <select id="pickerType">
+            <option value="section">Sections</option>
+            <option value="component">Components</option>
+            <option value="text">Text Design</option>
+            <option value="animation">Animations</option>
+            <option value="all">All</option>
+          </select>
+        </label>
+        <div class="pickerCounter"><b id="pickerVisibleCount">0</b><span>visible</span></div>
+      </div>
+
+      <div class="pickerWorkspace">
+        <div class="pickerViewportShell">
+          <div id="pickerCanvas" class="pickerCanvas" aria-label="Interactive reference screenshot">
+            <img id="pickerImage" alt="Scanned reference viewport"/>
+            <div id="pickerOverlay" class="pickerOverlay"></div>
+          </div>
+        </div>
+        <aside class="pickerInspectorPanel">
+          <div class="row between">
+            <h3>Evidence Inspector</h3>
+            <span class="modeBadge">VERIFIED runtime</span>
+          </div>
+          <pre id="pickerInspector">Click a highlighted reference design entity.</pre>
+        </aside>
+      </div>
+
+      <div class="pickerSelectionBar">
+        <div><b><span id="pickerSelectedCount">0</span> selected</b><div class="small">Selection can span routes, viewports and design layers.</div></div>
+        <div class="row compact">
+          <label class="check pickerTextOption"><input id="includeReferenceText" type="checkbox"/> Include literal reference text</label>
+          <button id="clearPicker">Clear</button>
+          <button id="savePickerSelection">Save Selection</button>
+          <button id="generateSource" class="primary">Generate Source Code</button>
+        </div>
+      </div>
+      <div id="pickerSelectionList" class="pickerSelectionList"></div>
+
+      <details class="generatedSourcePanel">
+        <summary>Generated Source Preview</summary>
+        <pre id="generatedSource">Select reference design entities and click Generate Source Code.</pre>
+      </details>
+      <p class="small"><b>Source meaning:</b> generated equivalent implementation from observed DOM geometry, computed styles, interactions and animation evidence. It does not claim to be the reference site's proprietary original source code.</p>
+    </section>
+
     <section class="panel">
       <div class="row between">
-        <div><h2>3. Compare</h2><p>Reference completion creates <b>DESIGN.md</b> + <b>DESIGN-PACK/</b> — exact JSON, screenshots, asset manifest and coding-agent prompt.</p></div>
+        <div><h2>4. Compare</h2><p>Reference completion creates <b>DESIGN.md</b> + <b>DESIGN-PACK/</b> — exact JSON, screenshots, asset manifest and coding-agent prompt.</p></div>
         <button id="compareBtn" class="primary">Build Comparison</button>
       </div>
       <div class="filters">
@@ -120,13 +181,13 @@
 
     <section class="grid2">
       <article class="panel">
-        <h2>4. Upgrade Plan</h2>
+        <h2>5. Upgrade Plan</h2>
         <p><span id="selectedCount">0</span> differences selected.</p>
         <button id="planBtn" class="primary">Build Safe Plan</button>
         <pre id="planPreview"></pre>
       </article>
       <article class="panel executePanel">
-        <div class="row between"><h2>5. Implement</h2><span id="executionModeBadge" class="modeBadge">Waiting for target</span></div>
+        <div class="row between"><h2>6. Implement</h2><span id="executionModeBadge" class="modeBadge">Waiting for target</span></div>
         <div id="executionCapability" class="capabilityCard">Scan a target and build a plan to see the safest implementation path.</div>
         <div class="executionLegend">
           <span>Git clean → isolated worktree</span>
