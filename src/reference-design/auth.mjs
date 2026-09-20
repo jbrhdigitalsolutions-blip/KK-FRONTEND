@@ -42,6 +42,7 @@ export function normalizeReferenceAuth(input = {}, targetUrl = "") {
     return {
       mode,
       loginUrl: safeWebUrl(input.loginUrl || target, "Login URL"),
+      loginUrlExplicit: Boolean(String(input.loginUrl || "").trim()),
       username: secret(input.username, "Username", 2048),
       password: secret(input.password, "Password", 4096),
       usernameSelector: selector(input.usernameSelector, "Username selector"),
