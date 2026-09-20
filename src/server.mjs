@@ -29,7 +29,7 @@ import { analyzeProjectContext } from "./no-code/project-fit.mjs";
 import { scanGitHubProject } from "./no-code/project-sources.mjs";
 
 const app=express();
-app.use(express.json({limit:"5mb"}));
+app.use(express.json({limit:"4mb"}));
 app.use(express.static(path.join(CONFIG.packageRoot,"src","web")));
 app.use("/data",express.static(CONFIG.dataDir,{fallthrough:true}));
 
@@ -192,13 +192,21 @@ app.post("/api/reference-design/project-website",async(req,res)=>{
 
 app.post("/api/reference-design/build",(req,res)=>{
   try{
-    const {evidenceJson,evidence,markdown="",options={},projectContext=null}=req.body||{};
+    const {evidenceJson,evidence,markdown="",options={},projectContext=null,projectProfile=null}=req.body||{};
     const input=evidenceJson||evidence;
     if(!input)throw new Error("Generate DESIGN.md and DESIGN-EVIDENCE.json before building the page.");
-    const result=compileNoCodeDesign({evidence:input,markdown,options,projectContext});
-    const responseBytes=Buffer.byteLength(JSON.stringify(result),"utf8");
-    if(responseBytes>4_000_000)throw new Error("Generated project exceeds the safe web response budget. Build a smaller custom design selection.");
-    res.json({...result,responseBytes});
+    const result=compileNoCodeDesign({evidence:input,markdown,options,projectContext,projectProfile});
+
+    // Do not duplicate every generated file and the full layout model beside
+    // zipBase64. The browser only needs file paths and viewport anchors.
+    const response={
+      ...result,
+      files:(result.files||[]).map(file=>({path:file.path,encoding:file.encoding||"utf8"})),
+      model:{viewports:result.model?.viewports||{}},
+    };
+    const responseBytes=Buffer.byteLength(JSON.stringify(response),"utf8");
+    if(responseBytes>4_000_000)throw new Error("Generated ZIP exceeds the safe Vercel response budget. Remove large portable assets or build a smaller custom selection.");
+    res.json({...response,responseBytes});
   }catch(e){
     res.status(400).json({error:String(e.message||e)});
   }
@@ -579,6 +587,13 @@ app.get("/api/artifacts/:sessionId",async(req,res)=>{
     }
     res.json(rows);
   }catch(e){res.status(404).json({error:e.message})}
+});
+
+app.use((err,req,res,next)=>{
+  if(err?.type==="entity.too.large" || err?.status===413){
+    return res.status(413).json({error:"Request payload exceeds the safe 4 MB web budget. Build requests must send the analyzed Project Fit profile plus only required export artifacts."});
+  }
+  next(err);
 });
 
 app.listen(CONFIG.port,"127.0.0.1",()=>{
