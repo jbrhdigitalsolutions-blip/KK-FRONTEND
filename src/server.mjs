@@ -125,8 +125,8 @@ app.post("/api/reference-design/inspect",async(req,res)=>{
 });
 app.post("/api/reference-design/generate",async(req,res)=>{
   try{
-    const {url,scope="whole",selectors=[]}=req.body||{};
-    res.json(await generateReferenceDesignMd({url,scope,selectors}));
+    const {url,scope="whole",selectors=[],selection=[]}=req.body||{};
+    res.json(await generateReferenceDesignMd({url,scope,selectors,selection}));
   }catch(e){
     const status=e?.code==="BROWSERLESS_NOT_CONFIGURED"?503:400;
     res.status(status).json({error:String(e.message||e)});
