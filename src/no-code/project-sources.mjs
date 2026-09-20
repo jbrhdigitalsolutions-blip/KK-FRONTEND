@@ -58,9 +58,10 @@ export async function scanGitHubProject({url,token="",ref=""}={}){
   const scoped=subdir?all.filter(x=>x.path===subdir||x.path.startsWith(subdir+"/")):all;
   const candidates=scoped.filter(x=>TEXT_EXT.test(x.path)&&Number(x.size||0)<=300_000)
     .sort((a,b)=>scorePath(b.path)-scorePath(a.path)||Number(a.size||0)-Number(b.size||0));
+  const maxTextFiles=secret?120:45;
   const selected=[];let budget=0;
   for(const row of candidates){
-    if(selected.length>=140)break;
+    if(selected.length>=maxTextFiles)break;
     if(budget+Number(row.size||0)>3_000_000&&!IMPORTANT.test(row.path))continue;
     selected.push(row);budget+=Number(row.size||0);
   }
@@ -79,7 +80,7 @@ export async function scanGitHubProject({url,token="",ref=""}={}){
   return{
     schema:"kk-project-github-scan/v1",
     repository:{url:parsed.url,owner:parsed.owner,name:parsed.repo,private:Boolean(repo.private),defaultBranch:repo.default_branch,branch,subdir,headTree:tree.sha||null},
-    coverage:{treeFiles:scoped.length,textFilesRead:selected.length,textBytesRead:readBytes,assetFilesIndexed:assetRows.length,truncated:Boolean(tree.truncated),maxTextFiles:140,maxTextBytes:3_000_000},
+    coverage:{treeFiles:scoped.length,textFilesRead:selected.length,textBytesRead:readBytes,assetFilesIndexed:assetRows.length,truncated:Boolean(tree.truncated),maxTextFiles,maxTextBytes:3_000_000},
     files,
     authentication:{used:Boolean(secret),persisted:false},
   };
