@@ -6,6 +6,7 @@ import { PNG } from "pngjs";
 import pixelmatch from "pixelmatch";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { gzipSync } from "node:zlib";
 import { buildEvidenceCompanion, candidateFamily, classifyCandidate, normalizeReferenceUrl, renderDesignMd } from "./design-md.mjs";
 import { containsReferenceAuthSecret, normalizeReferenceAuth, parseCookieHeader, referenceAuthHeader, referenceAuthSummary } from "./auth.mjs";
 
@@ -15,6 +16,51 @@ const VIEWPORTS = [
   { name: "mobile", width: 390, height: 844 },
 ];
 const TEMPLATE_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "DESIGN-TEMPLATE.md");
+
+const REFERENCE_DIRECT_RESPONSE_BUDGET_BYTES = 2_750_000;
+const REFERENCE_HARD_RESPONSE_BUDGET_BYTES = 3_750_000;
+
+export function encodeReferenceEvidenceForTransport({ markdown = "", evidenceJson = "" } = {}) {
+  const rawEvidenceBytes = Buffer.byteLength(evidenceJson, "utf8");
+  const rawResponseBytes = Buffer.byteLength(markdown, "utf8") + rawEvidenceBytes;
+  const directWireBytes = Buffer.byteLength(JSON.stringify({ markdown, evidenceJson }), "utf8");
+
+  if (directWireBytes <= REFERENCE_DIRECT_RESPONSE_BUDGET_BYTES) {
+    return {
+      evidenceEncoding: "identity",
+      evidenceJson,
+      evidenceGzipBase64: "",
+      rawEvidenceBytes,
+      rawResponseBytes,
+      evidenceTransferBytes: rawEvidenceBytes,
+      wireResponseBytes: directWireBytes,
+    };
+  }
+
+  const gzip = gzipSync(Buffer.from(evidenceJson, "utf8"), { level: 9 });
+  const evidenceGzipBase64 = gzip.toString("base64");
+  const wireResponseBytes = Buffer.byteLength(JSON.stringify({
+    markdown,
+    evidenceEncoding: "gzip-base64",
+    evidenceGzipBase64,
+  }), "utf8");
+
+  if (wireResponseBytes > REFERENCE_HARD_RESPONSE_BUDGET_BYTES) {
+    const error = new Error("Generated reference evidence remains above the safe web response budget after lossless compression. Select a smaller reference region and retry.");
+    error.code = "REFERENCE_EVIDENCE_TOO_LARGE";
+    throw error;
+  }
+
+  return {
+    evidenceEncoding: "gzip-base64",
+    evidenceJson: "",
+    evidenceGzipBase64,
+    rawEvidenceBytes,
+    rawResponseBytes,
+    evidenceTransferBytes: gzip.byteLength,
+    wireResponseBytes,
+  };
+}
 
 function env(name) { return String(process.env[name] || "").trim(); }
 export function referenceDesignStatus() {
@@ -1145,17 +1191,24 @@ export async function generateReferenceDesignMd({ url, scope = "whole", selector
     };
     const template = await fs.readFile(TEMPLATE_FILE, "utf8");
     const markdown = renderDesignMd({ template, evidence });
-    const evidenceJson = JSON.stringify(buildEvidenceCompanion(evidence), null, 2);
-    const responseBytes = Buffer.byteLength(markdown, "utf8") + Buffer.byteLength(evidenceJson, "utf8");
-    if (responseBytes > 4_000_000) {
-      throw new Error("Generated reference evidence exceeds the safe web response budget. Select a smaller reference region and retry.");
+    // Machine evidence is minified before transport. Pretty-printing a JSON string
+    // inside another JSON response adds avoidable escaping/whitespace and can push a
+    // valid whole-page capture over Vercel's response budget.
+    const evidenceJson = JSON.stringify(buildEvidenceCompanion(evidence));
+    const secretCheckPayload = { markdown, evidenceJson };
+    if (containsReferenceAuthSecret(secretCheckPayload, normalizedAuth)) {
+      throw new Error("Authentication secret safety check failed.");
     }
+
+    const transport = encodeReferenceEvidenceForTransport({ markdown, evidenceJson });
     const result = {
       schema: "kk-reference-design-md/v2",
       filename: "DESIGN.md",
       markdown,
       evidenceFilename: "DESIGN-EVIDENCE.json",
-      evidenceJson,
+      evidenceJson: transport.evidenceJson,
+      evidenceGzipBase64: transport.evidenceGzipBase64,
+      evidenceEncoding: transport.evidenceEncoding,
       summary: {
         url: safeUrl,
         finalUrl,
@@ -1172,7 +1225,11 @@ export async function generateReferenceDesignMd({ url, scope = "whole", selector
         mediaQueryCount: pageEvidence?.mediaQueries?.length || 0,
         confidence,
         confidenceReasons,
-        responseBytes,
+        responseBytes: transport.wireResponseBytes,
+        rawResponseBytes: transport.rawResponseBytes,
+        evidenceBytes: transport.rawEvidenceBytes,
+        evidenceTransferBytes: transport.evidenceTransferBytes,
+        evidenceEncoding: transport.evidenceEncoding,
         authentication: authSummary,
       },
     };

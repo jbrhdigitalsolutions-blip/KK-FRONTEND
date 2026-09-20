@@ -1,6 +1,6 @@
 {
   "name": "kk-frontend",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "private": true,
   "type": "module",
   "description": "KK-FRONTEND — Pixel Accurate reference reconstruction, large-build transport, project-aware migration and visual certification",

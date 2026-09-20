@@ -1,3 +1,11 @@
+# KK-FRONTEND v0.9.5 — LOSSLESS LARGE REFERENCE EVIDENCE TRANSPORT
+
+v0.9.5 fixes Whole Page DESIGN generation failures where expanded Pixel Accurate evidence could exceed the safe JSON response budget. Large `DESIGN-EVIDENCE.json` payloads are now minified, losslessly gzip-compressed server-side, transported as base64 only when needed, and transparently decompressed in the browser before Build/Download. No captured design evidence is intentionally dropped by this transport fix.
+
+Runtime health now exposes `compressedReferenceEvidence: true`. Small captures remain direct JSON; large captures use `gzip-base64` automatically.
+
+---
+
 # KK-FRONTEND v0.9.4 — PIXEL ACCURATE REFERENCE RENDERER
 
 v0.9.4 upgrades **Accurate** into an explicit reference-preserving visual mode. It uses measured hierarchy, reference text/media, inline SVG evidence, pseudo-elements, responsive computed styles, font-face evidence and sampled interaction/motion states so visual certification compares like-for-like pixels. Balanced and Inspired remain the target-content adaptation paths.

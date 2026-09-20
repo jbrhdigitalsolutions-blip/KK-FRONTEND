@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { gunzipSync } from "node:zlib";
 import { buildEvidenceCompanion, candidateFamily, classifyCandidate, normalizeReferenceUrl, renderDesignMd, UNKNOWN } from "../src/reference-design/design-md.mjs";
-import { isPrivateOrRestrictedAddress } from "../src/reference-design/browserless.mjs";
+import { encodeReferenceEvidenceForTransport, isPrivateOrRestrictedAddress } from "../src/reference-design/browserless.mjs";
 import { containsReferenceAuthSecret, normalizeReferenceAuth, parseCookieHeader, referenceAuthHeader, referenceAuthSummary } from "../src/reference-design/auth.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -192,6 +193,43 @@ test("compact evidence companion preserves machine evidence without raw DOM bloa
   assert.ok(Buffer.byteLength(json, "utf8") < 1_000_000);
 });
 
+test("reference evidence transport preserves small payloads directly", () => {
+  const evidenceJson=JSON.stringify({schema:"kk-reference-design-evidence-compact/v2",viewports:[{name:"desktop"}]});
+  const encoded=encodeReferenceEvidenceForTransport({markdown:"# DESIGN.md",evidenceJson});
+  assert.equal(encoded.evidenceEncoding,"identity");
+  assert.equal(encoded.evidenceJson,evidenceJson);
+  assert.equal(encoded.evidenceGzipBase64,"");
+  assert.equal(encoded.rawEvidenceBytes,Buffer.byteLength(evidenceJson,"utf8"));
+});
+
+test("large whole-page evidence uses lossless gzip transport instead of a 400 response", () => {
+  const evidenceJson=JSON.stringify({
+    schema:"kk-reference-design-evidence-compact/v2",
+    viewports:["desktop","tablet","mobile"].map((name,viewportIndex)=>({
+      name,
+      representativeElements:Array.from({length:480},(_,index)=>({
+        selector:`main > section:nth-child(${index+1}) > div[data-viewport="${viewportIndex}"]`,
+        text:"Reference content ".repeat(80),
+        directText:"Reference content ".repeat(40),
+        rect:{x:index%12*80,y:index*12,width:760,height:64},
+        styleRef:index%24,
+      }))
+    })),
+    styles:Array.from({length:24},(_,index)=>({
+      display:"flex",fontFamily:"Inter, sans-serif",fontSize:`${14+(index%5)}px`,
+      backgroundImage:`url("https://example.com/assets/background-${index}.webp")`,
+    })),
+  });
+  assert.ok(Buffer.byteLength(evidenceJson,"utf8")>2_750_000,"fixture must exercise compressed transport");
+  const encoded=encodeReferenceEvidenceForTransport({markdown:"# DESIGN.md\nWhole page",evidenceJson});
+  assert.equal(encoded.evidenceEncoding,"gzip-base64");
+  assert.equal(encoded.evidenceJson,"");
+  assert.ok(encoded.evidenceGzipBase64.length>0);
+  assert.ok(encoded.wireResponseBytes<3_750_000);
+  const decoded=gunzipSync(Buffer.from(encoded.evidenceGzipBase64,"base64")).toString("utf8");
+  assert.equal(decoded,evidenceJson,"compression transport must be lossless");
+});
+
 test("Design Explorer exposes filters, presets and explicit custom-selection limits", async () => {
   const [html, js, browserless] = await Promise.all([
     fs.readFile(path.join(root, "src", "web", "reference-design.html"), "utf8"),
@@ -236,6 +274,11 @@ test("Design Explorer exposes filters, presets and explicit custom-selection lim
   assert.ok(js.includes("standalone-replacement"));
   assert.ok(js.includes("BUILD_DIRECT_REQUEST_MAX_BYTES = 3_800_000"));
   assert.ok(js.includes("CompressionStream"));
+  assert.ok(js.includes("decodeGeneratedEvidence"));
+  assert.ok(js.includes("DecompressionStream"));
+  assert.ok(js.includes("evidenceGzipBase64"));
+  assert.ok(browserless.includes("encodeReferenceEvidenceForTransport"));
+  assert.ok(browserless.includes("REFERENCE_HARD_RESPONSE_BUDGET_BYTES"));
   assert.ok(js.includes("/api/reference-design/transport/start"));
   assert.ok(js.includes("/api/reference-design/transport/chunk/"));
   assert.ok(js.includes("cloudflare-r2"));
