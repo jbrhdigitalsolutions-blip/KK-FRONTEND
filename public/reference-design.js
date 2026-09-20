@@ -208,6 +208,7 @@ function renderProjectIntake(data) {
       <span><b>Package manager</b>${escapeHtml(data.packageManager)}</span>
       <span><b>Language</b>${escapeHtml(data.language)}</span>
       <span><b>Styling</b>${escapeHtml((data.styling || []).join(", ") || "Not detected")}</span>
+      <span><b>Current DESIGN.md</b>${escapeHtml(data.designContext?.designMd || "Not supplied")}</span>
     </div>
     <div class="rdRequirementGrid">${requirements}</div>
     ${recommendations ? `<div class="rdRecommendations"><b>For higher project fit</b><ul>${recommendations}</ul></div>` : ""}
