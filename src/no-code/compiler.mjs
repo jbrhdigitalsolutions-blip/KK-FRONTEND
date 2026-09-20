@@ -38,12 +38,27 @@ function styleFreq(nodes,key,predicate=()=>true){
 }
 function firstUseful(freq,fallback){ return freq[0]?.value || fallback; }
 function parseEvidence(input){
-  const evidence=typeof input==="string" ? JSON.parse(input) : input;
-  if(!evidence || evidence.schema!=="kk-reference-design-evidence-compact/v2"){
+  const parsed=typeof input==="string" ? JSON.parse(input) : input;
+  if(!parsed || parsed.schema!=="kk-reference-design-evidence-compact/v2"){
     throw new Error("Build Page requires DESIGN-EVIDENCE.json schema kk-reference-design-evidence-compact/v2.");
   }
-  if(!arr(evidence.viewports).length) throw new Error("Design evidence contains no verified viewports.");
-  return evidence;
+  if(!arr(parsed.viewports).length) throw new Error("Design evidence contains no verified viewports.");
+  const styles=arr(parsed.styles);
+  if(!styles.length)return parsed;
+  const hydrate=node=>{
+    if(!node)return node;
+    if(node.style && Object.keys(node.style).length)return node;
+    const index=Number(node.styleRef);
+    return {...node,style:Number.isInteger(index)&&index>=0&&index<styles.length ? styles[index] : {}};
+  };
+  return {
+    ...parsed,
+    viewports:arr(parsed.viewports).map(vp=>({
+      ...vp,
+      scopes:arr(vp.scopes).map(hydrate),
+      representativeElements:arr(vp.representativeElements).map(hydrate),
+    }))
+  };
 }
 function viewport(evidence,name){ return arr(evidence.viewports).find(v=>v.name===name) || {}; }
 function nodesFor(vp){ return [...arr(vp.scopes),...arr(vp.representativeElements)]; }
@@ -193,7 +208,7 @@ function buildReferenceTree(evidence,project){
   const desktop=viewport(evidence,"desktop");
   const tablet=viewport(evidence,"tablet");
   const mobile=viewport(evidence,"mobile");
-  const desktopNodes=nodesFor(desktop).filter(x=>x?.selector&&x.tag!=="body").slice(0,360);
+  const desktopNodes=nodesFor(desktop).filter(x=>x?.selector&&x.tag!=="body").slice(0,480);
   const included=new Set(desktopNodes.map(x=>x.selector));
   const byVp=(vp,selector)=>nodesFor(vp).find(x=>x.selector===selector);
   const svgMarkup=new Map(arr(evidence.assets?.svgs).filter(x=>x?.selector&&x?.markup).map(x=>[x.selector,String(x.markup)]));
