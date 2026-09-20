@@ -4,90 +4,129 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <meta name="color-scheme" content="dark"/>
-  <title>Reference → DESIGN.md — KK-FRONTEND</title>
+  <title>Design Explorer — KK-FRONTEND</title>
   <link rel="stylesheet" href="/reference-design.css"/>
 </head>
 <body>
   <header class="rdTopbar">
     <a class="rdBrand" href="/index.html" aria-label="Back to KK-FRONTEND">
-      <span class="rdMark">K</span><span><b>KK-FRONTEND</b><small>Reference → DESIGN.md</small></span>
+      <span class="rdMark">K</span>
+      <span><b>KK-FRONTEND</b><small>Design Explorer</small></span>
     </a>
-    <a class="rdBack" href="/index.html">Main workspace</a>
+    <div class="rdTopActions">
+      <span class="rdVersion">v0.5.1</span>
+      <a class="rdBack" href="/index.html">Main workspace</a>
+    </div>
   </header>
 
   <main class="rdMain">
     <section class="rdHero">
-      <div class="rdEyebrow">WEB-ONLY REFERENCE EXTRACTION</div>
-      <h1>Turn a reference URL into an implementation-ready <code>DESIGN.md</code>.</h1>
-      <p>No local project is required. Inspect the real rendered page, choose the exact page/section/component you want, then export measured Desktop, Tablet and Mobile design evidence.</p>
+      <div>
+        <div class="rdEyebrow">REFERENCE → VISUAL DESIGN → DESIGN.md</div>
+        <h1>Choose the design you want. <span>No coding agent required.</span></h1>
+        <p>Open any public reference page, visually pick the exact design regions, then export a verified implementation contract.</p>
+      </div>
       <div id="providerState" class="rdProvider">Checking cloud browser…</div>
     </section>
 
-    <section class="rdCard rdUrlCard" aria-labelledby="urlTitle">
-      <div class="rdCardHead">
-        <div><span class="rdStep">1</span><h2 id="urlTitle">Reference URL</h2></div>
-        <span class="rdHint">Public http(s) page</span>
+    <section class="rdGlass rdUrlCard" aria-labelledby="urlTitle">
+      <div class="rdUrlLead">
+        <span class="rdStep">1</span>
+        <div><h2 id="urlTitle">Reference URL</h2><p>We render the real page in remote Chromium and detect design regions.</p></div>
       </div>
       <form id="inspectForm" class="rdUrlForm">
         <label class="srOnly" for="referenceUrl">Reference website URL</label>
         <input id="referenceUrl" inputmode="url" autocomplete="url" placeholder="https://example.com/page" required/>
-        <button id="inspectButton" class="rdPrimary" type="submit">Inspect Reference</button>
+        <button id="inspectButton" class="rdPrimary" type="submit">Inspect design</button>
       </form>
       <div id="notice" class="rdNotice" hidden></div>
     </section>
 
     <section id="selectionStage" class="rdStage" hidden>
       <div class="rdStageHead">
-        <div><span class="rdStep">2</span><h2>Select what to reproduce</h2><p>Choose the whole page, or click exact regions on the captured reference.</p></div>
+        <div class="rdStageTitle">
+          <span class="rdStep">2</span>
+          <div><h2>Build your design selection</h2><p>Use a preset, filter by design type, or select directly on the reference preview.</p></div>
+        </div>
         <a id="openReference" class="rdTextLink" target="_blank" rel="noreferrer">Open reference ↗</a>
       </div>
 
-      <div class="rdScopeToggle" role="radiogroup" aria-label="Reference scope">
-        <label><input type="radio" name="scope" value="whole" checked/><span><b>Whole Page</b><small>Complete page design</small></span></label>
-        <label><input type="radio" name="scope" value="selected"/><span><b>Select Regions</b><small>Header, section, sidebar, component, motion…</small></span></label>
+      <div class="rdControlDeck">
+        <div class="rdScopeToggle" role="radiogroup" aria-label="Reference scope">
+          <label><input type="radio" name="scope" value="whole" checked/><span><b>Whole page</b><small>Capture everything</small></span></label>
+          <label><input type="radio" name="scope" value="selected"/><span><b>Custom design</b><small>Choose exact regions</small></span></label>
+        </div>
+
+        <div class="rdPresetBar" aria-label="Quick design presets">
+          <span class="rdPresetLabel">Quick select</span>
+          <button class="rdPreset" type="button" data-preset="essential">Essential design</button>
+          <button class="rdPreset" type="button" data-preset="structure">Structure</button>
+          <button class="rdPreset" type="button" data-preset="content">Typography</button>
+          <button class="rdPreset" type="button" data-preset="controls">Controls</button>
+          <button class="rdPreset" type="button" data-preset="media">Media</button>
+          <button class="rdPreset" type="button" data-preset="motion">Motion</button>
+        </div>
       </div>
 
       <div id="pickerGrid" class="rdPickerGrid isWhole">
-        <div class="rdPreviewCard">
-          <div class="rdPreviewMeta"><span id="referenceTitle">Reference</span><span id="candidateCount"></span></div>
+        <div class="rdPreviewCard rdGlass">
+          <div class="rdPreviewMeta">
+            <div><b id="referenceTitle">Reference</b><small id="referenceHost"></small></div>
+            <span id="candidateCount"></span>
+          </div>
           <div id="previewViewport" class="rdPreviewViewport">
             <div id="previewCanvas" class="rdPreviewCanvas">
               <img id="previewImage" alt="Captured reference website"/>
-              <div id="overlayLayer" class="rdOverlayLayer" aria-label="Selectable reference regions"></div>
+              <div id="overlayLayer" class="rdOverlayLayer" aria-label="Selectable reference design regions"></div>
             </div>
           </div>
         </div>
 
-        <aside class="rdInspector">
+        <aside class="rdInspector rdGlass">
           <div class="rdInspectorTop">
-            <div><b>Detected regions</b><small id="selectedSummary">Whole page selected</small></div>
+            <div><b>Design regions</b><small id="selectedSummary">Whole page selected</small></div>
             <button id="clearSelection" class="rdQuiet" type="button">Clear</button>
           </div>
-          <input id="candidateSearch" class="rdSearch" placeholder="Filter regions…"/>
+
+          <div class="rdInspectorTools">
+            <div id="familyFilters" class="rdFamilyFilters" aria-label="Design category filters"></div>
+            <div class="rdSearchRow">
+              <input id="candidateSearch" class="rdSearch" placeholder="Search design regions…"/>
+              <button id="selectFiltered" class="rdQuiet" type="button">Select filtered</button>
+            </div>
+            <div class="rdSelectionMeter">
+              <span id="selectionMeterText">0 / 30 selected</span>
+              <span>Max 30 custom regions</span>
+            </div>
+          </div>
+
           <div id="selectedChips" class="rdChips"></div>
           <div id="candidateList" class="rdCandidateList"></div>
         </aside>
       </div>
 
-      <div class="rdGenerateBar">
-        <div><b>Verified evidence capture</b><span>Exact Desktop 1440×900 · Tablet 820×1180 · Mobile 390×844 · semantic regions · Hover/Focus · Motion · exact CSS conditions</span></div>
+      <div class="rdGenerateBar rdGlass">
+        <div>
+          <b>Verified design capture</b>
+          <span>Desktop 1440×900 · Tablet 820×1180 · Mobile 390×844 · exact CSS conditions · states · motion</span>
+        </div>
         <button id="generateButton" class="rdPrimary rdGenerate" type="button">Generate DESIGN.md</button>
       </div>
     </section>
 
-    <section id="resultStage" class="rdCard rdResult" hidden>
+    <section id="resultStage" class="rdResult rdGlass" hidden>
       <div class="rdCardHead">
-        <div><span class="rdStep done">3</span><h2>DESIGN.md ready</h2></div>
+        <div><span class="rdStep done">3</span><div><h2>Design package ready</h2><p>Use DESIGN.md directly with your project or keep the evidence JSON for deeper automation.</p></div></div>
         <span id="confidencePill" class="rdConfidence"></span>
       </div>
       <div id="resultFacts" class="rdFacts"></div>
       <div class="rdResultActions">
         <button id="downloadButton" class="rdPrimary" type="button">Download DESIGN.md</button>
-        <button id="downloadEvidenceButton" class="rdSecondary" type="button">Download Evidence JSON</button>
+        <button id="downloadEvidenceButton" class="rdSecondary" type="button">Evidence JSON</button>
         <button id="copyButton" class="rdSecondary" type="button">Copy DESIGN.md</button>
-        <button id="newButton" class="rdSecondary" type="button">New Reference</button>
+        <button id="newButton" class="rdSecondary" type="button">New reference</button>
       </div>
-      <details class="rdPreviewText"><summary>Preview professional implementation specification</summary><pre id="markdownPreview"></pre></details>
+      <details class="rdPreviewText"><summary>Preview implementation contract</summary><pre id="markdownPreview"></pre></details>
     </section>
   </main>
 

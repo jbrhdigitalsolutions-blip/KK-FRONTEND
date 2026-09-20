@@ -17,7 +17,7 @@ assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","web","index.html")))
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","browser","scanner.mjs")));
 const pkg=JSON.parse(fs.readFileSync(path.join(CONFIG.packageRoot,"package.json"),"utf8"));
 assert.equal(pkg.name,"kk-frontend");
-assert.equal(pkg.version,"0.4.1");
+assert.equal(pkg.version,"0.5.1");
 assert.equal(pkg.packageManager,"pnpm@10.28.0");
 assert.ok(pkg.dependencies.playwright);
 const scanner=fs.readFileSync(path.join(CONFIG.packageRoot,"src","browser","scanner.mjs"),"utf8");
@@ -35,6 +35,11 @@ const jobs=fs.readFileSync(path.join(CONFIG.packageRoot,"src","jobs.mjs"),"utf8"
 for(const marker of ["pause(id)","resume(id)","stop(id)","KK_STOP"]) assert.ok(jobs.includes(marker),`job control marker missing: ${marker}`);
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","intelligence","design-entities.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","intelligence","source-generator.mjs")));
+assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","target","source-intelligence.mjs")));
+assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","intelligence","design-contract.mjs")));
+assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","intelligence","component-map.mjs")));
+assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","execution","migration-guard.mjs")));
+assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","execution","visual-verify.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","reference-design","design-md.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","reference-design","browserless.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","reference-design","DESIGN-TEMPLATE.md")));
@@ -42,9 +47,12 @@ assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","web","reference-desi
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"public","reference-design.html")));
 const referenceDesign=fs.readFileSync(path.join(CONFIG.packageRoot,"src","reference-design","design-md.mjs"),"utf8");
 for(const marker of ["Verified Evidence Summary","buildEvidenceCompanion","kk-reference-design-md/v2"]) assert.ok(referenceDesign.includes(marker),`reference design marker missing: ${marker}`);
+const designExplorer=fs.readFileSync(path.join(CONFIG.packageRoot,"src","web","reference-design.html"),"utf8");
+for(const marker of ["familyFilters","selectFiltered","Essential design","No coding agent required"]) assert.ok(designExplorer.includes(marker),`Design Explorer marker missing: ${marker}`);
 const browserless=fs.readFileSync(path.join(CONFIG.packageRoot,"src","reference-design","browserless.mjs"),"utf8");
-for(const marker of ["setExactViewport","installNetworkGuard","kk-reference-design-evidence/v2"]) assert.ok(browserless.includes(marker),`browserless hardening marker missing: ${marker}`);
+for(const marker of ["setExactViewport","installNetworkGuard","kk-reference-design-evidence/v2","kk-reference-design-inspection/v2","familyCounts"]) assert.ok(browserless.includes(marker),`browserless hardening marker missing: ${marker}`);
 const web=fs.readFileSync(path.join(CONFIG.packageRoot,"src","web","index.html"),"utf8");
 for(const marker of ["Reference Design Picker","Generate Source Code","pickerOverlay"]) assert.ok(web.includes(marker),`design picker marker missing: ${marker}`);
 assert.ok(web.includes("Reference → DESIGN.md"),"web-only DESIGN.md page link missing");
-console.log("KK-FRONTEND v0.4.1 selftest PASS");
+assert.ok(web.includes("verifyAfterBtn"),"post-change visual verification UI missing");
+console.log("KK-FRONTEND v0.5.1 selftest PASS");

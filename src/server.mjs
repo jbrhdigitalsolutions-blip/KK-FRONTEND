@@ -8,6 +8,7 @@ import { id, ensureDir, writeJson, readJson, exists } from "./fs-utils.mjs";
 import { scanWebsite } from "./browser/scanner.mjs";
 import { acquireTarget, githubStatus, gitState, run } from "./target/repo.mjs";
 import { scanSourceProject } from "./target/source-scan.mjs";
+import { buildSourceIntelligence } from "./target/source-intelligence.mjs";
 import { buildComparison } from "./intelligence/compare.mjs";
 import { buildPlan } from "./intelligence/plan.mjs";
 import { writeAuditMarkdown, writeComparisonMarkdown } from "./intelligence/reporter.mjs";
@@ -15,9 +16,13 @@ import { writeDesignBlueprint } from "./intelligence/design-blueprint.mjs";
 import { buildDesignPack } from "./intelligence/design-pack.mjs";
 import { buildReferenceEntityCatalog } from "./intelligence/design-entities.mjs";
 import { generateSelectionSource } from "./intelligence/source-generator.mjs";
+import { buildDesignContract } from "./intelligence/design-contract.mjs";
+import { buildComponentMap } from "./intelligence/component-map.mjs";
 import { prepareExecutionWorkspace, compareTrees, applySafeCopyToOriginal, rollbackSafeCopyApply } from "./execution/workspace.mjs";
 import { runConfiguredAgent } from "./execution/agent-runner.mjs";
 import { verifyProject } from "./execution/verify.mjs";
+import { verifyPlanBaseline, validateChangedFileScope } from "./execution/migration-guard.mjs";
+import { verifyVisualMigration } from "./execution/visual-verify.mjs";
 import { generateReferenceDesignMd, inspectReferenceDesign, referenceDesignStatus } from "./reference-design/browserless.mjs";
 
 const app=express();
@@ -61,7 +66,7 @@ function progressFor(job){
   }
 }
 async function newSession(){
-  const s={id:id("session"),createdAt:new Date().toISOString(),reference:null,target:null,comparison:null,designSelection:null,codeGeneration:null,plan:null,execution:null};
+  const s={id:id("session"),createdAt:new Date().toISOString(),reference:null,target:null,comparison:null,designSelection:null,codeGeneration:null,designContract:null,componentMap:null,plan:null,execution:null};
   await ensureDir(sessionDir(s.id));sessions.set(s.id,s);await saveSession(s);return s
 }
 
@@ -77,20 +82,27 @@ async function executionCapability(s){
   }
   const gs=await gitState(root);
   const mode=gs.isGit&&gs.clean?"git-worktree":"safe-copy";
+  const codeVerified=s.execution?.verificationPassed===true,visualPassed=s.execution?.visualVerificationPassed===true;
+  const visualStatus=s.execution?.visualVerificationStatus||"not-run";
   return {
     ready:!!s.plan,sourceType,mode,agentConfigured,
     canAutoImplement:!!s.plan&&agentConfigured,
-    canApplyBack:s.execution?.checkpoint?.mode==="safe-copy"&&s.execution?.verificationPassed===true&&s.execution?.applied!==true,
+    canVerifyVisual:codeVerified&&s.execution?.applied!==true,
+    canApplyBack:s.execution?.checkpoint?.mode==="safe-copy"&&codeVerified&&visualPassed&&s.execution?.applied!==true,
     canHandoff:!!s.plan,
     originalUntouched:s.execution?.applied!==true,
+    visualVerificationStatus:visualStatus,
+    visualVerificationPassed:visualPassed,
     git:{isGit:gs.isGit,clean:gs.clean??null,branch:gs.branch||null,head:gs.head||null},
-    message:mode==="git-worktree"
-      ?(agentConfigured?"Clean Git project: implementation runs in an isolated worktree; original branch remains untouched.":"Clean Git project detected. Configure a coding agent for automatic implementation, or generate the handoff.")
-      :(agentConfigured?"Git is optional: implementation runs in an isolated safe copy; original folder stays untouched until explicit apply-back.":"Non-Git or dirty-Git project is supported through an isolated safe copy. Configure a coding agent or generate the handoff.")
+    message:codeVerified&&!visualPassed
+      ?"Code verification PASS. Start the changed workspace, enter its runtime URL, and run post-change visual verification before apply-back."
+      :mode==="git-worktree"
+        ?(agentConfigured?"Clean Git project: implementation runs in an isolated worktree; original branch remains untouched.":"Clean Git project detected. Configure a coding agent for automatic implementation, or generate the handoff.")
+        :(agentConfigured?"Git is optional: implementation runs in an isolated safe copy; original folder stays untouched until explicit apply-back.":"Non-Git or dirty-Git project is supported through an isolated safe copy. Configure a coding agent or generate the handoff.")
   };
 }
 
-app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.4.1",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true}));
+app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.5.1",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true,sourceAwareMigration:true}));
 app.get("/api/github/status",async(req,res)=>res.json(await githubStatus()));
 app.post("/api/github/auth/start",async(req,res)=>{
   try{
@@ -113,8 +125,8 @@ app.post("/api/reference-design/inspect",async(req,res)=>{
 });
 app.post("/api/reference-design/generate",async(req,res)=>{
   try{
-    const {url,scope="whole",selectors=[]}=req.body||{};
-    res.json(await generateReferenceDesignMd({url,scope,selectors}));
+    const {url,scope="whole",selectors=[],selection=[]}=req.body||{};
+    res.json(await generateReferenceDesignMd({url,scope,selectors,selection}));
   }catch(e){
     const status=e?.code==="BROWSERLESS_NOT_CONFIGURED"?503:400;
     res.status(status).json({error:String(e.message||e)});
@@ -170,7 +182,16 @@ app.post("/api/scan/reference",async(req,res)=>{
     });
     progressFor(job)({stage:"design-entities",progress:100,message:"Building selectable Section / Component / Text / Animation catalog"});
     const entityCatalog=await buildReferenceEntityCatalog({referenceRoot:out,outFile:sessionFile(sessionId,"reference-entities.json")});
-    s.reference={url,root:out,auditFile:"reference-audit.json",designFile:"DESIGN.md",designBytes:designResult.bytes,designPack:"DESIGN-PACK",designPackFiles:packResult.manifest.counts.files,designPackScreenshots:packResult.manifest.counts.screenshots,entityCatalog:"reference-entities.json",entityCount:entityCatalog.counts.total,partial:false,cancelled:false};
+    const designContract=await buildDesignContract({auditRoot:out,auditFile:sessionFile(sessionId,"reference-audit.json"),entityCatalog,outFile:sessionFile(sessionId,"design-contract.json")});
+    s.designContract={file:"design-contract.json",schema:designContract.schema,createdAt:designContract.createdAt};
+    if(s.target?.sourceIntelligenceFile){
+      const targetIntelligence=await readJson(path.join(sessionDir(sessionId),s.target.sourceIntelligenceFile));
+      if(targetIntelligence){
+        const map=await buildComponentMap({catalog:entityCatalog,sourceIntelligence:targetIntelligence,outFile:sessionFile(sessionId,"component-map.json")});
+        s.componentMap={file:"component-map.json",mapped:map.counts.mapped,unmapped:map.counts.unmapped,createdAt:map.createdAt};
+      }
+    }
+    s.reference={url,root:out,auditFile:"reference-audit.json",designFile:"DESIGN.md",designContractFile:"design-contract.json",designBytes:designResult.bytes,designPack:"DESIGN-PACK",designPackFiles:packResult.manifest.counts.files,designPackScreenshots:packResult.manifest.counts.screenshots,entityCatalog:"reference-entities.json",entityCount:entityCatalog.counts.total,partial:false,cancelled:false};
     await saveSession(s);return s.reference;
   }).catch(()=>{});
 });
@@ -184,23 +205,30 @@ app.post("/api/scan/target",async(req,res)=>{
     const progress=progressFor(job);
     const acquired=await acquireTarget(source,{progress});
     const out=path.join(sessionDir(sessionId),"target-before");await ensureDir(out);
-    let sourceAudit=null,runtimeAudit=null;
+    let sourceAudit=null,sourceIntelligence=null,runtimeAudit=null;
     if(acquired.root){
       sourceAudit=await scanSourceProject(acquired.root,path.join(out,"source-audit.json"),{progress});
+      sourceIntelligence=await buildSourceIntelligence(acquired.root,sourceAudit,path.join(out,"source-intelligence.json"),{progress});
       const url=options.runtimeUrl||source.runtimeUrl||null;
       if(url)runtimeAudit=await scanWebsite({url,outDir:path.join(out,"runtime"),resume:true,...options,progress,control:jobs.control(job.id)});
     }else if(acquired.url){
       runtimeAudit=await scanWebsite({url:acquired.url,outDir:path.join(out,"runtime"),resume:true,...options,progress,control:jobs.control(job.id)});
     }
     if(runtimeAudit?.cancelled){
-      s.target={source,acquired,root:out,partial:true,cancelled:true,sourceAuditFile:sourceAudit?"target-before/source-audit.json":null,runtimeRoot:path.join(out,"runtime")};
+      s.target={source,acquired,root:out,partial:true,cancelled:true,sourceAuditFile:sourceAudit?"target-before/source-audit.json":null,sourceIntelligenceFile:sourceIntelligence?"target-before/source-intelligence.json":null,runtimeRoot:path.join(out,"runtime")};
       await saveSession(s);return s.target;
     }
     const canonical=runtimeAudit||{schema:"kk-frontend-audit/v2",kind:"source-only",target:acquired.root,evidenceStatus:"VERIFIED",routes:[]};
     canonical.sourceAuditFile=sourceAudit?"source-audit.json":null;
+    canonical.sourceIntelligenceFile=sourceIntelligence?"source-intelligence.json":null;
     await writeJson(sessionFile(sessionId,"target-before-audit.json"),canonical);
     await writeAuditMarkdown(sessionFile(sessionId,"target-before-audit.json"),sessionFile(sessionId,"TARGET-BEFORE-AUDIT.md"),"Target Before Audit");
-    s.target={source,acquired,root:out,auditFile:"target-before-audit.json",sourceAuditFile:sourceAudit?"target-before/source-audit.json":null,runtimeRoot:runtimeAudit?path.join(out,"runtime"):null,partial:false,cancelled:false};
+    s.target={source,acquired,root:out,auditFile:"target-before-audit.json",sourceAuditFile:sourceAudit?"target-before/source-audit.json":null,sourceIntelligenceFile:sourceIntelligence?"target-before/source-intelligence.json":null,runtimeRoot:runtimeAudit?path.join(out,"runtime"):null,partial:false,cancelled:false};
+    const catalog=await readJson(sessionFile(sessionId,"reference-entities.json"));
+    if(catalog&&sourceIntelligence){
+      const map=await buildComponentMap({catalog,sourceIntelligence,outFile:sessionFile(sessionId,"component-map.json")});
+      s.componentMap={file:"component-map.json",mapped:map.counts.mapped,unmapped:map.counts.unmapped,createdAt:map.createdAt};
+    }
     await saveSession(s);return s.target;
   }).catch(()=>{});
 });
@@ -281,7 +309,16 @@ app.post("/api/plan",async(req,res)=>{
   const job=jobs.create("plan",{sessionId,selected:selectedIds.length});res.json({jobId:job.id});
   jobs.run(job,async()=>{
     const sourceAudit=s.target?.sourceAuditFile?await readJson(path.join(sessionDir(sessionId),s.target.sourceAuditFile)):null;
-    const plan=await buildPlan({comparisonFile:sessionFile(sessionId,"comparison.json"),selectedIds,outDir:sessionDir(sessionId),targetSourceAudit:sourceAudit});
+    const sourceIntelligence=s.target?.sourceIntelligenceFile?await readJson(path.join(sessionDir(sessionId),s.target.sourceIntelligenceFile)):null;
+    let componentMap=await readJson(sessionFile(sessionId,"component-map.json"));
+    if(!componentMap&&sourceIntelligence){
+      const catalog=await readJson(sessionFile(sessionId,"reference-entities.json"));
+      if(catalog){
+        componentMap=await buildComponentMap({catalog,sourceIntelligence,outFile:sessionFile(sessionId,"component-map.json")});
+        s.componentMap={file:"component-map.json",mapped:componentMap.counts.mapped,unmapped:componentMap.counts.unmapped,createdAt:componentMap.createdAt};
+      }
+    }
+    const plan=await buildPlan({comparisonFile:sessionFile(sessionId,"comparison.json"),selectedIds,outDir:sessionDir(sessionId),targetSourceAudit:sourceAudit,targetSourceIntelligence:sourceIntelligence,componentMap});
     s.plan={file:"implementation-plan.json",selected:selectedIds.length};await saveSession(s);return s.plan;
   }).catch(()=>{});
 });
@@ -301,8 +338,8 @@ Generated: ${new Date().toISOString()}
 - Runtime: ${s.target?.source?.runtimeUrl||s.target?.acquired?.url||"not supplied"}
 
 ## Use
-1. Read DESIGN-PACK/DESIGN.md and PACK-MANIFEST.json.
-2. Read implementation-plan.json, selected-upgrades.json and AGENT-TASK.md.
+1. Read DESIGN-PACK/DESIGN.md, design-contract.json and PACK-MANIFEST.json.
+2. Read component-map.json, implementation-plan.json, selected-upgrades.json and AGENT-TASK.md.
 3. Apply only approved frontend changes.
 4. Preserve APIs, routes, auth, data/state, business logic and functionality.
 5. Verify against bundled screenshots.
@@ -330,15 +367,25 @@ app.post("/api/execute",async(req,res)=>{
   jobs.run(job,async()=>{
     const progress=progressFor(job);
     const checkpoint=await prepareExecutionWorkspace(s.target.acquired.root,sessionDir(sessionId),{progress});
+    const plan=await readJson(sessionFile(sessionId,"implementation-plan.json"));
+    if(!plan)throw new Error("Implementation plan artifact is missing.");
+    const systemDir=path.join(checkpoint.worktree,".kk-frontend");
+    await ensureDir(systemDir);
     const taskFile=path.join(sessionDir(sessionId),"AGENT-TASK.md");
-    const workTask=path.join(checkpoint.worktree,"AGENT-TASK.md");
+    const workTask=path.join(systemDir,"AGENT-TASK.md");
     await fs.copyFile(taskFile,workTask);
     const designPack=path.join(sessionDir(sessionId),"DESIGN-PACK");
-    if(await exists(designPack))await fs.cp(designPack,path.join(checkpoint.worktree,"DESIGN-PACK"),{recursive:true,force:true});
+    if(await exists(designPack))await fs.cp(designPack,path.join(systemDir,"DESIGN-PACK"),{recursive:true,force:true});
+    for(const name of ["design-contract.json","component-map.json","implementation-plan.json"]){
+      const src=sessionFile(sessionId,name);
+      if(await exists(src))await fs.copyFile(src,path.join(systemDir,name));
+    }
+    await verifyPlanBaseline(checkpoint.worktree,plan,{progress});
 
     const agent=await runConfiguredAgent({worktree:checkpoint.worktree,taskFile:workTask,runDir:sessionDir(sessionId),progress});
+    const scope=await validateChangedFileScope(checkpoint,plan,{progress});
     const sourceAudit=await scanSourceProject(checkpoint.worktree,path.join(sessionDir(sessionId),"target-after-source-audit.json"),{progress});
-    const verification=await verifyProject({root:checkpoint.worktree,sourceAudit,runDir:sessionDir(sessionId),progress});
+    const verification=await verifyProject({root:checkpoint.worktree,sourceAudit,runDir:sessionDir(sessionId),progress,migrationPlan:plan,changedFiles:scope.changedFiles});
 
     let changedText="";
     if(checkpoint.mode==="git-worktree"){
@@ -365,9 +412,41 @@ ${changedText}
 `;
     await fs.writeFile(sessionFile(sessionId,"CHANGELOG.md"),changelog,"utf8");
     if(!verification.passed)throw new Error("Verification failed. Isolated workspace retained; original project remains unchanged.");
-    s.execution={checkpoint,agent,verificationPassed:true,applied:false,completedAt:new Date().toISOString()};
+    s.execution={checkpoint,agent,scope,verificationPassed:true,visualVerificationPassed:false,visualVerificationStatus:"pending-runtime",visualRuntimeUrl:null,applied:false,completedAt:new Date().toISOString()};
     await saveSession(s);
     return s.execution;
+  }).catch(()=>{});
+});
+
+app.post("/api/verify-visual-after",async(req,res)=>{
+  const {sessionId,runtimeUrl}=req.body||{};
+  const s=await ensureSession(sessionId);
+  if(!s.execution?.verificationPassed)return res.status(400).json({error:"Run source implementation and code verification first."});
+  if(!s.reference?.root)return res.status(400).json({error:"Reference scan is required."});
+  if(!runtimeUrl)return res.status(400).json({error:"Changed-workspace runtime URL is required."});
+  const job=jobs.create("visual-verify",{sessionId,runtimeUrl});res.json({jobId:job.id});
+  jobs.run(job,async()=>{
+    const progress=progressFor(job);
+    const out=path.join(sessionDir(sessionId),"target-after","runtime");
+    await fs.rm(out,{recursive:true,force:true});
+    await ensureDir(out);
+    const audit=await scanWebsite({url:runtimeUrl,outDir:out,resume:false,mode:"blueprint-fast",designOnly:true,downloadAssets:false,headless:true,maxRoutes:30,progress,control:jobs.control(job.id)});
+    if(audit.cancelled)throw new Error("Post-change visual scan was stopped before verification completed.");
+    const plan=await readJson(sessionFile(sessionId,"implementation-plan.json"));
+    const visual=await verifyVisualMigration({
+      referenceRoot:s.reference.root,
+      afterRuntimeRoot:out,
+      beforeComparisonFile:sessionFile(sessionId,"comparison.json"),
+      selectedIds:plan?.selectedComparisonIds||[],
+      outDir:path.join(sessionDir(sessionId),"visual-verification"),
+      progress
+    });
+    s.execution.visualVerificationPassed=visual.passed===true;
+    s.execution.visualVerificationStatus=visual.passed?"passed":"failed";
+    s.execution.visualRuntimeUrl=runtimeUrl;
+    s.execution.visualVerifiedAt=new Date().toISOString();
+    await saveSession(s);
+    return {passed:visual.passed,status:s.execution.visualVerificationStatus,resolved:visual.selectedResolution?.resolved||0,unresolved:visual.selectedResolution?.unresolved||0,file:"visual-verification/visual-verification.json"};
   }).catch(()=>{});
 });
 
@@ -376,6 +455,7 @@ app.post("/api/apply-local",async(req,res)=>{
   const s=await ensureSession(sessionId);
   if(approved!==true)return res.status(400).json({error:"Explicit apply-back approval is required."});
   if(!s.execution?.verificationPassed)return res.status(400).json({error:"No verified execution workspace is ready to apply."});
+  if(s.execution?.visualVerificationPassed!==true)return res.status(400).json({error:"Post-change visual verification must PASS before apply-back."});
   if(s.execution?.checkpoint?.mode!=="safe-copy")return res.status(400).json({error:"Apply-back is only used for Local/non-Git safe-copy execution. Git worktrees remain isolated for normal Git review/merge."});
   if(s.execution?.applied)return res.status(400).json({error:"Verified changes were already applied."});
 
@@ -386,10 +466,12 @@ app.post("/api/apply-local",async(req,res)=>{
     const checkpoint=s.execution.checkpoint;
     const applyResult=await applySafeCopyToOriginal(checkpoint,sessionDir(sessionId),{progress});
     const after=await scanSourceProject(checkpoint.originalRoot,path.join(sessionDir(sessionId),"target-applied-source-audit.json"),{progress});
-    const verification=await verifyProject({root:checkpoint.originalRoot,sourceAudit:after,runDir:path.join(sessionDir(sessionId),"apply-verification"),progress});
+    const plan=await readJson(sessionFile(sessionId,"implementation-plan.json"));
+    const verification=await verifyProject({root:checkpoint.originalRoot,sourceAudit:after,runDir:path.join(sessionDir(sessionId),"apply-verification"),progress,migrationPlan:plan,changedFiles:s.execution?.scope?.changedFiles||[]});
     if(!verification.passed){
-      await rollbackSafeCopyApply(applyResult,checkpoint,{progress});
-      throw new Error("Apply-back verification failed. Original source files were restored from backup.");
+      const rollback=await rollbackSafeCopyApply(applyResult,checkpoint,{progress});
+      if(!rollback.passed)throw new Error("CRITICAL: Apply-back verification failed and rollback verification FAILED. Inspect rollback-verification.json.");
+      throw new Error("Apply-back verification failed. Rollback restored and SHA256-verified the original files.");
     }
     s.execution.applied=true;
     s.execution.appliedAt=new Date().toISOString();
@@ -408,10 +490,14 @@ app.get("/api/artifacts/:sessionId",async(req,res)=>{
       const p=path.join(dir,"DESIGN-PACK",name);
       if(await exists(p))rows.unshift({name:`DESIGN-PACK/${name}`,type:"file",featured:true,url:`/data/runs/${sid}/DESIGN-PACK/${encodeURIComponent(name)}`});
     }
-    for(const name of ["reference-entities.json","design-selection.json"]){
+    for(const name of ["design-contract.json","component-map.json","reference-entities.json","design-selection.json"]){
       const p=path.join(dir,name);
       if(await exists(p))rows.unshift({name,type:"file",featured:true,url:`/data/runs/${sid}/${encodeURIComponent(name)}`});
     }
+    const sourceIntelligence=path.join(dir,"target-before","source-intelligence.json");
+    if(await exists(sourceIntelligence))rows.unshift({name:"target-before/source-intelligence.json",type:"file",featured:true,url:"/data/runs/"+sid+"/target-before/source-intelligence.json"});
+    const visualVerification=path.join(dir,"visual-verification","visual-verification.json");
+    if(await exists(visualVerification))rows.unshift({name:"visual-verification/visual-verification.json",type:"file",featured:true,url:"/data/runs/"+sid+"/visual-verification/visual-verification.json"});
     const generated=path.join(dir,"generated-source");
     if(await exists(generated)){
       rows.unshift({name:"generated-source/",type:"dir",featured:true,url:`/data/runs/${sid}/generated-source/`});
