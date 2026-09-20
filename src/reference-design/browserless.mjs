@@ -303,6 +303,11 @@ const snapshotScript = ({ selectors, maxElements }) => {
     const r = el.getBoundingClientRect();
     return { x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height, viewportX: r.x, viewportY: r.y };
   }
+  function compactCssValue(value) {
+    const text = String(value ?? "");
+    if (!text.includes("data:")) return text;
+    return text.replace(/url\((["']?)data:[\s\S]*?\1\)/gi, "url(data:[inline-asset-omitted])");
+  }
   function style(el) {
     const s = getComputedStyle(el);
     const keys = [
@@ -314,7 +319,7 @@ const snapshotScript = ({ selectors, maxElements }) => {
       "transform","transformOrigin","transitionProperty","transitionDuration","transitionTimingFunction","animationName","animationDuration","animationTimingFunction","animationIterationCount",
       "overflow","overflowX","overflowY","scrollSnapType","scrollBehavior","zIndex","cursor","pointerEvents","filter","backdropFilter","objectFit","objectPosition","aspectRatio"
     ];
-    return Object.fromEntries(keys.map(k => [k, s[k]]));
+    return Object.fromEntries(keys.map(k => [k, compactCssValue(s[k])]));
   }
   function pseudo(el, which) {
     const s = getComputedStyle(el, which);
@@ -322,7 +327,12 @@ const snapshotScript = ({ selectors, maxElements }) => {
     return { content: s.content, color: s.color, backgroundColor: s.backgroundColor, width: s.width, height: s.height, position: s.position, transform: s.transform };
   }
   function role(el) { return el.getAttribute("role") || null; }
-  function label(el) { return (el.getAttribute("aria-label") || el.getAttribute("title") || el.textContent || "").replace(/\s+/g," ").trim().slice(0,180); }
+  function label(el) {
+    const explicit = el.getAttribute("aria-label") || el.getAttribute("title") || el.querySelector?.("h1,h2,h3,h4,h5,h6")?.textContent || "";
+    const clean = String(explicit).replace(/\s+/g," ").trim();
+    if (clean && !/requestAnimationFrame|function\s*\(/i.test(clean)) return clean.slice(0,180);
+    return el.tagName.toLowerCase();
+  }
   const roots = selectors.map(s => { try { return document.querySelector(s); } catch { return null; } }).filter(Boolean);
   const scopes = roots.map(el => ({ selector: selectorFor(el), tag: el.tagName.toLowerCase(), role: role(el), className: typeof el.className === "string" ? el.className.slice(0,220) : "", label: label(el), rect: rect(el), style: style(el), pseudoBefore: pseudo(el,"::before"), pseudoAfter: pseudo(el,"::after") }));
   const source = [];
@@ -346,7 +356,12 @@ const snapshotScript = ({ selectors, maxElements }) => {
     elements.push({ selector, tag: el.tagName.toLowerCase(), role: role(el), className: typeof el.className === "string" ? el.className.slice(0,220) : "", label: label(el), text: (el.textContent || "").replace(/\s+/g," ").trim().slice(0,320), interactive, rect: r, style: s, attrs: { href: el.getAttribute("href"), type: el.getAttribute("type"), ariaExpanded: el.getAttribute("aria-expanded"), ariaSelected: el.getAttribute("aria-selected"), ariaChecked: el.getAttribute("aria-checked"), ariaDisabled: el.getAttribute("aria-disabled") }, pseudoBefore: pseudo(el,"::before"), pseudoAfter: pseudo(el,"::after") });
   }
   return {
-    document: { width: Math.max(document.documentElement.scrollWidth, innerWidth), height: Math.max(document.documentElement.scrollHeight, innerHeight), horizontalOverflow: document.documentElement.scrollWidth > innerWidth + 1 },
+    runtimeViewport: { width: innerWidth, height: innerHeight, devicePixelRatio },
+    document: {
+      width: Math.max(document.documentElement.scrollWidth, innerWidth),
+      height: Math.max(document.documentElement.scrollHeight, innerHeight),
+      horizontalOverflow: document.documentElement.scrollWidth > innerWidth + 1
+    },
     scopes,
     elements,
   };
@@ -367,6 +382,7 @@ const pageEvidenceScript = ({ selectors }) => {
     return parts.join(" > ");
   }
   const media = new Set(), containers = new Set();
+  const styleSheets = { total: document.styleSheets.length, readable: 0, blocked: 0 };
   function walkRules(rules) {
     for (const rule of rules || []) {
       try {
@@ -376,7 +392,10 @@ const pageEvidenceScript = ({ selectors }) => {
       } catch {}
     }
   }
-  for (const sheet of document.styleSheets) { try { walkRules(sheet.cssRules); } catch {} }
+  for (const sheet of document.styleSheets) {
+    try { walkRules(sheet.cssRules); styleSheets.readable += 1; }
+    catch { styleSheets.blocked += 1; }
+  }
   const roots = selectors.map(s => { try{return document.querySelector(s);}catch{return null;} }).filter(Boolean);
   const animations=[];
   for(const root of roots){
@@ -392,10 +411,22 @@ const pageEvidenceScript = ({ selectors }) => {
   const fonts=[];
   try { for(const f of document.fonts || []) fonts.push({family:f.family,style:f.style,weight:f.weight,stretch:f.stretch,status:f.status}); } catch {}
   const svgs=[...document.querySelectorAll("svg")].slice(0,120).map(el=>({selector:selectorFor(el),className:typeof el.className?.baseVal==="string"?el.className.baseVal:"",viewBox:el.getAttribute("viewBox"),width:el.getAttribute("width"),height:el.getAttribute("height"),fill:el.getAttribute("fill"),stroke:el.getAttribute("stroke")}));
-  const images=[...document.images].slice(0,160).map(el=>({selector:selectorFor(el),src:el.currentSrc||el.src,alt:el.alt,naturalWidth:el.naturalWidth,naturalHeight:el.naturalHeight,width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height,loading:el.loading}));
-  const videos=[...document.querySelectorAll("video")].slice(0,60).map(el=>({selector:selectorFor(el),src:el.currentSrc||el.src,poster:el.poster,autoplay:el.autoplay,loop:el.loop,muted:el.muted,width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height}));
+  function assetUrl(value) {
+    const v=String(value||"");
+    return v.startsWith("data:") ? "data:[inline-asset-omitted]" : v;
+  }
+  const images=[...document.images].slice(0,160).map(el=>({selector:selectorFor(el),src:assetUrl(el.currentSrc||el.src),alt:el.alt,naturalWidth:el.naturalWidth,naturalHeight:el.naturalHeight,width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height,loading:el.loading}));
+  const videos=[...document.querySelectorAll("video")].slice(0,60).map(el=>({selector:selectorFor(el),src:assetUrl(el.currentSrc||el.src),poster:assetUrl(el.poster),autoplay:el.autoplay,loop:el.loop,muted:el.muted,width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height}));
   const sticky=[...document.querySelectorAll("body *")].filter(el=>["fixed","sticky"].includes(getComputedStyle(el).position)).slice(0,100).map(el=>({selector:selectorFor(el),position:getComputedStyle(el).position,top:getComputedStyle(el).top,bottom:getComputedStyle(el).bottom}));
-  return {mediaQueries:[...media].filter(Boolean),containerQueries:[...containers].filter(Boolean),animations,fonts,assets:{svgs,images,videos},scroll:{behavior:getComputedStyle(document.documentElement).scrollBehavior,sticky}};
+  return {
+    mediaQueries:[...media].filter(Boolean),
+    containerQueries:[...containers].filter(Boolean),
+    animations,
+    fonts,
+    styleSheets,
+    assets:{svgs,images,videos,canvasCount:document.querySelectorAll("canvas").length},
+    scroll:{behavior:getComputedStyle(document.documentElement).scrollBehavior,sticky}
+  };
 };
 
 async function stateStyle(locator) {
@@ -417,7 +448,16 @@ async function collectInteractions(page, selectors) {
       const parts=[];let n=el;while(n&&n.nodeType===1&&parts.length<6){let p=n.tagName.toLowerCase(),par=n.parentElement;if(par){const same=[...par.children].filter(x=>x.tagName===n.tagName);if(same.length>1)p+=`:nth-of-type(${same.indexOf(n)+1})`;}parts.unshift(p);const q=parts.join(" > ");try{if(document.querySelectorAll(q).length===1)return q;}catch{}n=par;}return parts.join(" > ");
     }
     const out=[];
-    for(const s of selectors){let root;try{root=document.querySelector(s);}catch{}if(!root)continue;for(const el of [root,...root.querySelectorAll("a,button,input,select,textarea,summary,[role='button'],[role='link'],[role='tab'],[tabindex]")]){const q=selectorFor(el);if(q&&!out.includes(q))out.push(q);if(out.length>=36)break;}if(out.length>=36)break;}
+    const interactiveSelector="a,button,input,select,textarea,summary,[role='button'],[role='link'],[role='tab'],[tabindex]";
+    for(const s of selectors){
+      let root;try{root=document.querySelector(s);}catch{}
+      if(!root)continue;
+      const candidates=[];
+      if(root.matches?.(interactiveSelector))candidates.push(root);
+      candidates.push(...root.querySelectorAll(interactiveSelector));
+      for(const el of candidates){const q=selectorFor(el);if(q&&!out.includes(q))out.push(q);if(out.length>=36)break;}
+      if(out.length>=36)break;
+    }
     return out;
   }, {selectors});
   const rows=[];
