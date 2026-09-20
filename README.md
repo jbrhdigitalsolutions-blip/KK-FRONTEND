@@ -1,3 +1,36 @@
+# KK-FRONTEND v0.7.0 — AUTHENTICATED REFERENCE CAPTURE
+
+v0.7.0 extends the no-code Design Explorer to reference pages that legitimately require authentication.
+
+## Authentication modes
+
+- **Public** — unchanged public-reference workflow.
+- **Login form** — username/password with automatic field detection, optional login URL, and optional advanced CSS selectors.
+- **Session cookie** — for an already-authorized browser session, including many MFA/SSO cases.
+- **Access token / header** — an authentication header injected only into requests to the exact reference origin.
+- **HTTP Basic** — Basic Authorization injected only into the exact reference origin.
+
+Authentication is **ephemeral**. Credentials, passwords, cookies, and access tokens are not written to DESIGN.md, DESIGN-EVIDENCE.json, session files, logs, or persistent server storage. API responses carry only a sanitized authentication summary.
+
+CAPTCHA and MFA are never bypassed. For a site whose interactive login requires MFA/SSO/CAPTCHA, authenticate normally in your own browser and use an authorized session cookie instead.
+
+## Authenticated workflow
+
+```text
+Reference URL
+→ Authentication (optional)
+→ Inspect Design
+→ Select Regions
+→ Generate DESIGN.md + DESIGN-EVIDENCE.json
+→ Build Page
+→ Live Preview
+→ Export project
+```
+
+Network SSRF protections remain active during login, redirects, target navigation, and subresource loading.
+
+---
+
 # KK-FRONTEND v0.6.0 — NO-CODE DESIGN COMPILER
 
 v0.6.0 adds a deterministic **Build Page** workflow to the visual Design Explorer. A user can now go from a public reference website to a working frontend without a coding agent:
