@@ -304,3 +304,68 @@ a{color:inherit}
   .rdAuthFields,.rdAuthSelectorGrid{grid-template-columns:1fr}
   .rdAuthFields label.wide,.rdAuthAdvanced.wide{grid-column:auto}
 }
+
+
+/* v0.8.0 Project-Aware Exact Builder */
+.rdProjectIntake{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:rgba(4,7,11,.42)}
+.rdIntakeGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.rdIntakeGrid label,.rdProvidedContent label{display:grid;gap:5px;min-width:0}
+.rdIntakeGrid label>span,.rdProvidedContent label>span{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.rdIntakeGrid input,.rdIntakeGrid select,.rdProvidedContent input,.rdProvidedContent textarea{width:100%;border:1px solid var(--line-strong);background:#070a0f;color:var(--text);outline:none;border-radius:9px;font-size:10px}
+.rdIntakeGrid input,.rdIntakeGrid select,.rdProvidedContent input{height:36px;padding:0 10px}
+.rdProvidedContent textarea{min-height:88px;resize:vertical;padding:9px 10px;line-height:1.45}
+.rdIntakeGrid input:focus,.rdIntakeGrid select:focus,.rdProvidedContent input:focus,.rdProvidedContent textarea:focus{border-color:rgba(126,151,255,.62);box-shadow:0 0 0 3px rgba(126,151,255,.07)}
+.rdPlatformRow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px;padding:8px 9px;border-radius:9px;background:rgba(255,255,255,.018);border:1px solid var(--line)}
+.rdPlatformRow>span{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.rdPlatformRow label{display:flex;align-items:center;gap:5px;font-size:9px;color:#abb7c8}
+.rdPlatformRow input{accent-color:#8ea6ff}
+.rdProvidedContent{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.rdProvidedContent .wide{grid-column:1/-1}
+.rdUploadGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.rdUploadCard{display:grid;gap:4px;min-height:105px;padding:10px;border:1px dashed rgba(151,170,204,.24);border-radius:11px;background:rgba(255,255,255,.014);cursor:pointer}
+.rdUploadCard:hover{border-color:rgba(142,166,255,.4);background:rgba(142,166,255,.03)}
+.rdUploadCard input{font-size:8px;color:#8f9daf;max-width:100%}
+.rdUploadTitle{font-size:9px;font-weight:800;color:#dbe3ef}
+.rdUploadCard small{font-size:8px;line-height:1.45;color:var(--muted)}
+.rdUploadCard b{font-size:8px;color:#8ba0bc;font-weight:600}
+.rdUploadSafety{margin-top:8px;padding:7px 8px;border-radius:8px;border:1px solid rgba(255,190,110,.12);background:rgba(255,190,110,.025);font-size:7px;line-height:1.45;color:#8c8174}
+.rdUploadSafety b{color:#b99b7b}
+.rdProjectNotes{display:grid;gap:5px;margin-top:8px}
+.rdProjectNotes>span{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.rdProjectNotes>span small{font-size:7px;color:var(--muted-2);text-transform:none;letter-spacing:0}
+.rdProjectNotes textarea{min-height:78px;resize:vertical;border:1px solid var(--line-strong);border-radius:9px;padding:9px 10px;background:#070a0f;color:var(--text);outline:none;font:9px/1.45 inherit}
+.rdProjectNotes textarea:focus{border-color:rgba(126,151,255,.62);box-shadow:0 0 0 3px rgba(126,151,255,.07)}
+.rdIntakeActions{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:center;margin-top:10px}
+.rdReadiness{display:grid;gap:5px}
+.rdReadiness>div:first-child{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.rdReadiness b{font-size:9px}.rdReadiness span{font-size:8px;color:var(--muted);text-align:right}
+.rdReadinessTrack{height:5px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.05)}
+.rdReadinessTrack i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#7f99f5,#9bb0ff);transition:width .2s ease}
+.rdReadiness.ready .rdReadinessTrack i{background:linear-gradient(90deg,#71cfa1,#92dfb9)}
+.rdIntakeDetails{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.rdDetectedStack{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.rdDetectedStack span{display:grid;gap:2px;padding:7px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.014);font-size:8px;color:#aab7c8;overflow:hidden;text-overflow:ellipsis}
+.rdDetectedStack b{font-size:7px;text-transform:uppercase;letter-spacing:.06em;color:#69778a}
+.rdRequirementGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:8px}
+.rdRequirement{display:grid;grid-template-columns:20px minmax(0,1fr);gap:7px;padding:7px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.012)}
+.rdRequirement>span{display:grid;place-items:center;width:19px;height:19px;border-radius:6px;background:rgba(255,255,255,.035);font-size:8px;color:#7f8ca0}
+.rdRequirement>div{display:grid;gap:1px}.rdRequirement b{font-size:8px}.rdRequirement small{font-size:7px;line-height:1.4;color:var(--muted)}
+.rdRequirement.complete{border-color:rgba(120,215,170,.14)}.rdRequirement.complete>span{color:#8ddcb1;background:rgba(120,215,170,.06)}
+.rdRequirement.missing{border-color:rgba(255,152,166,.15)}.rdRequirement.missing>span{color:#ff9eaa;background:rgba(255,152,166,.05)}
+.rdRecommendations{margin-top:8px;padding:8px;border-radius:8px;background:rgba(142,166,255,.035);border:1px solid rgba(142,166,255,.11)}
+.rdRecommendations b{font-size:8px}.rdRecommendations ul{margin:5px 0 0;padding-left:16px;color:var(--muted);font-size:7px;line-height:1.55}
+.rdExactControls{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto!important}
+.rdExactControls select:disabled{opacity:.72}
+
+@media(max-width:900px){
+  .rdIntakeGrid{grid-template-columns:1fr 1fr}
+  .rdDetectedStack{grid-template-columns:1fr 1fr}
+}
+@media(max-width:700px){
+  .rdIntakeGrid,.rdUploadGrid,.rdRequirementGrid,.rdProvidedContent,.rdExactControls{grid-template-columns:1fr!important}
+  .rdProvidedContent .wide{grid-column:auto}
+  .rdIntakeActions{grid-template-columns:1fr}
+  .rdReadiness>div:first-child{align-items:flex-start;flex-direction:column}
+  .rdReadiness span{text-align:left}
+  .rdDetectedStack{grid-template-columns:1fr 1fr}
+}
