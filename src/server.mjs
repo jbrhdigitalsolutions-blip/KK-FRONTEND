@@ -23,7 +23,7 @@ import { runConfiguredAgent } from "./execution/agent-runner.mjs";
 import { verifyProject } from "./execution/verify.mjs";
 import { verifyPlanBaseline, validateChangedFileScope } from "./execution/migration-guard.mjs";
 import { verifyVisualMigration } from "./execution/visual-verify.mjs";
-import { captureReferencePreview, generateReferenceDesignMd, inspectProjectWebsite, inspectReferenceDesign, referenceDesignStatus } from "./reference-design/browserless.mjs";
+import { captureReferencePreview, certifyGeneratedPreview, generateReferenceDesignMd, inspectProjectWebsite, inspectReferenceDesign, referenceDesignStatus } from "./reference-design/browserless.mjs";
 import { compileNoCodeDesign } from "./no-code/compiler.mjs";
 import { analyzeProjectContext } from "./no-code/project-fit.mjs";
 import { scanGitHubProject } from "./no-code/project-sources.mjs";
@@ -146,6 +146,16 @@ app.post("/api/reference-design/preview",async(req,res)=>{
   try{
     const {url,viewport="desktop",auth={}}=req.body||{};
     res.json(await captureReferencePreview({url,viewport,auth}));
+  }catch(e){
+    const status=e?.code==="BROWSERLESS_NOT_CONFIGURED"?503:400;
+    res.status(status).json({error:String(e.message||e)});
+  }
+});
+
+app.post("/api/reference-design/certify",async(req,res)=>{
+  try{
+    const {url,html,viewport="desktop",auth={},baseUrl=""}=req.body||{};
+    res.json(await certifyGeneratedPreview({url,html,viewport,auth,baseUrl}));
   }catch(e){
     const status=e?.code==="BROWSERLESS_NOT_CONFIGURED"?503:400;
     res.status(status).json({error:String(e.message||e)});
