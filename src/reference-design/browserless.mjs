@@ -50,10 +50,10 @@ export function isPrivateOrRestrictedAddress(address) {
   }
   if (net.isIP(address) === 6) {
     const x = address.toLowerCase();
-    if (x.startsWith("::ffff:")) return isPrivateOrRestrictedAddress(x.slice(7));
+    if (x.startsWith("::ffff:")) return true;
     return x === "::1" || x === "::" ||
       x.startsWith("fc") || x.startsWith("fd") ||
-      /^fe[89ab]/.test(x);
+      /^fe[89a-f]/.test(x) || x.startsWith("ff");
   }
   return false;
 }
@@ -68,7 +68,7 @@ function restrictedHostname(host) {
 async function assertPublicReferenceUrl(input, dnsCache = null) {
   const normalized = normalizeReferenceUrl(input);
   const url = new URL(normalized);
-  const host = url.hostname.toLowerCase();
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (restrictedHostname(host)) throw new Error("Private/local reference URLs are not allowed in web-only mode.");
   if (net.isIP(host) && isPrivateOrRestrictedAddress(host)) throw new Error("Private/local reference URLs are not allowed in web-only mode.");
   if (env("KK_REFERENCE_ALLOW_PRIVATE").toLowerCase() === "true") return normalized;
