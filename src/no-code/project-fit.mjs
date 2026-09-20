@@ -135,22 +135,29 @@ function bestAsset(assets, words){
   return assets.find(path=>words.some(w=>path.toLowerCase().includes(w))) || "";
 }
 
-function defaultTargetPath(stack,isTs,route,files=[]){
+function joinRoot(root,rel){
+  const r=pathNorm(root),p=pathNorm(rel);
+  return r?r+"/"+p:p;
+}
+function defaultTargetPath(stack,isTs,route,files=[],packageRoot=""){
   const cleanRoute=String(route||"/").replace(/^\/+|\/+$/g,"");
   if(stack==="next"){
-    const ext=isTs?"tsx":"jsx";
-    const exact=files.find(x=>x.path===((cleanRoute?`app/${cleanRoute}/`:"app/")+`page.${ext}`));
-    if(exact) return exact.path;
-    const base=cleanRoute ? `app/${cleanRoute}/` : "app/";
-    return base+`page.${ext}`;
+    const extensions=isTs?["tsx","ts","jsx","js"]:["jsx","js","tsx","ts"];
+    for(const extension of extensions){
+      const rel=(cleanRoute?"app/"+cleanRoute+"/":"app/")+"page."+extension;
+      const exact=files.find(x=>x.path===joinRoot(packageRoot,rel));
+      if(exact)return exact.path;
+    }
+    return joinRoot(packageRoot,(cleanRoute?"app/"+cleanRoute+"/":"app/")+"page."+(isTs?"tsx":"jsx"));
   }
   if(stack==="react"){
-    const app=files.find(x=>/^src\/App\.(?:js|jsx|ts|tsx)$/i.test(x.path));
-    if(app) return app.path;
-    return `src/App.${isTs?"tsx":"jsx"}`;
+    const prefix=packageRoot?pathNorm(packageRoot)+"/":"";
+    const app=files.find(x=>x.path.startsWith(prefix+"src/App.")&&/\.(?:js|jsx|ts|tsx)$/i.test(x.path));
+    if(app)return app.path;
+    return joinRoot(packageRoot,"src/App."+(isTs?"tsx":"jsx"));
   }
   const html=files.find(x=>/(^|\/)index\.html$/i.test(x.path));
-  return html?.path || "reference-design.html";
+  return html?.path || joinRoot(packageRoot,"reference-design.html");
 }
 
 function question(id,label,reason,kind="text",required=true){
