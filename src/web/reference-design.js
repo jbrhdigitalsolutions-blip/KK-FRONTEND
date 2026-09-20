@@ -126,8 +126,11 @@ function projectAnswers() {
     projectName: $("projectNameInput")?.value.trim() || "",
     targetPage: $("targetPageInput")?.value.trim() || "",
     frameworkPreference: $("frameworkPreference")?.value || "",
+    packageManagerPreference: $("packageManagerPreference")?.value || "",
     contentStrategy: $("contentStrategy")?.value || "",
     assetStrategy: $("assetStrategy")?.value || "",
+    assetMap: $("assetMapInput")?.value.trim() || "",
+    projectNotes: $("projectNotes")?.value.trim() || "",
     targetPlatforms: platforms,
     content,
   };
@@ -135,10 +138,13 @@ function projectAnswers() {
 function updateProjectModeUi() {
   const existing = $("projectMode").value === "existing";
   $("targetPageField").hidden = !existing;
-  $("frameworkField").hidden = existing;
+  $("frameworkLabel").textContent = existing ? "Framework / stack override" : "Framework";
 }
 function updateProvidedContentUi() {
   $("providedContentFields").hidden = $("contentStrategy").value !== "provided";
+}
+function updateAssetMapUi() {
+  $("assetMapField").hidden = $("assetStrategy").value !== "provided";
 }
 function invalidateProjectFit() {
   state.projectIntake = null;
@@ -666,7 +672,8 @@ $("buildPageButton").addEventListener("click", async () => {
 
 $("projectMode").addEventListener("change", () => { updateProjectModeUi(); invalidateProjectFit(); });
 $("contentStrategy").addEventListener("change", () => { updateProvidedContentUi(); invalidateProjectFit(); });
-for (const id of ["projectNameInput","targetPageInput","frameworkPreference","assetStrategy","platformWindows","platformMacos","contentHeadline","contentPrimaryAction","contentBody"]) {
+$("assetStrategy").addEventListener("change", () => { updateAssetMapUi(); invalidateProjectFit(); });
+for (const id of ["projectNameInput","targetPageInput","frameworkPreference","packageManagerPreference","assetMapInput","projectNotes","platformWindows","platformMacos","contentHeadline","contentPrimaryAction","contentBody"]) {
   $(id)?.addEventListener("change", invalidateProjectFit);
 }
 $("projectFolderInput").addEventListener("change", event => readProjectFiles(event.target.files));
@@ -735,13 +742,17 @@ $("newButton").addEventListener("click", () => {
   $("projectNameInput").value = "";
   $("targetPageInput").value = "";
   $("frameworkPreference").value = "";
+  $("packageManagerPreference").value = "";
   $("contentStrategy").value = "";
   $("assetStrategy").value = "";
+  $("assetMapInput").value = "";
+  $("projectNotes").value = "";
   $("projectFolderInput").value = "";
   $("projectFilesInput").value = "";
   $("intakeDetails").hidden = true;
   updateProjectModeUi();
   updateProvidedContentUi();
+  updateAssetMapUi();
   $("referenceUrl").focus();
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
@@ -749,4 +760,5 @@ $("newButton").addEventListener("click", () => {
 updateAuthUi();
 updateProjectModeUi();
 updateProvidedContentUi();
+updateAssetMapUi();
 checkProvider();
