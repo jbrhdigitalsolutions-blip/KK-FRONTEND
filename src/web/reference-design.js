@@ -12,6 +12,7 @@ const state = {
   build: null,
   projectFiles: [],
   projectProfile: null,
+  referencePreviews: {},
 };
 
 function notice(message, kind = "error") {
@@ -586,7 +587,37 @@ function buildDeviceSize(device) {
   };
   return evidence[device] || fallback[device] || fallback.desktop;
 }
-function setBuildDevice(device) {
+async function loadReferencePreview(device) {
+  if (!state.inspection?.finalUrl) return;
+  if (state.referencePreviews[device]) {
+    $("buildReferenceImage").src=state.referencePreviews[device];
+    return;
+  }
+  const label=$(".rdReferencePane .rdPaneLabel");
+  const old=label?.textContent || "Reference capture";
+  if(label) label.textContent=`Loading ${device} reference…`;
+  try {
+    const data=await api("/api/reference-design/preview",{
+      method:"POST",
+      body:JSON.stringify({
+        url:state.inspection.finalUrl,
+        viewport:device,
+        auth:currentAuth(),
+      }),
+    });
+    state.referencePreviews[device]=data.screenshot;
+    $("buildReferenceImage").src=data.screenshot;
+    if(label) label.textContent=`Reference · ${data.width}×${data.height}`;
+  } catch(error) {
+    if(label) label.textContent="Reference preview unavailable";
+    if (!state.referencePreviews.desktop && state.inspection?.screenshot) {
+      $("buildReferenceImage").src=state.inspection.screenshot;
+    }
+  } finally {
+    if(label && label.textContent.startsWith("Loading ")) label.textContent=old;
+  }
+}
+async function setBuildDevice(device) {
   const shell = $("buildFrameShell");
   if (!shell) return;
   const size = buildDeviceSize(device);
@@ -596,6 +627,7 @@ function setBuildDevice(device) {
   document.querySelectorAll("[data-device]").forEach(btn =>
     btn.classList.toggle("active", btn.dataset.device === device)
   );
+  await loadReferencePreview(device);
 }
 function setBuildView(view) {
   $("buildCompare").dataset.view = view;
@@ -620,7 +652,7 @@ function downloadBase64(base64, filename, type = "application/zip") {
 }
 function renderBuildResult(data) {
   state.build = data;
-  $("buildReferenceImage").src = state.inspection?.screenshot || "";
+  $("buildReferenceImage").src = state.referencePreviews.desktop || state.inspection?.screenshot || "";
   $("buildFrame").srcdoc = data.previewHtml;
   $("buildSummary").textContent = `${data.output.toUpperCase()} · ${data.summary.regions} compiled regions · ${data.summary.projectFiles} project files`;
   $("projectName").textContent = data.filename;
@@ -728,6 +760,7 @@ $("newButton").addEventListener("click", () => {
   state.markdown = "";
   state.evidenceJson = "";
   state.build = null;
+  state.referencePreviews = {};
   state.projectProfile = null;
   state.projectFiles = [];
   renderProjectFileSummary();
