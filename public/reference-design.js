@@ -9,6 +9,7 @@ const state = {
   filename: "DESIGN.md",
   evidenceJson: "",
   evidenceFilename: "DESIGN-EVIDENCE.json",
+  build: null,
 };
 
 function notice(message, kind = "error") {
@@ -226,7 +227,9 @@ function selectFiltered() {
 function resetResult() {
   state.markdown = "";
   state.evidenceJson = "";
+  state.build = null;
   $("resultStage").hidden = true;
+  $("buildStage").hidden = true;
 }
 
 async function checkProvider() {
@@ -341,6 +344,8 @@ $("generateButton").addEventListener("click", async () => {
 
     $("markdownPreview").textContent = state.markdown.slice(0, 24000) +
       (state.markdown.length > 24000 ? "\n\n… Preview truncated; downloaded DESIGN.md contains the complete specification." : "");
+    state.build = null;
+    $("buildStage").hidden = true;
     $("resultStage").hidden = false;
     $("resultStage").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
@@ -348,6 +353,110 @@ $("generateButton").addEventListener("click", async () => {
   } finally {
     busy($("generateButton"), false);
   }
+});
+
+function buildDeviceSize(device) {
+  const evidence = state.build?.model?.viewports || {};
+  const fallback = {
+    desktop: { width: 1440, height: 900 },
+    tablet: { width: 820, height: 1180 },
+    mobile: { width: 390, height: 844 },
+  };
+  return evidence[device] || fallback[device] || fallback.desktop;
+}
+function setBuildDevice(device) {
+  const shell = $("buildFrameShell");
+  if (!shell) return;
+  const size = buildDeviceSize(device);
+  shell.dataset.device = device;
+  shell.style.width = `${size.width}px`;
+  shell.style.height = `${Math.max(560, Math.min(1180, size.height))}px`;
+  document.querySelectorAll("[data-device]").forEach(btn =>
+    btn.classList.toggle("active", btn.dataset.device === device)
+  );
+}
+function setBuildView(view) {
+  $("buildCompare").dataset.view = view;
+  document.querySelectorAll("[data-build-view]").forEach(btn =>
+    btn.classList.toggle("active", btn.dataset.buildView === view)
+  );
+}
+function downloadBase64(base64, filename, type = "application/zip") {
+  if (!base64) return;
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+function renderBuildResult(data) {
+  state.build = data;
+  $("buildReferenceImage").src = state.inspection?.screenshot || "";
+  $("buildFrame").srcdoc = data.previewHtml;
+  $("buildSummary").textContent = `${data.output.toUpperCase()} · ${data.summary.regions} compiled regions · ${data.summary.projectFiles} project files`;
+  $("projectName").textContent = data.filename;
+  $("projectFiles").textContent = data.files.map(file => file.path).join(" · ");
+
+  const facts = [
+    [data.summary.regions, "Compiled regions"],
+    [`${data.summary.evidenceConfidence ?? "—"}%`, "Evidence confidence"],
+    [data.summary.unknownCount, "Unresolved fields"],
+    [data.summary.projectFiles, "Project files"],
+  ];
+  $("buildFacts").innerHTML = facts.map(([value,label]) =>
+    `<div class="rdFact"><b>${escapeHtml(value)}</b><span>${escapeHtml(label)}</span></div>`
+  ).join("");
+
+  $("buildStage").hidden = false;
+  setBuildView("build");
+  setBuildDevice("desktop");
+  $("buildStage").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+$("buildPageButton").addEventListener("click", async () => {
+  if (!state.evidenceJson || !state.markdown) {
+    notice("Generate DESIGN.md first, then build the page.");
+    return;
+  }
+  notice("");
+  busy($("buildPageButton"), true, "Compiling page…");
+  try {
+    const data = await api("/api/reference-design/build", {
+      method: "POST",
+      body: JSON.stringify({
+        evidenceJson: state.evidenceJson,
+        markdown: state.markdown,
+        options: {
+          output: $("buildOutput").value,
+          contentMode: $("buildContent").value,
+          fidelity: $("buildFidelity").value,
+        },
+      }),
+    });
+    renderBuildResult(data);
+  } catch (error) {
+    notice(error.message);
+  } finally {
+    busy($("buildPageButton"), false);
+  }
+});
+
+document.querySelectorAll("[data-build-view]").forEach(button =>
+  button.addEventListener("click", () => setBuildView(button.dataset.buildView))
+);
+document.querySelectorAll("[data-device]").forEach(button =>
+  button.addEventListener("click", () => setBuildDevice(button.dataset.device))
+);
+$("downloadProjectButton").addEventListener("click", () => {
+  if (!state.build) return;
+  downloadBase64(state.build.zipBase64, state.build.filename);
 });
 
 function downloadText(content, filename, type) {
@@ -382,8 +491,10 @@ $("newButton").addEventListener("click", () => {
   state.activeFamily = "All";
   state.markdown = "";
   state.evidenceJson = "";
+  state.build = null;
   $("selectionStage").hidden = true;
   $("resultStage").hidden = true;
+  $("buildStage").hidden = true;
   $("referenceUrl").focus();
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
