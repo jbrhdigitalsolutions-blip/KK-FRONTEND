@@ -125,14 +125,22 @@ function bestAsset(assets, words){
   return assets.find(path=>words.some(w=>path.toLowerCase().includes(w))) || "";
 }
 
-function defaultTargetPath(stack,isTs,route){
+function defaultTargetPath(stack,isTs,route,files=[]){
   const cleanRoute=String(route||"/").replace(/^\/+|\/+$/g,"");
   if(stack==="next"){
+    const ext=isTs?"tsx":"jsx";
+    const exact=files.find(x=>x.path===((cleanRoute?`app/${cleanRoute}/`:"app/")+`page.${ext}`));
+    if(exact) return exact.path;
     const base=cleanRoute ? `app/${cleanRoute}/` : "app/";
-    return base+`page.${isTs?"tsx":"jsx"}`;
+    return base+`page.${ext}`;
   }
-  if(stack==="react") return `src/components/ReferenceDesign.${isTs?"tsx":"jsx"}`;
-  return "reference-design.html";
+  if(stack==="react"){
+    const app=files.find(x=>/^src\/App\.(?:js|jsx|ts|tsx)$/i.test(x.path));
+    if(app) return app.path;
+    return `src/App.${isTs?"tsx":"jsx"}`;
+  }
+  const html=files.find(x=>/(^|\/)index\.html$/i.test(x.path));
+  return html?.path || "reference-design.html";
 }
 
 function question(id,label,reason,kind="text",required=true){
@@ -154,7 +162,7 @@ export function analyzeProjectContext(input={}){
   const mode=["existing","new"].includes(input.mode) ? input.mode : (files.length ? "existing" : "new");
   const projectName=text(input.projectName,pkgInfo.pkg?.name || "my-project").slice(0,100);
   const targetRoute=text(input.targetRoute,routes[0] || "/").slice(0,240);
-  const targetPath=text(input.targetPath,defaultTargetPath(stack,isTypeScript,targetRoute)).slice(0,300);
+  const targetPath=text(input.targetPath,defaultTargetPath(stack,isTypeScript,targetRoute,files)).slice(0,300);
   const nav=cleanList(input.navItems);
   const content={
     brand:text(input.brand).slice(0,120),
