@@ -171,6 +171,133 @@ function buildRegions(evidence,contentMode){
     })),
   }));
 }
+function targetContentPool(project={}){
+  const web=project.websiteContent||{};
+  const source=project.sourceIntelligence||{};
+  const content=project.content||{};
+  return{
+    headings:[content.heroTitle,...arr(web.headings),...arr(source.contentStrings)].filter(Boolean),
+    paragraphs:[content.heroBody,...arr(web.paragraphs),...arr(source.contentStrings)].filter(Boolean),
+    buttons:[content.primaryCta,content.secondaryCta,...arr(web.buttons)].filter(Boolean),
+    nav:arr(content.navItems).length?arr(content.navItems):arr(web.navItems),
+    images:[project.assetMap?.heroAsset,project.assetMap?.logoAsset,...arr(web.images).map(x=>x?.src),...arr(source.assetReferences)].filter(Boolean),
+  };
+}
+function closestIncludedAncestor(node,included){
+  for(const selector of arr(node.ancestorSelectors))if(included.has(selector))return selector;
+  return null;
+}
+function buildReferenceTree(evidence,project){
+  const desktop=viewport(evidence,"desktop");
+  const tablet=viewport(evidence,"tablet");
+  const mobile=viewport(evidence,"mobile");
+  const desktopNodes=nodesFor(desktop).filter(x=>x?.selector&&x.tag!=="body").slice(0,300);
+  const included=new Set(desktopNodes.map(x=>x.selector));
+  const byVp=(vp,selector)=>nodesFor(vp).find(x=>x.selector===selector);
+  const nodes=desktopNodes.map((node,index)=>({
+    id:"node-"+(index+1),
+    selector:node.selector,
+    parentSelector:included.has(node.parentSelector)?node.parentSelector:closestIncludedAncestor(node,included),
+    childIndex:Number.isFinite(Number(node.childIndex))?Number(node.childIndex):index,
+    depth:Number(node.depth)||0,
+    tag:node.tag||"div",
+    role:node.role||null,
+    label:cleanLabel(node.label)||node.tag||"content",
+    text:String(node.text||"").trim(),
+    interactive:Boolean(node.interactive),
+    attrs:node.attrs||{},
+    rect:node.rect||null,
+    style:node.style||{},
+    tablet:byVp(tablet,node.selector)||null,
+    mobile:byVp(mobile,node.selector)||null,
+  }));
+  const roots=[];
+  const map=new Map(nodes.map(x=>[x.selector,{...x,children:[]}]));
+  for(const node of map.values()){
+    const parent=node.parentSelector?map.get(node.parentSelector):null;
+    if(parent&&parent!==node)parent.children.push(node);
+    else roots.push(node);
+  }
+  const sortTree=list=>{
+    list.sort((a,b)=>(a.childIndex-b.childIndex)||((a.rect?.y||0)-(b.rect?.y||0))||((a.rect?.x||0)-(b.rect?.x||0)));
+    for(const node of list)sortTree(node.children);
+  };
+  sortTree(roots);
+  return{roots,nodes:[...map.values()],pool:targetContentPool(project||{})};
+}
+function nextPool(pool,key,index,fallback=""){
+  const list=arr(pool?.[key]);
+  return text(list[index%Math.max(1,list.length)],fallback);
+}
+function safeTag(tag){
+  return ["header","nav","main","aside","footer","section","article","div","form","button","a","input","textarea","select","img","video","p","span","ul","ol","li","h1","h2","h3","h4","h5","h6","label"].includes(tag)?tag:"div";
+}
+function renderTreeNode(node,ctx){
+  const tag=safeTag(node.tag);
+  const cls="kk-node-"+node.id.replace("node-","");
+  const attrs=[`class="${cls}"`,`data-ref-kind="${esc(semanticKind(node))}"`];
+  const role=node.role?String(node.role):"";
+  if(role)attrs.push(`role="${esc(role)}"`);
+  let content="";
+  if(tag==="h1")content=esc(ctx.project?.content?.heroTitle||nextPool(ctx.pool,"headings",ctx.heading++ ,node.text||node.label));
+  else if(/^h[2-6]$/.test(tag))content=esc(nextPool(ctx.pool,"headings",ctx.heading++,node.text||node.label));
+  else if(tag==="p")content=esc(nextPool(ctx.pool,"paragraphs",ctx.paragraph++,node.text||""));
+  else if(tag==="button")content=esc(nextPool(ctx.pool,"buttons",ctx.button++,node.text||node.label||"Action"));
+  else if(tag==="a"){
+    const isNav=node.ancestorSelectors?.some?.(x=>/nav/i.test(x))||node.parentSelector?.includes("nav");
+    content=esc(isNav?nextPool(ctx.pool,"nav",ctx.nav++,node.text||node.label):node.text||node.label||"Link");
+    attrs.push('href="#"');
+  } else if(tag==="img"){
+    const src=nextPool(ctx.pool,"images",ctx.image++,ctx.project?.assetMap?.heroAsset||"");
+    attrs.push(`alt="${esc(node.attrs?.alt||"")}"`);
+    if(src)attrs.push(`src="${esc(src)}"`);
+  } else if(tag==="input"){
+    attrs.push(`type="${esc(node.attrs?.type||"text")}"`);
+    const ph=node.attrs?.placeholder||"";
+    if(ph)attrs.push(`placeholder="${esc(ph)}"`);
+  } else if(tag==="textarea"){
+    const ph=node.attrs?.placeholder||""; if(ph)attrs.push(`placeholder="${esc(ph)}"`);
+  } else if(node.children.length===0 && node.text && node.text.length<180){
+    content=esc(node.text);
+  }
+  const children=node.children.map(child=>renderTreeNode(child,ctx)).join("");
+  if(["img","input"].includes(tag))return `<${tag} ${attrs.join(" ")} />`;
+  return `<${tag} ${attrs.join(" ")}>${content}${children}</${tag}>`;
+}
+function referenceTreeMarkup(model){
+  const tree=model.referenceTree;
+  if(!tree?.roots?.length)return"";
+  const ctx={pool:tree.pool||{},project:model.project||{},heading:0,paragraph:0,button:0,nav:0,image:0};
+  return tree.roots.map(node=>renderTreeNode(node,ctx)).join("\n");
+}
+const EXACT_STYLE_KEYS=[
+  "display","position","top","right","bottom","left","width","height","minWidth","maxWidth","minHeight","maxHeight",
+  "marginTop","marginRight","marginBottom","marginLeft","paddingTop","paddingRight","paddingBottom","paddingLeft",
+  "gap","rowGap","columnGap","gridTemplateColumns","gridTemplateRows","gridAutoFlow","justifyContent","alignItems",
+  "alignContent","flexDirection","flexWrap","color","backgroundColor","backgroundImage","opacity","border","borderRadius",
+  "boxShadow","outline","outlineOffset","fontFamily","fontSize","fontWeight","fontStyle","lineHeight","letterSpacing",
+  "textAlign","textTransform","whiteSpace","transform","transformOrigin","overflow","overflowX","overflowY","zIndex",
+  "cursor","pointerEvents","filter","backdropFilter","objectFit","objectPosition","aspectRatio"
+];
+function cssName(key){return key.replace(/[A-Z]/g,m=>"-"+m.toLowerCase())}
+function exactDeclarations(style={}){
+  return EXACT_STYLE_KEYS.map(key=>[key,style?.[key]]).filter(([,v])=>v!=null&&v!==""&&v!=="auto"&&v!=="normal")
+    .filter(([key,v])=>!(key==="backgroundImage"&&String(v).includes("data:")))
+    .map(([key,v])=>`${cssName(key)}:${cssEsc(v)}`).join(";");
+}
+function referenceTreeCss(model){
+  const rows=[];
+  for(const node of model.referenceTree?.nodes||[]){
+    const n=node.id.replace("node-","");
+    rows.push(`.kk-node-${n}{${exactDeclarations(node.style)}}`);
+    const tablet=node.tablet?.style||{};
+    const mobile=node.mobile?.style||{};
+    if(Object.keys(tablet).length)rows.push(`@media(max-width:900px){.kk-node-${n}{${exactDeclarations(tablet)}}}`);
+    if(Object.keys(mobile).length)rows.push(`@media(max-width:520px){.kk-node-${n}{${exactDeclarations(mobile)}}}`);
+  }
+  return `*{box-sizing:border-box}html,body{margin:0;padding:0;min-height:100%;background:${cssEsc(model.tokens.background)};color:${cssEsc(model.tokens.text)};font-family:${cssEsc(model.tokens.font)}}a{color:inherit;text-decoration:none}img,video,svg{max-width:100%}button,input,textarea,select{font:inherit}body{overflow-x:hidden}${rows.join("\n")}`;
+}
+
 function placeholderFor(kind,index){
   const map={
     Header:"Site header",Navigation:"Primary navigation",Hero:"Hero headline",Section:"Content section",
