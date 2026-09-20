@@ -1,3 +1,98 @@
+# KK-FRONTEND v0.9.0 — MULTI-SOURCE PROJECT INTELLIGENCE + VISUAL CERTIFICATION
+
+v0.9.0 addresses the main limitation found by comparing a real `https://v0.app/` reference against a v0.8 generated Next.js ZIP: a flat semantic region list is not enough to reconstruct a page accurately.
+
+## What changed
+
+### 1. Reference evidence keeps hierarchy
+
+Compact reference evidence now retains up to 300 useful nodes per viewport, including:
+
+- parent selector and ancestor chain;
+- child order and hierarchy depth;
+- element text evidence;
+- computed layout/style properties;
+- media attributes;
+- Desktop / Tablet / Mobile counterparts.
+
+Accurate generation uses this hierarchy instead of stacking generic Header / Section / Typography / Image templates.
+
+### 2. Target project can come from three sources
+
+Project Fit supports any combination of:
+
+```text
+Local project files/folder
++ GitHub repository URL
++ Current project website URL
+```
+
+Local files override matching GitHub files, so uncommitted local work can remain authoritative.
+
+GitHub scans are server-side, design/frontend prioritized and bounded. An optional token is used only for that scan and is not returned or persisted.
+
+The current website scan captures visible headings, paragraphs, navigation, actions, inputs, image metadata, runtime framework signals and CSS variables so the generated design can use the user's current content rather than reference-site copy.
+
+### 3. Monorepos are first-class
+
+When the real frontend package is nested, for example:
+
+```text
+package.json
+web/package.json
+web/app/page.tsx
+web/app/pricing/page.tsx
+```
+
+Project Fit detects `web/` as the frontend package root, detects its routes, and generates target paths under that root.
+
+### 4. Accurate mode has a stronger gate
+
+Existing projects now need deep source evidence and a materially complete Project Fit before Accurate mode unlocks. A manually filled form with no assets/design evidence is no longer enough to label a build Accurate.
+
+New projects use a separate readiness rule because they do not have an existing source tree to preserve.
+
+### 5. User content replaces reference content
+
+Reference DOM/layout/style evidence controls **design structure**. User project files and website evidence control **content and assets**. The exact renderer does not automatically copy reference-site text or third-party background image URLs.
+
+### 6. Original target source is preserved
+
+Existing-project ZIPs include the generated patch and, when available:
+
+```text
+ORIGINAL-SOURCE/<target-path>
+```
+
+The Windows/macOS apply scripts also create timestamped backups before changing the user's project.
+
+### 7. Viewer is now a verification tool
+
+The Build viewer provides:
+
+- Build
+- Reference
+- Split
+- Overlay
+- Diff
+- Desktop / Tablet / Mobile
+- Fit mode
+- 100% pixel mode
+- server-rendered visual analysis
+
+Visual analysis reports two separate measurements:
+
+- **Raw pixel similarity** — strict and content/color sensitive.
+- **Structural similarity** — an edge-placement heuristic that is less sensitive to content/color differences.
+
+Neither Project Fit nor visual similarity is presented as a guarantee of functional equivalence.
+
+## Target-source privacy
+
+Common secret/private paths and generated/vendor directories are excluded from local and server project analysis. GitHub tokens are ephemeral. Reference authentication credentials remain separate from project-website scanning.
+
+---
+
 # KK-FRONTEND v0.8.0 — PROJECT-AWARE DESIGN BUILDER
 
 v0.8.0 changes **Build Page** from a generic reference reconstruction into a project-aware workflow.

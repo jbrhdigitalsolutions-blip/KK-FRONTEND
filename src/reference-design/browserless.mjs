@@ -2,6 +2,8 @@ import dns from "node:dns/promises";
 import net from "node:net";
 import fs from "node:fs/promises";
 import { chromium } from "playwright";
+import { PNG } from "pngjs";
+import pixelmatch from "pixelmatch";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { buildEvidenceCompanion, candidateFamily, classifyCandidate, normalizeReferenceUrl, renderDesignMd } from "./design-md.mjs";
@@ -348,6 +350,143 @@ export async function captureReferencePreview({ url, viewport = "desktop", auth 
   }
 }
 
+export async function inspectProjectWebsite({ url, auth = {} }) {
+  const safeUrl = await assertPublicReferenceUrl(url);
+  const normalizedAuth = normalizeReferenceAuth(auth, safeUrl);
+  const authSummary = referenceAuthSummary(normalizedAuth);
+  const browser = await connectBrowser();
+  try {
+    const page = await pageForBrowser(browser, normalizedAuth, safeUrl);
+    await setExactViewport(page, VIEWPORTS[0]);
+    await establishReferenceSession(page, safeUrl, normalizedAuth);
+    await setExactViewport(page, VIEWPORTS[0]);
+    const evidence = await page.evaluate(() => {
+      const clean=(v,n=300)=>String(v||"").replace(/\s+/g," ").trim().slice(0,n);
+      const visible=el=>{
+        const s=getComputedStyle(el),r=el.getBoundingClientRect();
+        return s.display!=="none"&&s.visibility!=="hidden"&&Number(s.opacity)>0.001&&r.width>1&&r.height>1;
+      };
+      const texts=(selector,limit=100)=>[...document.querySelectorAll(selector)].filter(visible).map(el=>clean(el.innerText||el.textContent)).filter(Boolean).slice(0,limit);
+      const navItems=[...document.querySelectorAll("header a,nav a,[role='navigation'] a")].filter(visible).map(el=>clean(el.textContent,100)).filter(Boolean);
+      const buttons=[...document.querySelectorAll("button,[role='button'],input[type='submit'],input[type='button']")].filter(visible).map(el=>clean(el.innerText||el.value||el.getAttribute("aria-label"),120)).filter(Boolean);
+      const images=[...document.images].filter(visible).slice(0,160).map(img=>{
+        const r=img.getBoundingClientRect();
+        return{src:String(img.currentSrc||img.src||"").startsWith("data:")?"data:[inline-asset-omitted]":String(img.currentSrc||img.src||""),alt:clean(img.alt,180),naturalWidth:img.naturalWidth,naturalHeight:img.naturalHeight,width:r.width,height:r.height};
+      });
+      const links=[...document.querySelectorAll("a[href]")].filter(visible).slice(0,220).map(a=>({text:clean(a.textContent,120),href:a.href}));
+      const inputs=[...document.querySelectorAll("input,textarea,select")].filter(visible).slice(0,120).map(el=>({tag:el.tagName.toLowerCase(),type:el.getAttribute("type"),name:el.getAttribute("name"),placeholder:clean(el.getAttribute("placeholder"),160),ariaLabel:clean(el.getAttribute("aria-label"),160)}));
+      const root=getComputedStyle(document.documentElement),body=getComputedStyle(document.body);
+      const cssVars={};
+      for(let i=0;i<root.length;i++){const k=root[i];if(k.startsWith("--")&&Object.keys(cssVars).length<240)cssVars[k]=root.getPropertyValue(k).trim();}
+      return{
+        title:document.title,
+        description:document.querySelector('meta[name="description"]')?.content||"",
+        lang:document.documentElement.lang||"",
+        url:location.href,
+        headings:texts("h1,h2,h3,h4,h5,h6",120),
+        paragraphs:texts("main p,article p,section p",120),
+        navItems:[...new Set(navItems)].slice(0,60),
+        buttons:[...new Set(buttons)].slice(0,80),
+        links,
+        inputs,
+        images,
+        tokens:{rootBackground:root.backgroundColor,bodyBackground:body.backgroundColor,color:body.color,fontFamily:body.fontFamily,fontSize:body.fontSize,cssVars},
+        signals:{next:Boolean(document.querySelector("#__NEXT_DATA__")||document.querySelector('script[src*="_next"]')),react:Boolean(document.querySelector("[data-reactroot]")||document.querySelector('script[src*="react"]')),forms:document.forms.length},
+      };
+    });
+    const shot=await page.screenshot({type:"jpeg",quality:58,clip:{x:0,y:0,width:1440,height:900}});
+    const result={
+      schema:"kk-project-website-scan/v1",
+      ...evidence,
+      screenshot:`data:image/jpeg;base64,${shot.toString("base64")}`,
+      authentication:authSummary,
+    };
+    if (containsReferenceAuthSecret(result, normalizedAuth)) throw new Error("Authentication secret safety check failed.");
+    return result;
+  } finally {
+    await browser.close().catch(()=>{});
+  }
+}
+
+function edgeMismatchPercent(a,b){
+  const width=a.width,height=a.height,step=3,threshold=34;
+  let diff=0,total=0;
+  const lum=(png,x,y)=>{
+    const i=(y*width+x)*4;
+    return png.data[i]*0.2126+png.data[i+1]*0.7152+png.data[i+2]*0.0722;
+  };
+  for(let y=0;y<height-step;y+=step){
+    for(let x=0;x<width-step;x+=step){
+      const ea=Math.abs(lum(a,x+step,y)-lum(a,x,y))+Math.abs(lum(a,x,y+step)-lum(a,x,y));
+      const eb=Math.abs(lum(b,x+step,y)-lum(b,x,y))+Math.abs(lum(b,x,y+step)-lum(b,x,y));
+      const aa=ea>threshold,bb=eb>threshold;
+      if(aa!==bb)diff++;
+      total++;
+    }
+  }
+  return total?Math.round((diff/total)*10000)/100:0;
+}
+
+export async function certifyGeneratedPreview({ url, html, viewport = "desktop", auth = {}, baseUrl = "" }) {
+  const safeUrl = await assertPublicReferenceUrl(url);
+  const requested = VIEWPORTS.find(x => x.name === String(viewport || "desktop").toLowerCase());
+  if (!requested) throw new Error("Certification viewport must be desktop, tablet, or mobile.");
+  const sourceHtml=String(html||"");
+  if(!sourceHtml.trim() || sourceHtml.length>1_500_000) throw new Error("Generated preview HTML is missing or too large for visual certification.");
+  const normalizedAuth = normalizeReferenceAuth(auth, safeUrl);
+  const browser=await connectBrowser();
+  try{
+    const refPage=await pageForBrowser(browser,normalizedAuth,safeUrl);
+    await setExactViewport(refPage,requested);
+    await establishReferenceSession(refPage,safeUrl,normalizedAuth);
+    await setExactViewport(refPage,requested);
+    await refPage.evaluate(()=>window.scrollTo(0,0));
+    const referencePng=await refPage.screenshot({type:"png",clip:{x:0,y:0,width:requested.width,height:requested.height}});
+
+    const context=refPage.context();
+    const buildPage=await context.newPage();
+    buildPage.setDefaultTimeout(12_000);
+    await installNetworkGuard(buildPage);
+    await setExactViewport(buildPage,requested);
+    let htmlWithBase=sourceHtml;
+    if(baseUrl){
+      const safeBase=await assertPublicReferenceUrl(baseUrl);
+      htmlWithBase=sourceHtml.replace(/<head([^>]*)>/i,`<head$1><base href="${safeBase.replace(/"/g,"&quot;")}">`);
+    }
+    await buildPage.setContent(htmlWithBase,{waitUntil:"domcontentloaded",timeout:30_000});
+    await buildPage.waitForLoadState("networkidle",{timeout:3_000}).catch(()=>{});
+    await setExactViewport(buildPage,requested);
+    await buildPage.evaluate(()=>window.scrollTo(0,0));
+    const buildPng=await buildPage.screenshot({type:"png",clip:{x:0,y:0,width:requested.width,height:requested.height}});
+
+    const a=PNG.sync.read(referencePng),b=PNG.sync.read(buildPng);
+    const diff=new PNG({width:a.width,height:a.height});
+    const mismatched=pixelmatch(a.data,b.data,diff.data,a.width,a.height,{threshold:0.12,includeAA:false});
+    const total=a.width*a.height;
+    const rawPixelMismatchPct=Math.round((mismatched/total)*10000)/100;
+    const edgeMismatchPct=edgeMismatchPercent(a,b);
+    const diffPng=PNG.sync.write(diff,{colorType:6});
+    const buildJpeg=await buildPage.screenshot({type:"jpeg",quality:64,clip:{x:0,y:0,width:requested.width,height:requested.height}});
+    return{
+      schema:"kk-visual-certification/v1",
+      viewport:requested.name,
+      width:requested.width,
+      height:requested.height,
+      metrics:{
+        rawPixelMismatchPct,
+        rawPixelSimilarityPct:Math.round((100-rawPixelMismatchPct)*100)/100,
+        edgeMismatchPct,
+        structuralSimilarityPct:Math.round((100-edgeMismatchPct)*100)/100,
+        note:"Raw pixel similarity is content-sensitive. Structural similarity compares edge placement and is less sensitive to color/content changes."
+      },
+      buildScreenshot:`data:image/jpeg;base64,${buildJpeg.toString("base64")}`,
+      diffScreenshot:`data:image/png;base64,${diffPng.toString("base64")}`,
+    };
+  } finally {
+    await browser.close().catch(()=>{});
+  }
+}
+
 const candidateScript = () => {
   function selectorFor(el) {
     if (!el || el.nodeType !== 1) return null;
@@ -623,7 +762,38 @@ const snapshotScript = ({ selectors, maxElements }) => {
     const interactive = el.matches("a,button,input,select,textarea,summary,[role='button'],[role='link'],[role='tab'],[role='menuitem'],[tabindex]");
     const semanticallyUseful = interactive || /^h[1-6]$/.test(el.tagName.toLowerCase()) || ["header","nav","main","aside","footer","section","form","dialog","img","svg","video","p"].includes(el.tagName.toLowerCase()) || s.position === "fixed" || s.position === "sticky" || s.animationName !== "none" || parseFloat(s.transitionDuration) > 0;
     if (!semanticallyUseful && elements.length > 220) continue;
-    elements.push({ selector, tag: el.tagName.toLowerCase(), role: role(el), className: typeof el.className === "string" ? el.className.slice(0,220) : "", label: label(el), text: (el.textContent || "").replace(/\s+/g," ").trim().slice(0,320), interactive, rect: r, style: s, attrs: { href: el.getAttribute("href"), type: el.getAttribute("type"), ariaExpanded: el.getAttribute("aria-expanded"), ariaSelected: el.getAttribute("aria-selected"), ariaChecked: el.getAttribute("aria-checked"), ariaDisabled: el.getAttribute("aria-disabled") }, pseudoBefore: pseudo(el,"::before"), pseudoAfter: pseudo(el,"::after") });
+    const ancestors=[]; let parent=el.parentElement; let depth=0;
+    while(parent && depth<8){ const q=selectorFor(parent); if(q)ancestors.push(q); parent=parent.parentElement; depth++; }
+    const parentSelector=selectorFor(el.parentElement);
+    const childIndex=el.parentElement ? [...el.parentElement.children].indexOf(el) : 0;
+    elements.push({
+      selector,
+      parentSelector,
+      ancestorSelectors:ancestors,
+      childIndex,
+      depth:ancestors.length,
+      tag: el.tagName.toLowerCase(),
+      role: role(el),
+      className: typeof el.className === "string" ? el.className.slice(0,220) : "",
+      label: label(el),
+      text: (el.textContent || "").replace(/\s+/g," ").trim().slice(0,420),
+      interactive,
+      rect: r,
+      style: s,
+      attrs: {
+        href: el.getAttribute("href"),
+        src: compactCssValue(el.currentSrc || el.getAttribute("src") || ""),
+        alt: el.getAttribute("alt"),
+        placeholder: el.getAttribute("placeholder"),
+        type: el.getAttribute("type"),
+        ariaExpanded: el.getAttribute("aria-expanded"),
+        ariaSelected: el.getAttribute("aria-selected"),
+        ariaChecked: el.getAttribute("aria-checked"),
+        ariaDisabled: el.getAttribute("aria-disabled")
+      },
+      pseudoBefore: pseudo(el,"::before"),
+      pseudoAfter: pseudo(el,"::after")
+    });
   }
   return {
     runtimeViewport: { width: innerWidth, height: innerHeight, devicePixelRatio },

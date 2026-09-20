@@ -171,6 +171,135 @@ function buildRegions(evidence,contentMode){
     })),
   }));
 }
+function targetContentPool(project={}){
+  const web=project.websiteContent||{};
+  const source=project.sourceIntelligence||{};
+  const content=project.content||{};
+  return{
+    headings:[content.heroTitle,...arr(web.headings),...arr(source.contentStrings)].filter(Boolean),
+    paragraphs:[content.heroBody,...arr(web.paragraphs),...arr(source.contentStrings)].filter(Boolean),
+    buttons:[content.primaryCta,content.secondaryCta,...arr(web.buttons)].filter(Boolean),
+    nav:arr(content.navItems).length?arr(content.navItems):arr(web.navItems),
+    images:[project.assetMap?.heroAsset,project.assetMap?.logoAsset,...arr(web.images).map(x=>x?.src),...arr(source.assetReferences)].filter(Boolean),
+    generic:[...arr(web.headings),...arr(web.paragraphs),...arr(web.buttons),...arr(source.contentStrings)].filter(Boolean),
+  };
+}
+function closestIncludedAncestor(node,included){
+  for(const selector of arr(node.ancestorSelectors))if(included.has(selector))return selector;
+  return null;
+}
+function buildReferenceTree(evidence,project){
+  const desktop=viewport(evidence,"desktop");
+  const tablet=viewport(evidence,"tablet");
+  const mobile=viewport(evidence,"mobile");
+  const desktopNodes=nodesFor(desktop).filter(x=>x?.selector&&x.tag!=="body").slice(0,300);
+  const included=new Set(desktopNodes.map(x=>x.selector));
+  const byVp=(vp,selector)=>nodesFor(vp).find(x=>x.selector===selector);
+  const nodes=desktopNodes.map((node,index)=>({
+    id:"node-"+(index+1),
+    selector:node.selector,
+    parentSelector:included.has(node.parentSelector)?node.parentSelector:closestIncludedAncestor(node,included),
+    ancestorSelectors:arr(node.ancestorSelectors),
+    childIndex:Number.isFinite(Number(node.childIndex))?Number(node.childIndex):index,
+    depth:Number(node.depth)||0,
+    tag:node.tag||"div",
+    role:node.role||null,
+    label:cleanLabel(node.label)||node.tag||"content",
+    text:String(node.text||"").trim(),
+    interactive:Boolean(node.interactive),
+    attrs:node.attrs||{},
+    rect:node.rect||null,
+    style:node.style||{},
+    tablet:byVp(tablet,node.selector)||null,
+    mobile:byVp(mobile,node.selector)||null,
+  }));
+  const roots=[];
+  const map=new Map(nodes.map(x=>[x.selector,{...x,children:[]}]));
+  for(const node of map.values()){
+    const parent=node.parentSelector?map.get(node.parentSelector):null;
+    if(parent&&parent!==node)parent.children.push(node);
+    else roots.push(node);
+  }
+  const sortTree=list=>{
+    list.sort((a,b)=>(a.childIndex-b.childIndex)||((a.rect?.y||0)-(b.rect?.y||0))||((a.rect?.x||0)-(b.rect?.x||0)));
+    for(const node of list)sortTree(node.children);
+  };
+  sortTree(roots);
+  return{roots,nodes:[...map.values()],pool:targetContentPool(project||{})};
+}
+function nextPool(pool,key,index,fallback=""){
+  const list=arr(pool?.[key]);
+  return text(list[index%Math.max(1,list.length)],fallback);
+}
+function safeTag(tag){
+  return ["header","nav","main","aside","footer","section","article","div","form","button","a","input","textarea","select","img","video","p","span","ul","ol","li","h1","h2","h3","h4","h5","h6","label"].includes(tag)?tag:"div";
+}
+function renderTreeNode(node,ctx){
+  const tag=safeTag(node.tag);
+  const cls="kk-node-"+node.id.replace("node-","");
+  const attrs=[`class="${cls}"`,`data-ref-kind="${esc(semanticKind(node))}"`];
+  const role=node.role?String(node.role):"";
+  if(role)attrs.push(`role="${esc(role)}"`);
+  let content="";
+  if(tag==="h1")content=esc(ctx.project?.content?.heroTitle||nextPool(ctx.pool,"headings",ctx.heading++ ,"Heading"));
+  else if(/^h[2-6]$/.test(tag))content=esc(nextPool(ctx.pool,"headings",ctx.heading++,"Heading"));
+  else if(tag==="p")content=esc(nextPool(ctx.pool,"paragraphs",ctx.paragraph++,""));
+  else if(tag==="button")content=esc(nextPool(ctx.pool,"buttons",ctx.button++,"Action"));
+  else if(tag==="a"){
+    const isNav=node.ancestorSelectors?.some?.(x=>/nav/i.test(x))||node.parentSelector?.includes("nav");
+    content=esc(isNav?nextPool(ctx.pool,"nav",ctx.nav++,"Link"):nextPool(ctx.pool,"generic",ctx.generic++,"Link"));
+    attrs.push('href="#"');
+  } else if(tag==="img"){
+    const src=nextPool(ctx.pool,"images",ctx.image++,ctx.project?.assetMap?.heroAsset||"");
+    attrs.push(`alt="${esc(node.attrs?.alt||"")}"`);
+    if(src)attrs.push(`src="${esc(src)}"`);
+  } else if(tag==="input"){
+    attrs.push(`type="${esc(node.attrs?.type||"text")}"`);
+    const ph=node.attrs?.placeholder||"";
+    if(ph)attrs.push(`placeholder="${esc(ph)}"`);
+  } else if(tag==="textarea"){
+    const ph=node.attrs?.placeholder||""; if(ph)attrs.push(`placeholder="${esc(ph)}"`);
+  } else if(node.children.length===0 && ["div","span","label","li"].includes(tag)){
+    content=esc(nextPool(ctx.pool,"generic",ctx.generic++,""));
+  }
+  const children=node.children.map(child=>renderTreeNode(child,ctx)).join("");
+  if(["img","input"].includes(tag))return `<${tag} ${attrs.join(" ")} />`;
+  return `<${tag} ${attrs.join(" ")}>${content}${children}</${tag}>`;
+}
+function referenceTreeMarkup(model){
+  const tree=model.referenceTree;
+  if(!tree?.roots?.length)return"";
+  const ctx={pool:tree.pool||{},project:model.project||{},heading:0,paragraph:0,button:0,nav:0,image:0,generic:0};
+  return tree.roots.map(node=>renderTreeNode(node,ctx)).join("\n");
+}
+const EXACT_STYLE_KEYS=[
+  "display","position","top","right","bottom","left","width","height","minWidth","maxWidth","minHeight","maxHeight",
+  "marginTop","marginRight","marginBottom","marginLeft","paddingTop","paddingRight","paddingBottom","paddingLeft",
+  "gap","rowGap","columnGap","gridTemplateColumns","gridTemplateRows","gridAutoFlow","justifyContent","alignItems",
+  "alignContent","flexDirection","flexWrap","color","backgroundColor","backgroundImage","opacity","border","borderRadius",
+  "boxShadow","outline","outlineOffset","fontFamily","fontSize","fontWeight","fontStyle","lineHeight","letterSpacing",
+  "textAlign","textTransform","whiteSpace","transform","transformOrigin","overflow","overflowX","overflowY","zIndex",
+  "cursor","pointerEvents","filter","backdropFilter","objectFit","objectPosition","aspectRatio"
+];
+function cssName(key){return key.replace(/[A-Z]/g,m=>"-"+m.toLowerCase())}
+function exactDeclarations(style={}){
+  return EXACT_STYLE_KEYS.map(key=>[key,style?.[key]]).filter(([,v])=>v!=null&&v!==""&&v!=="auto"&&v!=="normal")
+    .filter(([key,v])=>!(key==="backgroundImage"&&/url\s*\(/i.test(String(v))))
+    .map(([key,v])=>`${cssName(key)}:${cssEsc(v)}`).join(";");
+}
+function referenceTreeCss(model){
+  const rows=[];
+  for(const node of model.referenceTree?.nodes||[]){
+    const n=node.id.replace("node-","");
+    rows.push(`.kk-node-${n}{${exactDeclarations(node.style)}}`);
+    const tablet=node.tablet?.style||{};
+    const mobile=node.mobile?.style||{};
+    if(Object.keys(tablet).length)rows.push(`@media(max-width:900px){.kk-node-${n}{${exactDeclarations(tablet)}}}`);
+    if(Object.keys(mobile).length)rows.push(`@media(max-width:520px){.kk-node-${n}{${exactDeclarations(mobile)}}}`);
+  }
+  return `*{box-sizing:border-box}html,body{margin:0;padding:0;min-height:100%;background:${cssEsc(model.tokens.background)};color:${cssEsc(model.tokens.text)};font-family:${cssEsc(model.tokens.font)}}a{color:inherit;text-decoration:none}img,video,svg{max-width:100%}button,input,textarea,select{font:inherit}body{overflow-x:hidden}${rows.join("\n")}`;
+}
+
 function placeholderFor(kind,index){
   const map={
     Header:"Site header",Navigation:"Primary navigation",Hero:"Hero headline",Section:"Content section",
@@ -194,6 +323,7 @@ function layoutModel(evidence,options){
   const tokens=deriveTokens(evidence);
   const regions=buildRegions(evidence,options.contentMode);
   const project=options.projectProfile || null;
+  const referenceTree=buildReferenceTree(evidence,project);
   const desktop=viewport(evidence,"desktop");
   const tablet=viewport(evidence,"tablet");
   const mobile=viewport(evidence,"mobile");
@@ -204,6 +334,7 @@ function layoutModel(evidence,options){
     referenceUrl:text(evidence.capture?.finalUrl || evidence.capture?.referenceUrl),
     tokens,
     regions,
+    referenceTree,
     viewports:{
       desktop:desktop.viewport||desktop.targetViewport||{width:1440,height:900},
       tablet:tablet.viewport||tablet.targetViewport||{width:820,height:1180},
@@ -349,14 +480,14 @@ h3{margin:10px 0 4px;font-size:20px}.kk-copy p,.kk-lede{max-width:680px;color:va
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
 ${regionRules}`;
 }
-function standaloneHtml(model,css){
-  const body=model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n");
+function standaloneHtml(model,css,bodyOverride=""){
+  const body=bodyOverride || model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n");
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(model.title)}</title><style>${css}</style></head>
 <body>${body}<script>document.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>b.animate([{transform:'scale(1)'},{transform:'scale(.97)'},{transform:'scale(1)'}],{duration:160})));<\/script></body></html>`;
 }
-function reactFiles(model,css){
-  const body=model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n");
+function reactFiles(model,css,bodyOverride=""){
+  const body=bodyOverride || model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n");
   const jsx=body.replaceAll("class=","className=").replace(/<script[\s\S]*?<\/script>/g,"");
   return [
     {path:"package.json",content:JSON.stringify({name:slug(model.title),private:true,scripts:{dev:"vite",build:"vite build"},dependencies:{"@vitejs/plugin-react":"latest","vite":"latest","react":"latest","react-dom":"latest"},devDependencies:{}},null,2)},
@@ -366,8 +497,8 @@ function reactFiles(model,css){
     {path:"src/styles.css",content:css},
   ];
 }
-function nextFiles(model,css){
-  const body=model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n").replaceAll("class=","className=");
+function nextFiles(model,css,bodyOverride=""){
+  const body=(bodyOverride || model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n")).replaceAll("class=","className=");
   return [
     {path:"package.json",content:JSON.stringify({name:slug(model.title),private:true,scripts:{dev:"next dev",build:"next build",start:"next start"},dependencies:{next:"latest",react:"latest","react-dom":"latest"}},null,2)},
     {path:"app/layout.jsx",content:'import "./globals.css";export const metadata={title:"Generated Design"};export default function RootLayout({children}){return <html lang="en"><body>{children}</body></html>}'},
@@ -375,10 +506,20 @@ function nextFiles(model,css){
     {path:"app/globals.css",content:css},
   ];
 }
-function outputFiles(model,css,output,html){
-  if(output==="react") return reactFiles(model,css);
-  if(output==="next") return nextFiles(model,css);
+function outputFiles(model,css,output,html,bodyOverride=""){
+  if(output==="react") return reactFiles(model,css,bodyOverride);
+  if(output==="next") return nextFiles(model,css,bodyOverride);
   return [{path:"index.html",content:html}];
+}
+
+function preservedOriginalSource(projectContext,profile){
+  if(profile?.mode!=="existing" || !profile.targetPath)return[];
+  const original=arr(projectContext?.files).find(file=>String(file?.path||"").replaceAll("\\","/")===profile.targetPath && typeof file?.text==="string" && file.text);
+  if(!original)return[];
+  return [{
+    path:"ORIGINAL-SOURCE/"+profile.targetPath,
+    content:original.text,
+  }];
 }
 
 function portableProjectAssets(projectContext, profile){
@@ -408,11 +549,11 @@ function stylePathFor(profile){
   return "";
 }
 
-function projectPatchFiles(model,css,profile,output,html){
-  if(profile?.mode!=="existing") return outputFiles(model,css,output,html);
+function projectPatchFiles(model,css,profile,output,html,bodyOverride=""){
+  if(profile?.mode!=="existing") return outputFiles(model,css,output,html,bodyOverride);
   const target=profile.targetPath || (output==="html" ? "reference-design.html" : output==="next" ? "app/page.jsx" : "src/components/ReferenceDesign.jsx");
   if(output==="html") return [{path:target,content:html}];
-  const source=output==="next" ? nextFiles(model,css).find(x=>x.path==="app/page.jsx") : reactFiles(model,css).find(x=>x.path==="src/App.jsx");
+  const source=output==="next" ? nextFiles(model,css,bodyOverride).find(x=>x.path==="app/page.jsx") : reactFiles(model,css,bodyOverride).find(x=>x.path==="src/App.jsx");
   const stylePath=stylePathFor(profile);
   let sourceText=source?.content || "";
   if(output==="next") sourceText='import "./reference-design.css";\n'+sourceText;
@@ -468,12 +609,15 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
     throw new Error("Accurate mode needs more project information before build: "+(needed || projectProfile.readiness.blockers.join("; ")));
   }
   const model=layoutModel(evidence,{contentMode,fidelity,markdown,projectProfile});
-  const css=generatedCss(model,{fidelity});
-  const previewHtml=standaloneHtml(model,css);
-  const patchFiles=projectPatchFiles(model,css,projectProfile,output,previewHtml);
+  const exactTree=fidelity==="accurate" && Boolean(projectProfile) && (model.referenceTree?.nodes?.length||0)>=3;
+  const bodyMarkup=exactTree ? referenceTreeMarkup(model) : "";
+  const css=exactTree ? referenceTreeCss(model) : generatedCss(model,{fidelity});
+  const previewHtml=standaloneHtml(model,css,bodyMarkup);
+  const patchFiles=projectPatchFiles(model,css,projectProfile,output,previewHtml,bodyMarkup);
   const files=projectProfile?.mode==="existing"
     ? [
         ...patchFiles.map(file=>({path:"project-patch/"+file.path,content:file.content})),
+        ...preservedOriginalSource(projectContext,projectProfile),
         ...integrationSupportFiles(projectProfile,patchFiles),
       ]
     : [
@@ -519,6 +663,8 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
       projectFitScore:projectProfile?.readiness?.score ?? null,
       projectStack:projectProfile?.stack ?? null,
       accurateReady:projectProfile?.readiness?.accurateReady ?? null,
+      renderer:exactTree?"hierarchy-exact":"semantic-fallback",
+      hierarchyNodes:model.referenceTree?.nodes?.length||0,
     }
   };
 }

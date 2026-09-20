@@ -23,9 +23,10 @@ import { runConfiguredAgent } from "./execution/agent-runner.mjs";
 import { verifyProject } from "./execution/verify.mjs";
 import { verifyPlanBaseline, validateChangedFileScope } from "./execution/migration-guard.mjs";
 import { verifyVisualMigration } from "./execution/visual-verify.mjs";
-import { captureReferencePreview, generateReferenceDesignMd, inspectReferenceDesign, referenceDesignStatus } from "./reference-design/browserless.mjs";
+import { captureReferencePreview, certifyGeneratedPreview, generateReferenceDesignMd, inspectProjectWebsite, inspectReferenceDesign, referenceDesignStatus } from "./reference-design/browserless.mjs";
 import { compileNoCodeDesign } from "./no-code/compiler.mjs";
 import { analyzeProjectContext } from "./no-code/project-fit.mjs";
+import { scanGitHubProject } from "./no-code/project-sources.mjs";
 
 const app=express();
 app.use(express.json({limit:"5mb"}));
@@ -104,7 +105,7 @@ async function executionCapability(s){
   };
 }
 
-app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.8.0",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true,sourceAwareMigration:true,noCodeDesignCompiler:true,authenticatedReferenceCapture:true,projectAwareDesignBuilder:true}));
+app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.9.0",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true,sourceAwareMigration:true,noCodeDesignCompiler:true,authenticatedReferenceCapture:true,projectAwareDesignBuilder:true,multiSourceProjectIntelligence:true,visualCertification:true}));
 app.get("/api/github/status",async(req,res)=>res.json(await githubStatus()));
 app.post("/api/github/auth/start",async(req,res)=>{
   try{
@@ -151,11 +152,41 @@ app.post("/api/reference-design/preview",async(req,res)=>{
   }
 });
 
+app.post("/api/reference-design/certify",async(req,res)=>{
+  try{
+    const {url,html,viewport="desktop",auth={},baseUrl=""}=req.body||{};
+    res.json(await certifyGeneratedPreview({url,html,viewport,auth,baseUrl}));
+  }catch(e){
+    const status=e?.code==="BROWSERLESS_NOT_CONFIGURED"?503:400;
+    res.status(status).json({error:String(e.message||e)});
+  }
+});
+
 app.post("/api/reference-design/project-fit",(req,res)=>{
   try{
     res.json(analyzeProjectContext(req.body||{}));
   }catch(e){
     res.status(400).json({error:String(e.message||e)});
+  }
+});
+
+app.post("/api/reference-design/project-github",async(req,res)=>{
+  try{
+    const {url,token="",ref=""}=req.body||{};
+    const result=await scanGitHubProject({url,token,ref});
+    res.json(result);
+  }catch(e){
+    res.status(400).json({error:String(e.message||e)});
+  }
+});
+
+app.post("/api/reference-design/project-website",async(req,res)=>{
+  try{
+    const {url,auth={}}=req.body||{};
+    res.json(await inspectProjectWebsite({url,auth}));
+  }catch(e){
+    const status=e?.code==="BROWSERLESS_NOT_CONFIGURED"?503:400;
+    res.status(status).json({error:String(e.message||e)});
   }
 });
 
