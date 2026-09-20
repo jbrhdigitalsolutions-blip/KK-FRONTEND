@@ -228,11 +228,6 @@ test("new project ZIP carries small uploaded portable assets",()=>{
   const result=compileNoCodeDesign({
     evidence:evidence(),
     markdown:"# DESIGN.md",
-    test("new project ZIP carries small uploaded portable assets",()=>{
-  const asset=Buffer.from("fake-webp-bytes").toString("base64");
-  const result=compileNoCodeDesign({
-    evidence:evidence(),
-    markdown:"# DESIGN.md",
     options:{output:"auto",contentMode:"placeholders",fidelity:"balanced"},
     projectContext:{
       mode:"new",
