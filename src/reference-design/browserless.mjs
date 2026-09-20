@@ -5,6 +5,7 @@ import { chromium } from "playwright";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { buildEvidenceCompanion, candidateFamily, classifyCandidate, normalizeReferenceUrl, renderDesignMd } from "./design-md.mjs";
+import { normalizeReferenceAuth, parseCookieHeader, referenceAuthHeader, referenceAuthSummary } from "./auth.mjs";
 
 const VIEWPORTS = [
   { name: "desktop", width: 1440, height: 900 },
@@ -21,6 +22,12 @@ export function referenceDesignStatus() {
     browser: "remote-chromium",
     viewports: VIEWPORTS,
     requires: ["BROWSERLESS_TOKEN or BROWSERLESS_WS_ENDPOINT"],
+    authentication: {
+      modes: ["public","login","cookie","header","basic"],
+      secretsPersisted: false,
+      captchaBypass: false,
+      mfaBypass: false,
+    },
   };
 }
 
@@ -88,8 +95,8 @@ async function assertPublicReferenceUrl(input, dnsCache = null) {
   return normalized;
 }
 
-async function installNetworkGuard(page) {
-  if (env("KK_REFERENCE_ALLOW_PRIVATE").toLowerCase() === "true") return null;
+async function installNetworkGuard(page, { authHeader = null, authOrigin = "" } = {}) {
+  if (env("KK_REFERENCE_ALLOW_PRIVATE").toLowerCase() === "true" && !authHeader) return null;
   const session = await page.context().newCDPSession(page);
   const dnsCache = new Map();
   await session.send("Fetch.enable", { patterns: [{ urlPattern: "*", requestStage: "Request" }] });
@@ -103,8 +110,19 @@ async function installNetworkGuard(page) {
         return;
       }
       if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Blocked non-web protocol");
-      await assertPublicReferenceUrl(requestUrl, dnsCache);
-      await session.send("Fetch.continueRequest", { requestId }).catch(() => {});
+      if (env("KK_REFERENCE_ALLOW_PRIVATE").toLowerCase() !== "true") {
+        await assertPublicReferenceUrl(requestUrl, dnsCache);
+      }
+      let headers;
+      if (authHeader && parsed.origin === authOrigin) {
+        const merged = { ...(event.request?.headers || {}) };
+        for (const key of Object.keys(merged)) {
+          if (key.toLowerCase() === authHeader.name.toLowerCase()) delete merged[key];
+        }
+        merged[authHeader.name] = authHeader.value;
+        headers = Object.entries(merged).map(([name,value]) => ({ name, value:String(value) }));
+      }
+      await session.send("Fetch.continueRequest", { requestId, ...(headers ? { headers } : {}) }).catch(() => {});
     } catch {
       await session.send("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" }).catch(() => {});
     }
@@ -151,20 +169,134 @@ async function connectBrowser() {
   return chromium.connectOverCDP(buildEndpoint(), { timeout: 30_000 });
 }
 
-async function pageForBrowser(browser) {
+async function pageForBrowser(browser, auth, targetUrl) {
   const context = browser.contexts()[0] || await browser.newContext();
   const page = context.pages()[0] || await context.newPage();
   page.setDefaultTimeout(12_000);
   page.setDefaultNavigationTimeout(45_000);
-  await installNetworkGuard(page);
+  const authHeader = referenceAuthHeader(auth);
+  await installNetworkGuard(page, {
+    authHeader,
+    authOrigin: authHeader ? new URL(targetUrl).origin : "",
+  });
   return page;
 }
 
 async function gotoReference(page, url) {
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
+  const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
   await page.waitForLoadState("networkidle", { timeout: 4_000 }).catch(() => {});
   await page.waitForTimeout(350);
   await assertPublicReferenceUrl(page.url());
+  return response;
+}
+
+async function firstVisibleLocator(page, selectors) {
+  for (const selector of selectors.filter(Boolean)) {
+    try {
+      const locator = page.locator(selector).first();
+      if (await locator.isVisible({ timeout: 650 })) return locator;
+    } catch {}
+  }
+  return null;
+}
+
+async function submitLoginStep(page, customSelector = "") {
+  const submit = await firstVisibleLocator(page, [
+    customSelector,
+    'button[type="submit"]',
+    'input[type="submit"]',
+    'button:has-text("Sign in")',
+    'button:has-text("Log in")',
+    'button:has-text("Login")',
+    'button:has-text("Continue")',
+    'button:has-text("Next")',
+  ]);
+  if (submit) {
+    await Promise.all([
+      page.waitForLoadState("domcontentloaded", { timeout: 12_000 }).catch(() => {}),
+      submit.click({ timeout: 5_000 }),
+    ]);
+    await page.waitForTimeout(450);
+    return;
+  }
+  const active = page.locator('input[type="password"],input[autocomplete="username"],input[type="email"]').last();
+  await active.press("Enter", { timeout: 3_000 });
+  await page.waitForTimeout(450);
+}
+
+async function performFormLogin(page, auth, targetUrl) {
+  await gotoReference(page, auth.loginUrl || targetUrl);
+
+  const username = await firstVisibleLocator(page, [
+    auth.usernameSelector,
+    'input[autocomplete="username"]',
+    'input[type="email"]',
+    'input[name*="email" i]',
+    'input[name*="user" i]',
+    'input[name*="login" i]',
+    'input[type="text"]',
+  ]);
+  if (!username) throw new Error("Login form username/email field was not detected. Open Advanced login settings and provide its selector.");
+  await username.fill(auth.username);
+
+  let password = await firstVisibleLocator(page, [
+    auth.passwordSelector,
+    'input[autocomplete="current-password"]',
+    'input[type="password"]',
+  ]);
+
+  if (!password) {
+    await submitLoginStep(page, auth.submitSelector);
+    password = await firstVisibleLocator(page, [
+      auth.passwordSelector,
+      'input[autocomplete="current-password"]',
+      'input[type="password"]',
+    ]);
+  }
+
+  if (!password) throw new Error("Login form password field was not detected after the username step. MFA/SSO pages may require Session Cookie mode.");
+  await password.fill(auth.password);
+  await submitLoginStep(page, auth.submitSelector);
+  await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
+  await page.waitForTimeout(auth.waitAfterMs);
+
+  if (auth.successSelector) {
+    try {
+      await page.locator(auth.successSelector).first().waitFor({ state:"visible", timeout:8_000 });
+    } catch {
+      throw new Error("Login completed but the configured success selector was not found.");
+    }
+  }
+
+  const response = await gotoReference(page, targetUrl);
+  if ([401,403].includes(Number(response?.status?.()))) {
+    throw new Error("Authentication was rejected by the reference website.");
+  }
+
+  const visiblePasswords = await page.locator('input[type="password"]:visible').count().catch(() => 0);
+  const loginUrl = new URL(auth.loginUrl || targetUrl);
+  const currentUrl = new URL(page.url());
+  const stillOnLoginPath = currentUrl.origin === loginUrl.origin && currentUrl.pathname === loginUrl.pathname && currentUrl.href !== new URL(targetUrl).href;
+  if (visiblePasswords > 0 && stillOnLoginPath) {
+    throw new Error("Login did not complete. Check credentials/selectors, or use Session Cookie mode for MFA/SSO.");
+  }
+}
+
+async function establishReferenceSession(page, targetUrl, auth) {
+  if (auth.mode === "cookie") {
+    await page.context().addCookies(parseCookieHeader(auth.cookieHeader, targetUrl));
+    const response = await gotoReference(page, targetUrl);
+    if ([401,403].includes(Number(response?.status?.()))) throw new Error("Session cookie was rejected by the reference website.");
+    return;
+  }
+  if (auth.mode === "login") {
+    await performFormLogin(page, auth, targetUrl);
+    return;
+  }
+  const response = await gotoReference(page, targetUrl);
+  if (["header","basic"].includes(auth.mode) && [401,403].includes(Number(response?.status?.()))) {
+    throw new Error("Authentication was rejected by the reference website.");
+  }
 }
 
 const candidateScript = () => {
@@ -316,13 +448,15 @@ const candidateScript = () => {
     rows,
   };
 };
-export async function inspectReferenceDesign({ url }) {
+export async function inspectReferenceDesign({ url, auth = {} }) {
   const safeUrl = await assertPublicReferenceUrl(url);
+  const normalizedAuth = normalizeReferenceAuth(auth, safeUrl);
+  const authSummary = referenceAuthSummary(normalizedAuth);
   const browser = await connectBrowser();
   try {
-    const page = await pageForBrowser(browser);
+    const page = await pageForBrowser(browser, normalizedAuth, safeUrl);
     await setExactViewport(page, VIEWPORTS[0]);
-    await gotoReference(page, safeUrl);
+    await establishReferenceSession(page, safeUrl, normalizedAuth);
     await setExactViewport(page, VIEWPORTS[0]);
     const info = await page.evaluate(candidateScript);
     const maxHeight = Math.min(Math.max(info.document.height, 900), 12_000);
@@ -353,6 +487,7 @@ export async function inspectReferenceDesign({ url }) {
       candidates,
       candidateCount: candidates.length,
       facets: { familyCounts, kindCounts },
+      authentication: authSummary,
     };
   } finally {
     await browser.close().catch(() => {});
@@ -582,16 +717,21 @@ function normalizeSelection(scope, selectors, selection = []) {
   };
 }
 
-export async function generateReferenceDesignMd({ url, scope = "whole", selectors = [], selection = [] }) {
+export async function generateReferenceDesignMd({ url, scope = "whole", selectors = [], selection = [], auth = {} }) {
   const safeUrl = await assertPublicReferenceUrl(url);
+  const normalizedAuth = normalizeReferenceAuth(auth, safeUrl);
+  const authSummary = referenceAuthSummary(normalizedAuth);
   const chosen = normalizeSelection(scope, selectors, selection);
   const browser = await connectBrowser();
   try {
-    const page = await pageForBrowser(browser);
+    const page = await pageForBrowser(browser, normalizedAuth, safeUrl);
     const responsive = [];
     let title = "";
     let finalUrl = safeUrl;
     let pageEvidence = null;
+
+    await setExactViewport(page, VIEWPORTS[0]);
+    await establishReferenceSession(page, safeUrl, normalizedAuth);
 
     for (const viewport of VIEWPORTS) {
       await setExactViewport(page, viewport);
@@ -641,7 +781,7 @@ export async function generateReferenceDesignMd({ url, scope = "whole", selector
     confidence = Math.max(50, Math.min(97, confidence));
 
     const restrictions = [
-      "Only states safely observable without submitting forms, clicking destructive actions, bypassing authentication, or defeating bot/CAPTCHA protections are measured.",
+      "Only states safely observable without destructive actions or defeating bot/CAPTCHA/MFA protections are measured. Authentication is used only when the user explicitly supplies it for the capture.",
       "Chromium rendering is verified; Safari/WebKit and Firefox rasterization are not independently verified by this capture.",
       "Cross-origin stylesheet rules that the browser does not expose remain unverified; computed rendered styles are still captured where visible.",
       "Canvas/WebGL internal drawing instructions cannot be reconstructed from DOM/CSS evidence alone.",
@@ -654,6 +794,7 @@ export async function generateReferenceDesignMd({ url, scope = "whole", selector
       title,
       capturedAt: new Date().toISOString(),
       browser: "Remote Chromium via Browserless + Playwright CDP",
+      authentication: authSummary,
       scope: chosen.scope,
       selection: chosen.selection,
       viewports: responsive,
@@ -702,6 +843,7 @@ export async function generateReferenceDesignMd({ url, scope = "whole", selector
         confidence,
         confidenceReasons,
         responseBytes,
+        authentication: authSummary,
       },
     };
   } finally {
