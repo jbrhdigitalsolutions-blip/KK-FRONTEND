@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { compileNoCodeDesign } from "../src/no-code/compiler.mjs";
+import { analyzeProjectContext } from "../src/no-code/project-fit.mjs";
 
 function evidence() {
   const baseStyle={
@@ -304,3 +305,43 @@ test("website-only target exports standalone replacement instead of unsafe proje
   assert.equal(result.files.some(x=>x.path==="APPLY-WINDOWS.ps1"),false);
   assert.match(result.files.find(x=>x.path==="README.md").content,/standalone replacement/i);
 });
+
+test("pre-analyzed Project Fit builds with only the target artifact file",()=>{
+  const projectFiles=[
+    {path:"package.json",name:"package.json",text:JSON.stringify({name:"slim-app",packageManager:"pnpm@10.28.0",dependencies:{react:"19.0.0",vite:"7.0.0"}})},
+    ...["App","Header","Hero","Nav","Card","Footer","Form","CTA"].map(name=>({
+      path:`src/${name}.jsx`,
+      name:`${name}.jsx`,
+      text:`export default function ${name}(){return <div>${name} target project content</div>}`
+    })),
+    {path:"DESIGN.md",name:"DESIGN.md",text:"# Target design"}
+  ];
+  const fullContext={
+    mode:"existing",
+    stack:"auto",
+    files:projectFiles,
+    brand:"Slim App",
+    heroTitle:"Target headline",
+    heroBody:"Target body",
+    primaryCta:"Start",
+    navItems:"Home, Pricing",
+    targetPath:"src/App.jsx",
+    targetRoute:"/"
+  };
+  const profile=analyzeProjectContext(fullContext);
+  assert.equal(profile.readiness.accurateReady,true);
+
+  const original=projectFiles.find(file=>file.path===profile.targetPath);
+  const result=compileNoCodeDesign({
+    evidence:evidence(),
+    markdown:"# DESIGN.md",
+    options:{output:"auto",contentMode:"placeholders",fidelity:"accurate"},
+    projectProfile:profile,
+    projectContext:{files:[original]}
+  });
+
+  assert.equal(result.summary.projectFitScore,profile.readiness.score);
+  assert.ok(result.files.some(file=>file.path===`ORIGINAL-SOURCE/${profile.targetPath}`));
+  assert.ok(result.files.some(file=>file.path===`project-patch/${profile.targetPath}`));
+});
+
