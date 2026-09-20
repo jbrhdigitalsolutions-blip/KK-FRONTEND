@@ -189,7 +189,7 @@ function sourceFiles(model,r){
     if(isNew){
       return [
         {path:"package.json",content:JSON.stringify({name:slug(model.title),private:true,scripts:{dev:"next dev",build:"next build",start:"next start"},dependencies:{next:">=14",react:">=18","react-dom":">=18"}},null,2)},
-        {path:"app/layout.jsx",content:'import "./globals.css";export const metadata={title:"'+esc(model.title)+'"};export default function RootLayout({children}){return <html lang="en"><body>{children}</body></html>}'},
+        {path:"app/layout.jsx",content:'import "./globals.css";export const metadata={title:'+JSON.stringify(model.title)+'};export default function RootLayout({children}){return <html lang="en"><body>{children}</body></html>}'},
         {path:"app/page.jsx",content:'export default function Page(){return <main className="kkx-page">'+jsx+'</main>}'},
         {path:"app/globals.css",content:r.cssText}
       ];
