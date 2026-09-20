@@ -27,10 +27,13 @@ function evidence() {
         document:{width:1440,height:1800,horizontalOverflow:false},
         scopes:[{selector:"body",tag:"body",label:"body",rect:{x:0,y:0,width:1440,height:1800},style:baseStyle}],
         representativeElements:[
-          {selector:"header",tag:"header",role:"banner",label:"Top navigation",rect:{x:0,y:0,width:1440,height:72},style:{...baseStyle,display:"flex",position:"sticky"},interactive:false},
-          {selector:"section.hero",tag:"section",className:"hero",label:"Launch your idea",rect:{x:0,y:72,width:1440,height:620},style:{...baseStyle,display:"grid"},interactive:false},
-          {selector:"section.hero button",tag:"button",label:"Start",rect:{x:80,y:500,width:120,height:44},style:{...baseStyle,cursor:"pointer"},interactive:true},
-          {selector:"footer",tag:"footer",label:"Footer",rect:{x:0,y:1500,width:1440,height:240},style:baseStyle,interactive:false}
+          {selector:"header",parentSelector:null,ancestorSelectors:[],childIndex:0,depth:1,tag:"header",role:"banner",label:"Top navigation",text:"Top navigation",rect:{x:0,y:0,width:1440,height:72},style:{...baseStyle,display:"flex",position:"sticky"},interactive:false},
+          {selector:"header nav",parentSelector:"header",ancestorSelectors:["header"],childIndex:0,depth:2,tag:"nav",label:"Primary navigation",text:"Product Pricing",rect:{x:80,y:0,width:700,height:72},style:{...baseStyle,display:"flex"},interactive:false},
+          {selector:"section.hero",parentSelector:null,ancestorSelectors:[],childIndex:1,depth:1,tag:"section",className:"hero",label:"Launch your idea",text:"Launch your idea",rect:{x:0,y:72,width:1440,height:620},style:{...baseStyle,display:"grid"},interactive:false},
+          {selector:"section.hero h1",parentSelector:"section.hero",ancestorSelectors:["section.hero"],childIndex:0,depth:2,tag:"h1",label:"Launch your idea",text:"Launch your idea",rect:{x:80,y:180,width:600,height:100},style:{...baseStyle,fontSize:"72px",lineHeight:"72px"},interactive:false},
+          {selector:"section.hero button",parentSelector:"section.hero",ancestorSelectors:["section.hero"],childIndex:1,depth:2,tag:"button",label:"Start",text:"Start",rect:{x:80,y:500,width:120,height:44},style:{...baseStyle,cursor:"pointer"},interactive:true},
+          {selector:"section.hero img",parentSelector:"section.hero",ancestorSelectors:["section.hero"],childIndex:2,depth:2,tag:"img",label:"Hero media",text:"",attrs:{alt:""},rect:{x:800,y:150,width:420,height:420},style:{...baseStyle,objectFit:"cover"},interactive:false},
+          {selector:"footer",parentSelector:null,ancestorSelectors:[],childIndex:2,depth:1,tag:"footer",label:"Footer",text:"Footer",rect:{x:0,y:1500,width:1440,height:240},style:baseStyle,interactive:false}
         ]
       },
       {
@@ -137,7 +140,14 @@ test("project-aware accurate build uses real content and exports a safe React pa
       packageManager:"pnpm@10.28.0",
       dependencies:{react:"19.0.0","react-dom":"19.0.0",vite:"7.0.0"}
     })},
-    {path:"src/App.jsx",name:"App.jsx",text:"export default function App(){}"},
+    {path:"src/App.jsx",name:"App.jsx",text:'import Header from "./Header"; import Hero from "./Hero"; export default function App(){return <><Header/><Hero/></>}'},
+    {path:"src/Header.jsx",name:"Header.jsx",text:"export default function Header(){return <header>Product Pricing</header>}"},
+    {path:"src/Hero.jsx",name:"Hero.jsx",text:"export default function Hero(){return <main>Operate faster</main>}"},
+    {path:"src/Nav.jsx",name:"Nav.jsx",text:"export default function Nav(){return <nav>Navigation</nav>}"},
+    {path:"src/Card.jsx",name:"Card.jsx",text:"export default function Card(){return <article>Feature</article>}"},
+    {path:"src/Footer.jsx",name:"Footer.jsx",text:"export default function Footer(){return <footer>Footer</footer>}"},
+    {path:"src/Form.jsx",name:"Form.jsx",text:"export default function Form(){return <form><input/></form>}"},
+    {path:"src/CTA.jsx",name:"CTA.jsx",text:"export default function CTA(){return <button>Start</button>}"},
     {path:"DESIGN.md",name:"DESIGN.md",text:"# Current design"},
     {path:"public/logo.svg",name:"logo.svg",size:100,type:"image/svg+xml"},
     {path:"public/hero.webp",name:"hero.webp",size:100,type:"image/webp"}
@@ -164,13 +174,18 @@ test("project-aware accurate build uses real content and exports a safe React pa
   assert.match(result.previewHtml,/Start free/);
   assert.match(result.previewHtml,/\/hero\.webp/);
   assert.equal(result.summary.projectStack,"react");
-  assert.ok(result.summary.projectFitScore>=75);
+  assert.ok(result.summary.projectFitScore>=85);
   assert.equal(result.summary.accurateReady,true);
+  assert.equal(result.summary.renderer,"hierarchy-exact");
+  assert.ok(result.summary.hierarchyNodes>=6);
+  assert.equal(result.previewHtml.includes("Replace this placeholder content"),false);
+  assert.equal(result.previewHtml.includes(">Typography<"),false);
   const paths=result.files.map(x=>x.path);
   assert.ok(paths.some(x=>x.startsWith("project-patch/")));
   assert.ok(paths.includes("APPLY-WINDOWS.ps1"));
   assert.ok(paths.includes("APPLY-MAC.command"));
   assert.ok(paths.includes("PROJECT-FIT.json"));
+  assert.ok(paths.includes("ORIGINAL-SOURCE/src/App.jsx"));
 });
 
 test("accurate build is blocked when required project context is incomplete",()=>{
@@ -232,4 +247,28 @@ test("new project ZIP carries small uploaded portable assets",()=>{
   assert.equal(portable.encoding,"base64");
   assert.equal(portable.content,asset);
   assert.match(result.previewHtml,/\/assets\/hero\.webp/);
+});
+
+
+test("Accurate renderer preserves measured hierarchy while substituting target-owned content",()=>{
+  const projectFiles=[
+    {path:"package.json",name:"package.json",text:JSON.stringify({name:"deep-app",packageManager:"pnpm@10.28.0",dependencies:{react:"19.0.0",vite:"7.0.0"}})},
+    ...["App","Header","Hero","Nav","Card","Footer","Form","CTA"].map(name=>({path:`src/${name}.jsx`,name:`${name}.jsx`,text:`export default function ${name}(){return <div>${name} project content</div>}`})),
+    {path:"DESIGN.md",name:"DESIGN.md",text:"# Design"},
+    {path:"public/hero.webp",name:"hero.webp",size:100,type:"image/webp"}
+  ];
+  const result=compileNoCodeDesign({
+    evidence:evidence(),markdown:"# DESIGN.md",
+    options:{output:"auto",contentMode:"placeholders",fidelity:"accurate"},
+    projectContext:{
+      mode:"existing",stack:"auto",files:projectFiles,brand:"Deep App",
+      heroTitle:"Target headline",heroBody:"Target body",primaryCta:"Target action",navItems:"Workspace, Pricing"
+    }
+  });
+  assert.equal(result.summary.renderer,"hierarchy-exact");
+  assert.match(result.previewHtml,/kk-node-/);
+  assert.match(result.previewHtml,/Target headline/);
+  assert.match(result.previewHtml,/Target action/);
+  assert.equal(result.previewHtml.includes("Launch your idea"),false,"reference literal copy must not become target content");
+  assert.equal(result.previewHtml.includes("Evidence-led content placeholder"),false);
 });
