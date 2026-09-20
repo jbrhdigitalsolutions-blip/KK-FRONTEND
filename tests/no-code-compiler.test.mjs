@@ -346,3 +346,15 @@ test("pre-analyzed Project Fit builds with only the target artifact file",()=>{
   assert.ok(result.files.some(file=>file.path===`project-patch/${profile.targetPath}`));
 });
 
+test("generated project ZIP uses DEFLATE for compressible source entries",()=>{
+  const result=compileNoCodeDesign({
+    evidence:evidence(),
+    markdown:"# DESIGN.md",
+    options:{output:"html",contentMode:"placeholders",fidelity:"balanced"}
+  });
+  const zip=Buffer.from(result.zipBase64,"base64");
+  assert.equal(zip.readUInt32LE(0),0x04034b50);
+  assert.equal(zip.readUInt16LE(8),8,"first generated source entry should use ZIP DEFLATE");
+  assert.equal(result.summary.zipBytes,zip.length);
+});
+
