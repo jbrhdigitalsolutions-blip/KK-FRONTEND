@@ -254,8 +254,18 @@ function supportFiles(a,generated){
   const pm=a.packageManager==="unknown"?"npm":a.packageManager,c=commands(pm);
   const req="# PC Requirements\n\n## Project fit\n- Framework: "+a.effectiveFramework+"\n- Language: "+a.language+"\n- Package manager: "+pm+"\n- Target platforms: "+a.targetPlatforms.join(", ")+"\n- Project mode: "+a.projectMode+"\n- Target page: "+(a.targetPage||"not specified")+"\n\n## Windows\n- Windows 10/11 64-bit\n- Node.js 20+; Node 22 LTS recommended\n- PowerShell 7 recommended\n- "+pm+" available in PATH (setup script attempts Corepack for pnpm/yarn)\n- Git optional\n\n## macOS\n- macOS 13+ recommended\n- Node.js 20+; Node 22 LTS recommended\n- Terminal / zsh\n- "+pm+" available in PATH (setup script attempts Corepack for pnpm/yarn)\n- Git optional\n\nNo global framework CLI is required.\n";
   const list=generated.map(f=>"- "+f.path).join("\n");
-  const integ="# Project Integration\n\nThe generated source is isolated so it can fit the analyzed project without blindly overwriting current code.\n\n- Framework: "+a.effectiveFramework+"\n- Package manager: "+a.packageManager+"\n- Styling: "+(a.styling.join(", ")||"not detected")+"\n- Source root: "+(a.structure.sourceRoot||"not detected")+"\n- Component root: "+(a.structure.componentRoot||"not detected")+"\n- Route root: "+(a.structure.routeRoot||"not detected")+"\n- Requested target: "+(a.targetPage||"not specified")+"\n- Project notes: "+(a.projectProfile?.projectNotes||"none")+"\n\n## Generated source\n"+list+"\n\nCompare imports, handlers, data flow, assets and route conventions before replacing an existing production file.\n";
+  const design=a.designContext||{};
+  const designNotes=[
+    "Current DESIGN.md: "+(design.designMd||"not supplied"),
+    "Related design files: "+arr(design.relatedFiles).length,
+    "Observed design colors: "+(arr(design.colors).join(", ")||"none extracted"),
+    "Observed CSS variables: "+(arr(design.cssVariables).slice(0,20).join(", ")||"none extracted")
+  ].join("\n- ");
+  const integ="# Project Integration\n\nThe generated source is isolated so it can fit the analyzed project without blindly overwriting current code.\n\n- Framework: "+a.effectiveFramework+"\n- Package manager: "+a.packageManager+"\n- Styling: "+(a.styling.join(", ")||"not detected")+"\n- Source root: "+(a.structure.sourceRoot||"not detected")+"\n- Component root: "+(a.structure.componentRoot||"not detected")+"\n- Route root: "+(a.structure.routeRoot||"not detected")+"\n- Requested target: "+(a.targetPage||"not specified")+"\n- Project notes: "+(a.projectProfile?.projectNotes||"none")+"\n\n## Existing design-system context\n- "+designNotes+"\n\n## Generated source\n"+list+"\n\nCompare imports, handlers, data flow, assets and route conventions before replacing an existing production file.\n";
   const deps="# Dependency Plan\n\n- Package manager: "+pm+"\n- Install command: "+c.i+"\n- Run command: "+c.r+"\n- Existing dependency count detected: "+arr(a.projectProfile?.existingDependencies).length+"\n\nFor a new project, package.json is included in the ZIP. For an existing project, existing dependencies are preserved and generated code is isolated under a kk-generated path.\n";
+  const assetRows=arr(a.content?.assetRefs).map(x=>"- "+x.path+" (from "+x.file+")");
+  if(a.projectProfile?.assetMap) assetRows.push(...String(a.projectProfile.assetMap).split(/[,\n]/).map(x=>x.trim()).filter(Boolean).map(x=>"- "+x+" (provided)"));
+  const assetMap="# Asset Map\n\nStrategy: "+(a.projectProfile?.assetStrategy||"not specified")+"\n\n"+(assetRows.length?assetRows.join("\n"):"No concrete asset paths were available. Generated media slots remain unresolved.")+"\n";
   const winPm=pm==="pnpm"||pm==="yarn"
     ? 'if(-not(Get-Command '+pm+' -ErrorAction SilentlyContinue)){if(Get-Command corepack -ErrorAction SilentlyContinue){corepack enable; corepack prepare '+pm+'@latest --activate}else{throw "'+pm+' is required and Corepack is unavailable."}}\n'
     : pm==="bun"
@@ -271,6 +281,7 @@ function supportFiles(a,generated){
   return [
     {path:"SYSTEM-REQUIREMENTS.md",content:req},
     {path:"DEPENDENCIES.md",content:deps},
+    {path:"ASSET-MAP.md",content:assetMap},
     {path:"PROJECT-INTEGRATION.md",content:integ},
     {path:"SETUP-WINDOWS.ps1",content:winPre+c.i+'\nWrite-Host "Setup complete." -ForegroundColor Green\n'},
     {path:"RUN-WINDOWS.ps1",content:'$ErrorActionPreference="Stop"\n'+c.r+'\n'},
