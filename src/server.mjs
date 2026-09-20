@@ -150,7 +150,11 @@ app.post("/api/reference-design/generate",async(req,res)=>{
     const {url,scope="whole",selectors=[],selection=[],auth={}}=req.body||{};
     res.json(await generateReferenceDesignMd({url,scope,selectors,selection,auth}));
   }catch(e){
-    const status=e?.code==="BROWSERLESS_NOT_CONFIGURED"?503:400;
+    const status=e?.code==="BROWSERLESS_NOT_CONFIGURED"
+      ?503
+      :e?.code==="REFERENCE_EVIDENCE_TOO_LARGE"
+        ?413
+        :400;
     res.status(status).json({error:String(e.message||e)});
   }
 });
