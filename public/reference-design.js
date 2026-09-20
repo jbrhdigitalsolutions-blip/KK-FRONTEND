@@ -1,5 +1,6 @@
 const $ = id => document.getElementById(id);
 const MAX_CUSTOM_SELECTION = 30;
+const BUILD_REQUEST_MAX_BYTES = 4_000_000;
 const FAMILY_ORDER = ["All", "Structure", "Controls", "Content", "Media", "Motion", "Components"];
 const state = {
   inspection: null,
@@ -227,6 +228,42 @@ function collectProjectContext() {
       githubFiles:state.githubScan?.files?.length || 0,
       website:Boolean(state.websiteEvidence),
     },
+  };
+}
+function collectBuildProjectContext(profile) {
+  const files=projectMode()==="existing" ? mergedProjectFiles() : state.projectFiles;
+  if(!profile) return {files:[]};
+
+  // The Build API already has the analyzed Project Fit profile. Do not resend
+  // the full 1.5–3 MB source inventory; only send bytes that must be embedded
+  // in the exported ZIP.
+  if(profile.mode==="existing" && profile.deliveryMode!=="standalone-replacement"){
+    const target=String(profile.targetPath||"").replaceAll("\\","/");
+    const original=files.find(file=>
+      String(file?.path||"").replaceAll("\\","/")===target &&
+      typeof file?.text==="string" &&
+      file.text
+    );
+    return {files:original ? [original] : []};
+  }
+
+  const portable=files.filter(file=>
+    file?.base64 &&
+    /\.(png|jpe?g|webp|avif|gif|svg|ico|mp4|webm|woff2?|ttf|otf)$/i.test(file?.name||file?.path||"")
+  ).slice(0,30);
+  return {files:portable};
+}
+function buildRequestPayload(profile) {
+  return {
+    evidenceJson:state.evidenceJson,
+    markdown:state.markdown,
+    options:{
+      output:$("buildOutput").value,
+      contentMode:$("buildContent").value,
+      fidelity:$("buildFidelity").value,
+    },
+    projectProfile:profile,
+    projectContext:collectBuildProjectContext(profile),
   };
 }
 function sourceCount() {
@@ -983,18 +1020,15 @@ $("buildPageButton").addEventListener("click", async () => {
   notice("");
   busy($("buildPageButton"), true, "Compiling project-fit source…");
   try {
+    const payload=buildRequestPayload(profile);
+    const body=JSON.stringify(payload);
+    const requestBytes=new TextEncoder().encode(body).byteLength;
+    if(requestBytes>BUILD_REQUEST_MAX_BYTES){
+      throw new Error(`Build request is ${(requestBytes/1_000_000).toFixed(2)} MB, above the safe 4 MB Vercel budget. Use a smaller custom reference selection or remove large portable assets.`);
+    }
     const data = await api("/api/reference-design/build", {
-      method: "POST",
-      body: JSON.stringify({
-        evidenceJson: state.evidenceJson,
-        markdown: state.markdown,
-        options: {
-          output: $("buildOutput").value,
-          contentMode: $("buildContent").value,
-          fidelity: $("buildFidelity").value,
-        },
-        projectContext: collectProjectContext(),
-      }),
+      method:"POST",
+      body,
     });
     renderBuildResult(data);
   } catch (error) {

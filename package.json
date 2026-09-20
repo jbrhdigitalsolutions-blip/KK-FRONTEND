@@ -1,9 +1,9 @@
 {
   "name": "kk-frontend",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "private": true,
   "type": "module",
-  "description": "KK-FRONTEND — multi-source project intelligence with live URL-to-source mapping, collection-reference intent guards, hierarchy-exact reconstruction and visual certification",
+  "description": "KK-FRONTEND — Vercel-safe project-aware builds with URL-to-source mapping, hierarchy-exact reconstruction and visual certification",
   "engines": {
     "node": ">=22"
   },

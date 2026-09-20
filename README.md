@@ -1,3 +1,20 @@
+# KK-FRONTEND v0.9.2 — VERCEL BUILD PAYLOAD HARDENING
+
+v0.9.2 fixes production Build Page failures where `POST /api/reference-design/build` could exceed Vercel's Function payload budget and return HTTP 413 before the application handler ran.
+
+## What changed
+
+- Build requests reuse the already analyzed Project Fit profile instead of resending the complete GitHub/local source inventory.
+- Existing-project builds send only the original target source file needed for the exported rollback/reference copy.
+- New/standalone builds send only portable assets that must actually be embedded in the ZIP.
+- The browser enforces a 4 MB request preflight budget and gives a useful error before calling the API.
+- The server uses a 4 MB JSON parser budget for local/production parity.
+- Build responses no longer duplicate full generated file contents and the full layout model beside the ZIP payload.
+- The browser still receives ZIP bytes, preview HTML, file paths, summary data, and viewport anchors required by the viewer.
+- Regression coverage verifies pre-analyzed Project Fit + minimal artifact context builds correctly.
+
+---
+
 # KK-FRONTEND v0.9.1 — URL→SOURCE MAPPING + REFERENCE INTENT GUARD
 
 v0.9.1 fixes two workflow gaps found in production v0.9.0.
