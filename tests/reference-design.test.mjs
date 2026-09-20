@@ -266,7 +266,11 @@ test("compact evidence keeps fidelity-critical ancestors and reference font/SVG 
   const selectors=compact.viewports[0].representativeElements.map(x=>x.selector);
   assert.ok(selectors.includes("main > div"),"layout ancestor required by an h1 must be retained");
   assert.ok(selectors.includes("main > div > h1"));
-  assert.equal(compact.viewports[0].representativeElements.find(x=>x.tag==="h1").directText,"Reference heading");
+  const compactHeading=compact.viewports[0].representativeElements.find(x=>x.tag==="h1");
+  assert.equal(compactHeading.directText,"Reference heading");
+  assert.equal(Number.isInteger(compactHeading.styleRef),true);
+  assert.equal(Object.hasOwn(compactHeading,"style"),false);
+  assert.ok(compact.styles.length>0);
   assert.match(compact.fontFaces[0],/reference\.woff2/);
   assert.match(compact.assets.svgs[0].markup,/<path/);
 });
