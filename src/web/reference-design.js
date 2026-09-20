@@ -17,6 +17,7 @@ const state = {
   websiteEvidence: null,
   certifications: {},
   currentDevice: "desktop",
+  previewScaleMode: "fit",
 };
 
 function notice(message, kind = "error") {
@@ -748,17 +749,32 @@ function renderCertification(device) {
   $("overlayBuildImage").src=row.buildScreenshot;
   $("buildDiffImage").src=row.diffScreenshot;
 }
+function applyPreviewScale() {
+  const shell=$("buildFrameShell"), stage=$("buildScaleStage"), viewport=$("buildFrameViewport");
+  if(!shell||!stage||!viewport||!state.build)return;
+  const size=buildDeviceSize(state.currentDevice);
+  const actualHeight=Math.max(560,Math.min(1180,Number(size.height)||900));
+  const available=Math.max(240,viewport.clientWidth-20);
+  const scale=state.previewScaleMode==="actual" ? 1 : Math.min(1,available/(Number(size.width)||1440));
+  shell.style.width=`${size.width}px`;
+  shell.style.height=`${actualHeight}px`;
+  shell.style.transform=`scale(${scale})`;
+  stage.style.width=`${Math.round((Number(size.width)||1440)*scale)}px`;
+  stage.style.height=`${Math.round(actualHeight*scale)}px`;
+  stage.dataset.scale=state.previewScaleMode;
+  document.querySelectorAll("[data-preview-scale]").forEach(btn =>
+    btn.classList.toggle("active",btn.dataset.previewScale===state.previewScaleMode)
+  );
+}
 async function setBuildDevice(device) {
   const shell = $("buildFrameShell");
   if (!shell) return;
   state.currentDevice=device;
-  const size = buildDeviceSize(device);
   shell.dataset.device = device;
-  shell.style.width = `${size.width}px`;
-  shell.style.height = `${Math.max(560, Math.min(1180, size.height))}px`;
   document.querySelectorAll("[data-device]").forEach(btn =>
     btn.classList.toggle("active", btn.dataset.device === device)
   );
+  applyPreviewScale();
   await loadReferencePreview(device);
   renderCertification(device);
 }
@@ -818,6 +834,7 @@ function renderBuildResult(data) {
   state.build = data;
   state.certifications={};
   state.currentDevice="desktop";
+  state.previewScaleMode="fit";
   $("visualCertification").hidden=true;
   $("buildReferenceImage").src = state.referencePreviews.desktop || state.inspection?.screenshot || "";
   $("buildFrame").srcdoc = data.previewHtml;
@@ -886,6 +903,13 @@ document.querySelectorAll("[data-build-view]").forEach(button =>
 document.querySelectorAll("[data-device]").forEach(button =>
   button.addEventListener("click", () => void setBuildDevice(button.dataset.device))
 );
+document.querySelectorAll("[data-preview-scale]").forEach(button =>
+  button.addEventListener("click",()=>{
+    state.previewScaleMode=button.dataset.previewScale;
+    applyPreviewScale();
+  })
+);
+window.addEventListener("resize",()=>{ if(state.previewScaleMode==="fit") applyPreviewScale(); });
 $("certifyBuildButton").addEventListener("click",()=>void certifyCurrentBuild());
 $("overlayOpacity").addEventListener("input",event=>{
   const value=Number(event.target.value)||0;
@@ -936,6 +960,7 @@ $("newButton").addEventListener("click", () => {
   state.referencePreviews = {};
   state.certifications = {};
   state.currentDevice = "desktop";
+  state.previewScaleMode = "fit";
   state.projectProfile = null;
   state.projectFiles = [];
   state.githubScan = null;
