@@ -31,7 +31,7 @@ function syntheticEvidence() {
         elements: [
           { selector: "body", tag: "body", rect: { x: 0, y: 0, width: 1440, height: 1800 }, style: desktopStyle },
           { selector: "header", tag: "header", role: "banner", label: "Header", rect: { x: 0, y: 0, width: 1440, height: 72 }, style: { ...desktopStyle, display: "flex", position: "sticky" } },
-          { selector: "header button", tag: "button", label: "Menu", interactive: true, rect: { x: 1300, y: 16, width: 40, height: 40 }, style: { ...desktopStyle, cursor: "pointer" } },
+          { selector: "header button", parentSelector:"header", ancestorSelectors:["header"], childIndex:0, depth:2, tag: "button", label: "Menu", text:"Menu", interactive: true, rect: { x: 1300, y: 16, width: 40, height: 40 }, style: { ...desktopStyle, cursor: "pointer" } },
         ],
       },
       {
@@ -185,6 +185,10 @@ test("compact evidence companion preserves machine evidence without raw DOM bloa
   assert.ok(companion.viewports[0].representativeElements.length < evidence.viewports[0].elements.length);
   assert.ok(json.includes("(max-width: 768px)"));
   assert.ok(json.includes("header button"));
+  const button=companion.viewports[0].representativeElements.find(x=>x.selector==="header button");
+  assert.equal(button.parentSelector,"header");
+  assert.deepEqual(button.ancestorSelectors,["header"]);
+  assert.equal(button.text,"Menu");
   assert.ok(Buffer.byteLength(json, "utf8") < 1_000_000);
 });
 
@@ -194,7 +198,7 @@ test("Design Explorer exposes filters, presets and explicit custom-selection lim
     fs.readFile(path.join(root, "src", "web", "reference-design.js"), "utf8"),
     fs.readFile(path.join(root, "src", "reference-design", "browserless.mjs"), "utf8"),
   ]);
-  for (const marker of ["familyFilters", "selectFiltered", "Essential design", "Custom design", "Build the page yourself.", "buildPageButton", "downloadProjectButton", "authToggle", "authMode", "Session cookie", "HTTP Basic", "projectFitTitle", "projectFiles", "projectFolder", "Analyze Project Fit", "Auto — match project"]) {
+  for (const marker of ["familyFilters", "selectFiltered", "Essential design", "Custom design", "Build the page yourself.", "buildPageButton", "downloadProjectButton", "authToggle", "authMode", "Session cookie", "HTTP Basic", "projectFitTitle", "projectFiles", "projectFolder", "GitHub repository", "Current website", "scanGithubButton", "scanWebsiteButton", "Analyze Project Fit", "Auto — match project", "certifyBuildButton", "Overlay", "Diff"]) {
     assert.ok(html.includes(marker), "missing Design Explorer marker: " + marker);
   }
   assert.ok(js.includes("MAX_CUSTOM_SELECTION = 30"));
@@ -209,8 +213,17 @@ test("Design Explorer exposes filters, presets and explicit custom-selection lim
   assert.ok(browserless.includes("assertCredentialOrigin"));
   assert.ok(browserless.includes("credentials were not entered"));
   assert.ok(browserless.includes("captureReferencePreview"));
+  assert.ok(browserless.includes("inspectProjectWebsite"));
+  assert.ok(browserless.includes("certifyGeneratedPreview"));
+  assert.ok(browserless.includes("rawPixelSimilarityPct"));
+  assert.ok(browserless.includes("structuralSimilarityPct"));
   assert.ok(js.includes("/api/reference-design/project-fit"));
   assert.ok(js.includes("/api/reference-design/preview"));
+  assert.ok(js.includes("/api/reference-design/project-github"));
+  assert.ok(js.includes("/api/reference-design/project-website"));
+  assert.ok(js.includes("/api/reference-design/certify"));
+  assert.ok(js.includes("mergedProjectFiles"));
+  assert.ok(js.includes("certifyCurrentBuild"));
   assert.ok(js.includes("projectFitScore"));
   assert.ok(js.includes("Accurate build is locked"));
 });
