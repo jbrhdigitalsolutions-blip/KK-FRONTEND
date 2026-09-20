@@ -150,9 +150,15 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
   const assetStrategy=answerValue(answers,"assetStrategy");
   const targetPlatforms=arr(answers?.targetPlatforms).filter(x=>["windows","macos"].includes(x));
   const frameworkPreference=answerValue(answers,"frameworkPreference");
+  const packageManagerPreference=answerValue(answers,"packageManagerPreference");
   const detectedFramework=pkg.framework;
   const detected=detectedFramework!=="Unknown";
-  const effectiveFramework=projectMode==="existing" ? detectedFramework : (frameworkPreference||"HTML/CSS/JS");
+  const effectiveFramework=projectMode==="existing"
+    ? (detected ? detectedFramework : (frameworkPreference||"Unknown"))
+    : (frameworkPreference||"HTML/CSS/JS");
+  const effectivePackageManager=pkg.packageManager!=="unknown"
+    ? pkg.packageManager
+    : (packageManagerPreference||"unknown");
 
   const requirements=[];
   const add=(id,label,status,why,required=true)=>requirements.push({id,label,status,why,required});
@@ -160,10 +166,11 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
   add("projectName","Project name",projectName?"complete":"missing","Names the generated package and integration manifest.");
   if(projectMode==="existing"){
     add("projectFiles","Current frontend/project files",files.length>=2?"complete":"missing","Needed to detect framework, dependencies, file layout and styling conventions.");
-    add("techStack","Detected tech stack",detected?"complete":"missing","Accurate source must match the user's actual framework and build tool.");
+    add("techStack","Project tech stack",(detected||frameworkPreference)?"complete":"missing","Accurate source must match the user's actual framework and build tool.");
     add("targetPage","Target page/route",targetPage?"complete":"missing","Needed to place generated source in the correct route/component location.");
   } else {
     add("frameworkPreference","Output framework",frameworkPreference?"complete":"missing","Needed to produce the requested project structure.");
+    add("packageManagerPreference","Package manager",(effectivePackageManager!=="unknown")?"complete":"missing","Needed to generate install/run scripts for the user's PC.");
   }
 
   add("contentStrategy","Text/content source",contentStrategy?"complete":"missing","Choose project text, supplied text, reference labels, or placeholders.");
@@ -209,7 +216,7 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
     targetPage:targetPage||null,
     targetPlatforms,
     effectiveFramework,
-    packageManager:pkg.packageManager,
+    packageManager:effectivePackageManager,
     language:pkg.language,
     styling:pkg.styling,
     frameworkDetected:pkg.framework,
@@ -224,7 +231,7 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
     projectProfile:{
       framework:effectiveFramework,
       detectedFramework:pkg.framework,
-      packageManager:pkg.packageManager,
+      packageManager:effectivePackageManager,
       language:pkg.language,
       styling:pkg.styling,
       scripts:pkg.scripts,
@@ -239,6 +246,7 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
       assetMap:str(answers?.assetMap)||null,
       targetPlatforms,
       existingDependencies:pkg.dependencies,
+      projectNotes:answerValue(answers,"projectNotes")||null,
     }
   };
 }
