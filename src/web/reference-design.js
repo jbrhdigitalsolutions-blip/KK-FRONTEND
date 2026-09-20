@@ -185,17 +185,23 @@ async function readProjectFiles(fileList) {
 function renderProjectIntake(data) {
   state.projectIntake = data;
   const readiness = $("intakeReadiness");
-  readiness.querySelector("b").textContent = data.ready ? `Project fit ready · ${data.readinessPercent}%` : `Project fit ${data.readinessPercent}%`;
-  readiness.querySelector("span").textContent = data.ready
+  readiness.querySelector("b").textContent = data.exactReady
+    ? `Exact project fit ready · ${data.readinessPercent}%`
+    : data.ready
+      ? `Project fit complete · exact build still blocked`
+      : `Project fit ${data.readinessPercent}%`;
+  readiness.querySelector("span").textContent = data.exactReady
     ? `${data.effectiveFramework} · ${data.packageManager} · ${data.fileCount} analyzed files`
-    : `${data.missing.length} required item(s) still missing`;
+    : data.ready
+      ? (data.exactBlockers || []).join(" ")
+      : `${data.missing.length} required item(s) still missing`;
   readiness.querySelector("i").style.width = `${data.readinessPercent}%`;
-  readiness.classList.toggle("ready", data.ready);
+  readiness.classList.toggle("ready", data.exactReady);
 
   const requirements = (data.requirements || []).map(item =>
     `<div class="rdRequirement ${item.status}"><span>${item.status === "complete" ? "✓" : item.status === "recommended" ? "○" : "!"}</span><div><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.why)}</small></div></div>`
   ).join("");
-  const recommendations = (data.recommendations || []).map(x => `<li>${escapeHtml(x)}</li>`).join("");
+  const recommendations = [...(data.exactBlockers || []), ...(data.recommendations || [])].map(x => `<li>${escapeHtml(x)}</li>`).join("");
   $("intakeDetails").innerHTML = `
     <div class="rdDetectedStack">
       <span><b>Framework</b>${escapeHtml(data.effectiveFramework)}</span>
@@ -208,8 +214,8 @@ function renderProjectIntake(data) {
   `;
   $("intakeDetails").hidden = false;
   const prototype = $("buildFidelity").value === "prototype";
-  $("buildPageButton").disabled = !data.ready && !prototype;
-  $("buildPageButton").textContent = prototype ? "Build Prototype" : (data.ready ? "Build Exact Project" : "Complete Project Fit");
+  $("buildPageButton").disabled = !data.exactReady && !prototype;
+  $("buildPageButton").textContent = prototype ? "Build Prototype" : (data.exactReady ? "Build Exact Project" : "Resolve Exact Build Requirements");
   const output = $("buildOutput");
   output.innerHTML = `<option value="auto">${escapeHtml(data.effectiveFramework)} · auto-match project</option>`;
 }
@@ -638,10 +644,10 @@ $("buildPageButton").addEventListener("click", async () => {
     return;
   }
   const prototype = $("buildFidelity").value === "prototype";
-  if (!prototype && !state.projectIntake?.ready) {
+  if (!prototype && !state.projectIntake?.exactReady) {
     const analyzed = await analyzeProjectFit();
-    if (!analyzed?.ready) {
-      notice("Complete the required Project Fit items before building an accurate project package.");
+    if (!analyzed?.exactReady) {
+      notice("Resolve the required Project Fit and exact-build items before generating an accurate project package.");
       return;
     }
   }
@@ -681,8 +687,8 @@ $("projectFilesInput").addEventListener("change", event => readProjectFiles(even
 $("analyzeProjectButton").addEventListener("click", analyzeProjectFit);
 $("buildFidelity").addEventListener("change", () => {
   const prototype = $("buildFidelity").value === "prototype";
-  $("buildPageButton").disabled = !prototype && !state.projectIntake?.ready;
-  $("buildPageButton").textContent = prototype ? "Build Prototype" : (state.projectIntake?.ready ? "Build Exact Project" : "Complete Project Fit");
+  $("buildPageButton").disabled = !prototype && !state.projectIntake?.exactReady;
+  $("buildPageButton").textContent = prototype ? "Build Prototype" : (state.projectIntake?.exactReady ? "Build Exact Project" : "Resolve Exact Build Requirements");
 });
 
 document.querySelectorAll("[data-build-view]").forEach(button =>
