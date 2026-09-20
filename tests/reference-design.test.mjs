@@ -234,7 +234,11 @@ test("Design Explorer exposes filters, presets and explicit custom-selection lim
   assert.ok(js.includes("whole-collection"));
   assert.ok(js.includes("renderTargetMapping"));
   assert.ok(js.includes("standalone-replacement"));
-  assert.ok(js.includes("BUILD_REQUEST_MAX_BYTES = 4_000_000"));
+  assert.ok(js.includes("BUILD_DIRECT_REQUEST_MAX_BYTES = 3_800_000"));
+  assert.ok(js.includes("CompressionStream"));
+  assert.ok(js.includes("/api/reference-design/transport/start"));
+  assert.ok(js.includes("/api/reference-design/transport/chunk/"));
+  assert.ok(js.includes("cloudflare-r2"));
   assert.ok(js.includes("collectBuildProjectContext"));
   assert.ok(js.includes("projectProfile:profile"));
 });
