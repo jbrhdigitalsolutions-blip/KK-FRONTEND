@@ -14,7 +14,7 @@
       <span><b>KK-FRONTEND</b><small>Design Explorer</small></span>
     </a>
     <div class="rdTopActions">
-      <span class="rdVersion">v0.5.1</span>
+      <span class="rdVersion">v0.6.0</span>
       <a class="rdBack" href="/index.html">Main workspace</a>
     </div>
   </header>
@@ -22,9 +22,9 @@
   <main class="rdMain">
     <section class="rdHero">
       <div>
-        <div class="rdEyebrow">REFERENCE → VISUAL DESIGN → DESIGN.md</div>
-        <h1>Choose the design you want. <span>No coding agent required.</span></h1>
-        <p>Open any public reference page, visually pick the exact design regions, then export a verified implementation contract.</p>
+        <div class="rdEyebrow">REFERENCE → SELECT → BUILD → PREVIEW</div>
+        <h1>Choose the design you want. <span>Build the page yourself.</span></h1>
+        <p>Open a public reference, choose the exact visual regions, generate verified evidence, then compile a real page with live preview and project export — no coding agent required.</p>
       </div>
       <div id="providerState" class="rdProvider">Checking cloud browser…</div>
     </section>
@@ -127,6 +127,98 @@
         <button id="newButton" class="rdSecondary" type="button">New reference</button>
       </div>
       <details class="rdPreviewText"><summary>Preview implementation contract</summary><pre id="markdownPreview"></pre></details>
+
+      <section class="rdBuildDeck" aria-labelledby="buildTitle">
+        <div class="rdBuildHead">
+          <div class="rdStageTitle">
+            <span class="rdStep">4</span>
+            <div>
+              <h2 id="buildTitle">Build this design</h2>
+              <p>Compile the verified design evidence into a working frontend. No coding agent, prompt, or source editing required.</p>
+            </div>
+          </div>
+          <span class="rdCompilerBadge">Deterministic compiler</span>
+        </div>
+
+        <div class="rdBuildControls">
+          <label>
+            <span>Output</span>
+            <select id="buildOutput">
+              <option value="html">Standalone HTML</option>
+              <option value="react">React + Vite</option>
+              <option value="next">Next.js</option>
+            </select>
+          </label>
+          <label>
+            <span>Content</span>
+            <select id="buildContent">
+              <option value="placeholders">Safe placeholders</option>
+              <option value="reference-labels">Reference labels</option>
+            </select>
+          </label>
+          <label>
+            <span>Fidelity</span>
+            <select id="buildFidelity">
+              <option value="accurate">Accurate</option>
+              <option value="balanced">Balanced</option>
+              <option value="inspired">Inspired</option>
+            </select>
+          </label>
+          <button id="buildPageButton" class="rdPrimary rdBuildButton" type="button">Build Page</button>
+        </div>
+
+        <div class="rdBuildRule">
+          <span>Verified measurements are compiled directly.</span>
+          <span>Unknown values stay unresolved instead of being invented.</span>
+          <span>Generated source is isolated from your existing project.</span>
+        </div>
+      </section>
+
+      <section id="buildStage" class="rdBuildResult" hidden>
+        <div class="rdBuildToolbar">
+          <div>
+            <b>Live build preview</b>
+            <small id="buildSummary">Generated from verified evidence</small>
+          </div>
+          <div class="rdToolbarGroups">
+            <div class="rdSegment" aria-label="Preview comparison">
+              <button class="active" type="button" data-build-view="build">Build</button>
+              <button type="button" data-build-view="reference">Reference</button>
+              <button type="button" data-build-view="split">Split</button>
+            </div>
+            <div class="rdSegment" aria-label="Preview device">
+              <button class="active" type="button" data-device="desktop">Desktop</button>
+              <button type="button" data-device="tablet">Tablet</button>
+              <button type="button" data-device="mobile">Mobile</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="buildCompare" class="rdBuildCompare" data-view="build">
+          <div class="rdReferencePane">
+            <div class="rdPaneLabel">Reference capture</div>
+            <img id="buildReferenceImage" alt="Reference design capture"/>
+          </div>
+          <div class="rdBuildPane">
+            <div class="rdPaneLabel">Generated page</div>
+            <div id="buildFrameViewport" class="rdBuildFrameViewport">
+              <div id="buildFrameShell" class="rdBuildFrameShell" data-device="desktop">
+                <iframe id="buildFrame" title="Generated page preview" sandbox="allow-scripts"></iframe>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="buildFacts" class="rdFacts rdBuildFacts"></div>
+
+        <div class="rdProjectBar">
+          <div>
+            <b id="projectName">Generated project</b>
+            <span id="projectFiles"></span>
+          </div>
+          <button id="downloadProjectButton" class="rdPrimary" type="button">Download Project ZIP</button>
+        </div>
+      </section>
     </section>
   </main>
 
