@@ -122,6 +122,24 @@ function contentProfile(files){
   return {snippets,assetRefs:assetRefs.slice(0,60)};
 }
 
+function designContextProfile(files){
+  const design=files.find(f=>f.name.toLowerCase()==="design.md");
+  const related=files.filter(f=>/design|theme|token|tailwind|brand/i.test(f.path)).slice(0,30);
+  const text=[design?.content||"",...related.map(f=>f.content)].join("\n").slice(0,120000);
+  const headings=[...text.matchAll(/^#{1,4}\s+(.+)$/gm)].map(m=>m[1].trim()).slice(0,40);
+  const colors=[...new Set((text.match(/#[0-9a-f]{3,8}\b/gi)||[]).map(x=>x.toLowerCase()))].slice(0,40);
+  const cssVariables=[...new Set([...text.matchAll(/(--[a-z0-9-_]+)\s*:/gi)].map(m=>m[1]))].slice(0,60);
+  const breakpoints=[...new Set([...text.matchAll(/(?:breakpoint|media)[^\n]{0,80}/gi)].map(m=>m[0].trim()))].slice(0,20);
+  return {
+    designMd:design?.path||null,
+    relatedFiles:related.map(f=>f.path),
+    headings,
+    colors,
+    cssVariables,
+    breakpointMentions:breakpoints,
+  };
+}
+
 function evidenceNeeds(evidence){
   let parsed=evidence;
   if(typeof evidence==="string"){try{parsed=JSON.parse(evidence);}catch{parsed={};}}
@@ -145,6 +163,7 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
   const pkg=packageProfile(files);
   const structure=structureProfile(files);
   const content=contentProfile(files);
+  const designContext=designContextProfile(files);
   const needs=evidenceNeeds(evidence);
   const projectMode=answerValue(answers,"projectMode") || (files.length ? "existing" : "new");
   const targetPage=answerValue(answers,"targetPage");
@@ -233,6 +252,7 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
     analyzedBytes:files.reduce((n,f)=>n+f.size,0),
     structure,
     content,
+    designContext,
     evidenceNeeds:needs,
     requirements,
     missing:missing.map(x=>x.id),
@@ -255,6 +275,7 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
       assetMap:str(answers?.assetMap)||null,
       targetPlatforms,
       existingDependencies:pkg.dependencies,
+      designContext,
       projectNotes:answerValue(answers,"projectNotes")||null,
     }
   };
