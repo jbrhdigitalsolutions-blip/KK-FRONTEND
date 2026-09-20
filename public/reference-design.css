@@ -241,7 +241,8 @@ a{color:inherit}
 .rdBuildFrameViewport{min-height:560px;max-height:720px;overflow:auto;padding:10px;background:
  linear-gradient(45deg,rgba(255,255,255,.012) 25%,transparent 25%,transparent 75%,rgba(255,255,255,.012) 75%),
  #05070a;background-size:18px 18px}
-.rdBuildFrameShell{width:1440px;height:900px;max-width:none;margin:0 auto;border:1px solid rgba(255,255,255,.1);border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 18px 55px rgba(0,0,0,.35)}
+.rdBuildScaleStage{position:relative;margin:0 auto;transition:width .18s ease,height .18s ease}
+.rdBuildFrameShell{width:1440px;height:900px;max-width:none;transform-origin:top left;border:1px solid rgba(255,255,255,.1);border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 18px 55px rgba(0,0,0,.35);transition:transform .18s ease}
 .rdBuildFrameShell iframe{display:block;width:100%;height:100%;border:0;background:#fff}
 .rdBuildFacts{padding:10px;margin:0;border-bottom:1px solid var(--line)}
 .rdProjectBar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px}
@@ -357,4 +358,44 @@ a{color:inherit}
   .rdUploadActions{display:grid;grid-template-columns:1fr 1fr}
   .rdFileButton{text-align:center}
   .rdFitQuestions>div{grid-template-columns:1fr}
+}
+
+
+/* v0.9.0 Multi-Source Project Intelligence + Visual Certification */
+.rdSourceDeck{margin-top:9px;padding:9px;border:1px solid var(--line);border-radius:11px;background:linear-gradient(180deg,rgba(255,255,255,.018),rgba(4,7,11,.32))}
+.rdSourceIntro{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 1px 8px}
+.rdSourceIntro>div:first-child{display:grid;gap:2px;min-width:0}.rdSourceIntro b{font-size:9px}.rdSourceIntro span{font-size:7px;color:var(--muted)}
+.rdSourceCount{flex:0 0 auto;padding:4px 7px;border:1px solid var(--line);border-radius:999px;background:rgba(126,151,255,.04);color:#aab6d9;font-size:7px}
+.rdSourceGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.rdSourceCard{min-width:0;padding:9px;border:1px solid rgba(255,255,255,.065);border-radius:10px;background:rgba(5,8,12,.58);box-shadow:inset 0 1px rgba(255,255,255,.018)}
+.rdSourceCardHead{display:flex;align-items:flex-start;gap:7px;margin-bottom:8px}.rdSourceCardHead>span{display:grid;place-items:center;flex:0 0 auto;width:20px;height:20px;border-radius:6px;background:rgba(126,151,255,.07);border:1px solid rgba(126,151,255,.17);font-size:6px;color:#9eafe5}.rdSourceCardHead>div{display:grid;gap:1px}.rdSourceCardHead b{font-size:8px}.rdSourceCardHead small{font-size:6.5px;line-height:1.4;color:var(--muted)}
+.rdSourceField{display:grid;gap:4px;margin-top:6px}.rdSourceField>span{font-size:6px;color:#8492a5;text-transform:uppercase;letter-spacing:.055em}.rdSourceField>span small{text-transform:none;letter-spacing:0;color:var(--muted-2)}
+.rdSourceField input{width:100%;height:32px;border:1px solid var(--line);border-radius:8px;background:#070a0f;color:var(--text);padding:0 8px;font-size:8px;outline:none}.rdSourceField input:focus{border-color:rgba(126,151,255,.5);box-shadow:0 0 0 3px rgba(126,151,255,.05)}
+.rdSourcePair{display:grid;grid-template-columns:1fr 1fr;gap:6px}.rdSourceActionRow{display:flex;align-items:center;gap:7px;margin-top:8px}.rdSourceActionRow>span{min-width:0;color:#77869a;font-size:6.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rdSourceFoot{display:block;margin-top:6px;color:#627084;font-size:6px;line-height:1.4}
+.rdSourceCard .rdUploadActions{display:grid;grid-template-columns:1fr 1fr}.rdSourceCard .rdFileButton{text-align:center}.rdSourceCard .rdFileSummary{line-height:1.45}
+
+.rdCertifyButton{height:30px;padding:0 10px;white-space:nowrap}
+.rdOverlayPane,.rdDiffPane{display:none;min-width:0;position:relative;background:#040609}
+.rdBuildCompare[data-view="overlay"] .rdReferencePane,.rdBuildCompare[data-view="overlay"] .rdBuildPane{display:none}
+.rdBuildCompare[data-view="overlay"] .rdOverlayPane{display:block}
+.rdBuildCompare[data-view="diff"] .rdReferencePane,.rdBuildCompare[data-view="diff"] .rdBuildPane{display:none}
+.rdBuildCompare[data-view="diff"] .rdDiffPane{display:block}
+.rdOverlayStage{position:relative;margin:10px auto 8px;width:min(100%,1440px);overflow:auto;max-height:720px;background:#fff}
+.rdOverlayStage img{display:block;width:100%;height:auto}.rdOverlayStage #overlayBuildImage{position:absolute;inset:0;opacity:.5}
+.rdOverlayPane>input{display:block;width:calc(100% - 20px);margin:0 10px 10px;accent-color:#8ea5ff}
+.rdPaneLabel #overlayValue,.rdPaneLabel span{margin-left:auto;color:#aebaf0}
+.rdDiffPane{max-height:748px;overflow:auto}.rdDiffPane img{display:block;width:min(100%,1440px);height:auto;margin:0 auto;background:#000}
+.rdCertification{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;padding:9px 10px;border-bottom:1px solid var(--line);background:rgba(6,9,13,.58)}
+.rdCertification>div{padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.018);display:grid;gap:1px}.rdCertification span{font-size:6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.rdCertification b{font-size:12px}.rdCertification p{grid-column:1/-1;margin:0;color:#6f7d90;font-size:6.5px;line-height:1.45}
+.rdBuildCompare[data-view="split"] .rdOverlayPane,.rdBuildCompare[data-view="split"] .rdDiffPane,
+.rdBuildCompare[data-view="build"] .rdOverlayPane,.rdBuildCompare[data-view="build"] .rdDiffPane,
+.rdBuildCompare[data-view="reference"] .rdOverlayPane,.rdBuildCompare[data-view="reference"] .rdDiffPane{display:none}
+
+@media(max-width:1100px){.rdSourceGrid{grid-template-columns:1fr}.rdSourcePair{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){
+  .rdSourceIntro{align-items:flex-start;flex-direction:column}
+  .rdSourcePair,.rdSourceCard .rdUploadActions{grid-template-columns:1fr}
+  .rdCertification{grid-template-columns:1fr}
+  .rdCertification p{grid-column:auto}
+  .rdCertifyButton{width:100%}
 }
