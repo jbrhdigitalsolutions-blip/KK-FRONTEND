@@ -121,7 +121,8 @@ test("new project can become exact-ready from explicit stack content and asset m
       targetPlatforms:["windows","macos"],content:{"text-1":"Fresh headline","action-1":"Create now"}
     }
   });
-  assert.ok(result.files.some(x=>x.path==="app/kk-generated/page.jsx"));
+  assert.ok(result.files.some(x=>x.path==="app/page.jsx"));
+  assert.ok(result.files.some(x=>x.path==="package.json"));
   assert.match(result.previewHtml,/Fresh headline/);
   assert.match(result.previewHtml,/hero\.webp/);
 });
