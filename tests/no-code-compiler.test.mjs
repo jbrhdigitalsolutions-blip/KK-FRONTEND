@@ -320,6 +320,7 @@ test("pre-analyzed Project Fit builds with only the target artifact file",()=>{
     mode:"existing",
     stack:"auto",
     files:projectFiles,
+    githubEvidence:{schema:"kk-project-github-scan/v1",repository:{url:"https://github.com/example/slim-app",branch:"main"}},
     brand:"Slim App",
     heroTitle:"Target headline",
     heroBody:"Target body",
