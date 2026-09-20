@@ -184,7 +184,16 @@ function frameworkKey(v){const x=str(v).toLowerCase();return x.includes("next")?
 function sourceFiles(model,r){
   const fw=frameworkKey(model.framework),jsx=r.body.replaceAll("class=","className=");
   const routeRoot=str(model.projectProfile?.routeRoot);
+  const isNew=model.projectMode==="new";
   if(fw==="next"){
+    if(isNew){
+      return [
+        {path:"package.json",content:JSON.stringify({name:slug(model.title),private:true,scripts:{dev:"next dev",build:"next build",start:"next start"},dependencies:{next:">=14",react:">=18","react-dom":">=18"}},null,2)},
+        {path:"app/layout.jsx",content:'import "./globals.css";export const metadata={title:"'+esc(model.title)+'"};export default function RootLayout({children}){return <html lang="en"><body>{children}</body></html>}'},
+        {path:"app/page.jsx",content:'export default function Page(){return <main className="kkx-page">'+jsx+'</main>}'},
+        {path:"app/globals.css",content:r.cssText}
+      ];
+    }
     const root=routeRoot&&/app$/.test(routeRoot)?routeRoot:"app";
     return [
       {path:root+"/kk-generated/page.jsx",content:'import "./page.css";export default function GeneratedDesignPage(){return <main className="kkx-page">'+jsx+'</main>}'},
@@ -192,10 +201,25 @@ function sourceFiles(model,r){
     ];
   }
   if(fw==="react"){
+    if(isNew){
+      return [
+        {path:"package.json",content:JSON.stringify({name:slug(model.title),private:true,scripts:{dev:"vite",build:"vite build",preview:"vite preview"},dependencies:{react:">=18","react-dom":">=18"},devDependencies:{vite:">=5","@vitejs/plugin-react":">=4"}},null,2)},
+        {path:"index.html",content:'<div id="root"></div><script type="module" src="/src/main.jsx"></script>'},
+        {path:"src/main.jsx",content:'import React from "react";import{createRoot}from"react-dom/client";import App from "./App.jsx";import "./styles.css";createRoot(document.getElementById("root")).render(<App/>);'},
+        {path:"src/App.jsx",content:'export default function App(){return <main className="kkx-page">'+jsx+'</main>}'},
+        {path:"src/styles.css",content:r.cssText}
+      ];
+    }
     const root=str(model.projectProfile?.sourceRoot,"src");
     return [
       {path:root+"/kk-generated/ExactDesignPage.jsx",content:'import "./ExactDesignPage.css";export default function ExactDesignPage(){return <main className="kkx-page">'+jsx+'</main>}'},
       {path:root+"/kk-generated/ExactDesignPage.css",content:r.cssText}
+    ];
+  }
+  if(isNew){
+    return [
+      {path:"package.json",content:JSON.stringify({name:slug(model.title),private:true,scripts:{dev:"vite",build:"vite build",preview:"vite preview"},devDependencies:{vite:">=5"}},null,2)},
+      {path:"index.html",content:r.html}
     ];
   }
   return [{path:"kk-generated/index.html",content:r.html}];
@@ -228,7 +252,7 @@ function zipStore(files){
   const cs=centrals.reduce((n,b)=>n+b.length,0),end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50,0);end.writeUInt16LE(files.length,8);end.writeUInt16LE(files.length,10);end.writeUInt32LE(cs,12);end.writeUInt32LE(offset,16);return Buffer.concat([...locals,...centrals,end]);
 }
 
-export function compileProjectAwareDesign({evidence:inputEvidence,files=[],answers={},options={}}={}){
+export function compileProjectAwareDesign({evidence:inputEvidence,markdown="",files=[],answers={},options={}}={}){
   const evidence=parseEvidence(inputEvidence),normalized=normalizeProjectFiles(files);
   const intake=analyzeProjectIntake({evidence,files:normalized,answers});
   if(!intake.exactReady&&!options.allowPrototype){
@@ -237,6 +261,7 @@ export function compileProjectAwareDesign({evidence:inputEvidence,files=[],answe
   }
   const model=buildModel(evidence,intake,answers),rendered=render(model),generated=sourceFiles(model,rendered);
   const out=[...generated,
+    {path:"REFERENCE-DESIGN.md",content:String(markdown||"# DESIGN.md\n")},
     {path:"PROJECT-FIT.json",content:JSON.stringify(intake,null,2)},
     {path:"DESIGN-BUILD.json",content:JSON.stringify(model,null,2)},
     ...supportFiles(intake,generated)
