@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { buildEvidenceCompanion, candidateFamily, classifyCandidate, normalizeReferenceUrl, renderDesignMd } from "./design-md.mjs";
-import { normalizeReferenceAuth, parseCookieHeader, referenceAuthHeader, referenceAuthSummary } from "./auth.mjs";
+import { containsReferenceAuthSecret, normalizeReferenceAuth, parseCookieHeader, referenceAuthHeader, referenceAuthSummary } from "./auth.mjs";
 
 const VIEWPORTS = [
   { name: "desktop", width: 1440, height: 900 },
@@ -476,7 +476,7 @@ export async function inspectReferenceDesign({ url, auth = {} }) {
       familyCounts[candidate.family] = (familyCounts[candidate.family] || 0) + 1;
       kindCounts[candidate.kind] = (kindCounts[candidate.kind] || 0) + 1;
     }
-    return {
+    const result = {
       schema: "kk-reference-design-inspection/v2",
       url: safeUrl,
       finalUrl: info.finalUrl,
@@ -489,6 +489,8 @@ export async function inspectReferenceDesign({ url, auth = {} }) {
       facets: { familyCounts, kindCounts },
       authentication: authSummary,
     };
+    if (containsReferenceAuthSecret(result, normalizedAuth)) throw new Error("Authentication secret safety check failed.");
+    return result;
   } finally {
     await browser.close().catch(() => {});
   }
@@ -820,7 +822,7 @@ export async function generateReferenceDesignMd({ url, scope = "whole", selector
     if (responseBytes > 4_000_000) {
       throw new Error("Generated reference evidence exceeds the safe web response budget. Select a smaller reference region and retry.");
     }
-    return {
+    const result = {
       schema: "kk-reference-design-md/v2",
       filename: "DESIGN.md",
       markdown,
@@ -846,6 +848,8 @@ export async function generateReferenceDesignMd({ url, scope = "whole", selector
         authentication: authSummary,
       },
     };
+    if (containsReferenceAuthSecret(result, normalizedAuth)) throw new Error("Authentication secret safety check failed.");
+    return result;
   } finally {
     await browser.close().catch(() => {});
   }
