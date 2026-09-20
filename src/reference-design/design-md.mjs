@@ -498,6 +498,7 @@ function slimEvidenceNode(node = {}) {
     className: node.className || "",
     label: cleanLabel(node.label) || node.tag || "",
     text: String(node.text || "").replace(/\s+/g," ").trim().slice(0,420),
+    directText: String(node.directText || "").replace(/\s+/g," ").trim().slice(0,420),
     interactive: Boolean(node.interactive),
     rect: node.rect || null,
     style: slimEvidenceStyle(node.style),
