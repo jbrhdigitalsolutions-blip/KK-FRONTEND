@@ -42,6 +42,10 @@ const projectFiles=[
   {path:"DESIGN.md",content:"# Existing Design\nUse current brand tokens."},
 ];
 
+const projectAssets=[
+  {name:"hero.svg",mime:"image/svg+xml",base64:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>').toString("base64")}
+];
+
 test("project intake detects stack and asks only for evidence still needed",()=>{
   const result=analyzeProjectIntake({
     evidence:evidence(),
@@ -116,9 +120,10 @@ test("new project can become exact-ready from explicit stack content and asset m
   const intake=analyzeProjectIntake({
     evidence:evidence(),
     files:[],
+    assets:projectAssets,
     answers:{
       projectMode:"new",projectName:"Fresh",frameworkPreference:"Next.js",packageManagerPreference:"pnpm",
-      contentStrategy:"provided",assetStrategy:"provided",assetMap:"/hero.webp",
+      contentStrategy:"provided",assetStrategy:"provided",assetMap:"",
       targetPlatforms:["windows","macos"],content:{"text-1":"Fresh headline","action-1":"Create now"}
     }
   });
@@ -127,17 +132,32 @@ test("new project can become exact-ready from explicit stack content and asset m
   assert.equal(intake.packageManager,"pnpm");
 
   const result=compileProjectAwareDesign({
-    evidence:evidence(),files:[],
+    evidence:evidence(),files:[],assets:projectAssets,
     answers:{
       projectMode:"new",projectName:"Fresh",frameworkPreference:"Next.js",packageManagerPreference:"pnpm",
-      contentStrategy:"provided",assetStrategy:"provided",assetMap:"/hero.webp",
+      contentStrategy:"provided",assetStrategy:"provided",assetMap:"",
       targetPlatforms:["windows","macos"],content:{"text-1":"Fresh headline","action-1":"Create now"}
     }
   });
   assert.ok(result.files.some(x=>x.path==="app/page.jsx"));
   assert.ok(result.files.some(x=>x.path==="package.json"));
   assert.match(result.previewHtml,/Fresh headline/);
-  assert.match(result.previewHtml,/hero\.webp/);
+  assert.match(result.previewHtml,/data:image\/svg\+xml;base64/);
+  assert.ok(result.files.some(x=>x.path==="public/kk-assets/hero.svg" && x.binary===true));
+  assert.ok(result.files.some(x=>x.path==="ASSET-MAP.md"));
+});
+
+test("new project does not treat an unresolved local asset path as complete",()=>{
+  const intake=analyzeProjectIntake({
+    evidence:evidence(),files:[],
+    answers:{
+      projectMode:"new",projectName:"Fresh",frameworkPreference:"Next.js",packageManagerPreference:"pnpm",
+      contentStrategy:"provided",assetStrategy:"provided",assetMap:"/missing-local.webp",
+      targetPlatforms:["windows"],content:{"text-1":"Headline","action-1":"Create"}
+    }
+  });
+  assert.equal(intake.exactReady,false);
+  assert.ok(intake.missing.includes("assetMap"));
 });
 
 test("accurate build refuses incomplete project intake instead of guessing",()=>{
