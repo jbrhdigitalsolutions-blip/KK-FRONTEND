@@ -206,3 +206,30 @@ test("new project export includes cross-platform setup scripts",()=>{
   assert.ok(paths.includes("RUN.md"));
   assert.ok(paths.includes("PROJECT-FIT.json"));
 });
+
+
+test("new project ZIP carries small uploaded portable assets",()=>{
+  const asset=Buffer.from("fake-webp-bytes").toString("base64");
+  const result=compileNoCodeDesign({
+    evidence:evidence(),
+    markdown:"# DESIGN.md",
+    options:{output:"auto",contentMode:"placeholders",fidelity:"accurate"},
+    projectContext:{
+      mode:"new",
+      stack:"react",
+      projectName:"Asset App",
+      brand:"Asset",
+      heroTitle:"Visual headline",
+      heroBody:"Real copy.",
+      primaryCta:"Start",
+      navItems:"Home, Product",
+      files:[{path:"hero.webp",name:"hero.webp",size:15,type:"image/webp",base64:asset}]
+    }
+  });
+  assert.equal(result.model.project.assetMap.heroAsset,"/assets/hero.webp");
+  const portable=result.files.find(x=>x.path==="public/assets/hero.webp");
+  assert.ok(portable);
+  assert.equal(portable.encoding,"base64");
+  assert.equal(portable.content,asset);
+  assert.match(result.previewHtml,/\/assets\/hero\.webp/);
+});
