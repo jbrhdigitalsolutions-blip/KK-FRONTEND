@@ -1,9 +1,9 @@
 {
   "name": "kk-frontend",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
-  "description": "KK-FRONTEND — professional visual design picker, runtime-evidence source generator and safe frontend implementation studio",
+  "description": "KK-FRONTEND — web-only reference DESIGN.md extraction, visual design picker, runtime-evidence source generator and safe frontend implementation studio",
   "engines": {
     "node": ">=22"
   },
@@ -11,9 +11,10 @@
     "start": "node src/server.mjs",
     "dev": "node --watch src/server.mjs",
     "selftest": "node tests/selftest.mjs",
-    "check": "node --check src/server.mjs && node --check src/browser/scanner.mjs && node --check src/target/repo.mjs && node --check src/intelligence/compare.mjs && node --check src/intelligence/design-entities.mjs && node --check src/intelligence/source-generator.mjs && node --check src/execution/git-safety.mjs",
+    "check": "node --check src/server.mjs && node --check src/browser/scanner.mjs && node --check src/target/repo.mjs && node --check src/intelligence/compare.mjs && node --check src/intelligence/design-entities.mjs && node --check src/intelligence/source-generator.mjs && node --check src/execution/git-safety.mjs && node --check src/reference-design/design-md.mjs && node --check src/reference-design/browserless.mjs && node --check src/web/reference-design.js",
     "test:internal": "node --test tests/optimization.test.mjs",
-    "test:design-picker": "node --test tests/design-picker.test.mjs"
+    "test:design-picker": "node --test tests/design-picker.test.mjs",
+    "test:reference-design": "node --test tests/reference-design.test.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",

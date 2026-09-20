@@ -1,4 +1,52 @@
-# KK-FRONTEND v0.3.0 — DESIGN PICKER + SOURCE GENERATOR
+# KK-FRONTEND v0.4.0 — WEB-ONLY REFERENCE → DESIGN.md
+
+v0.4.0 adds a dedicated **Reference → DESIGN.md** workspace at `/reference-design.html`.
+
+This workflow does not require a target project, local machine path, Git checkout, or locally installed browser. A user supplies a public reference URL, inspects a server-rendered capture, selects the whole page or exact regions, and downloads an evidence-first `DESIGN.md`.
+
+## v0.4.0 flow
+
+```text
+Reference URL
+→ Remote Chromium inspection
+→ Whole Page or exact region selection
+→ Desktop + Tablet + Mobile measurement
+→ hover/focus + animation + responsive CSS evidence
+→ deterministic supplied-template renderer
+→ Download DESIGN.md
+```
+
+### Evidence rules
+
+- Measurable values come from rendered browser evidence.
+- Unverified values are emitted as `UNKNOWN — DO NOT INVENT`.
+- The extractor does not submit forms or click destructive controls.
+- Public `http(s)` URLs only in production web-only mode; private/local network targets are rejected.
+- The capture verifies remote Chromium rendering. Safari/WebKit and Firefox rendering are not claimed as independently verified.
+- Canvas/WebGL internals and inaccessible cross-origin stylesheet rules may remain unverified.
+
+### Cloud browser configuration
+
+Set one of these server-side environment variables:
+
+```text
+BROWSERLESS_TOKEN=
+BROWSERLESS_WS_ENDPOINT=
+```
+
+`BROWSERLESS_TOKEN` uses the default Browserless production endpoint. `BROWSERLESS_WS_ENDPOINT` can provide a complete compatible WebSocket endpoint. Never expose either value in client-side code.
+
+For local development only, private-address scanning can be deliberately enabled with:
+
+```text
+KK_REFERENCE_ALLOW_PRIVATE=true
+```
+
+Keep it unset/false in production.
+
+---
+
+## v0.3.0 — DESIGN PICKER + SOURCE GENERATOR
 
 v0.3.0 adds a visual reference-design extraction workflow on top of the existing scanner/comparison/safe-execution system.
 

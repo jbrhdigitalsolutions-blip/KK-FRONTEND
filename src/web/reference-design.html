@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="color-scheme" content="dark"/>
+  <title>Reference → DESIGN.md — KK-FRONTEND</title>
+  <link rel="stylesheet" href="/reference-design.css"/>
+</head>
+<body>
+  <header class="rdTopbar">
+    <a class="rdBrand" href="/index.html" aria-label="Back to KK-FRONTEND">
+      <span class="rdMark">K</span><span><b>KK-FRONTEND</b><small>Reference → DESIGN.md</small></span>
+    </a>
+    <a class="rdBack" href="/index.html">Main workspace</a>
+  </header>
+
+  <main class="rdMain">
+    <section class="rdHero">
+      <div class="rdEyebrow">WEB-ONLY REFERENCE EXTRACTION</div>
+      <h1>Turn a reference URL into an implementation-ready <code>DESIGN.md</code>.</h1>
+      <p>No local project is required. Inspect the real rendered page, choose the exact page/section/component you want, then export measured Desktop, Tablet and Mobile design evidence.</p>
+      <div id="providerState" class="rdProvider">Checking cloud browser…</div>
+    </section>
+
+    <section class="rdCard rdUrlCard" aria-labelledby="urlTitle">
+      <div class="rdCardHead">
+        <div><span class="rdStep">1</span><h2 id="urlTitle">Reference URL</h2></div>
+        <span class="rdHint">Public http(s) page</span>
+      </div>
+      <form id="inspectForm" class="rdUrlForm">
+        <label class="srOnly" for="referenceUrl">Reference website URL</label>
+        <input id="referenceUrl" inputmode="url" autocomplete="url" placeholder="https://example.com/page" required/>
+        <button id="inspectButton" class="rdPrimary" type="submit">Inspect Reference</button>
+      </form>
+      <div id="notice" class="rdNotice" hidden></div>
+    </section>
+
+    <section id="selectionStage" class="rdStage" hidden>
+      <div class="rdStageHead">
+        <div><span class="rdStep">2</span><h2>Select what to reproduce</h2><p>Choose the whole page, or click exact regions on the captured reference.</p></div>
+        <a id="openReference" class="rdTextLink" target="_blank" rel="noreferrer">Open reference ↗</a>
+      </div>
+
+      <div class="rdScopeToggle" role="radiogroup" aria-label="Reference scope">
+        <label><input type="radio" name="scope" value="whole" checked/><span><b>Whole Page</b><small>Complete page design</small></span></label>
+        <label><input type="radio" name="scope" value="selected"/><span><b>Select Regions</b><small>Header, section, sidebar, animation…</small></span></label>
+      </div>
+
+      <div id="pickerGrid" class="rdPickerGrid isWhole">
+        <div class="rdPreviewCard">
+          <div class="rdPreviewMeta"><span id="referenceTitle">Reference</span><span id="candidateCount"></span></div>
+          <div id="previewViewport" class="rdPreviewViewport">
+            <div id="previewCanvas" class="rdPreviewCanvas">
+              <img id="previewImage" alt="Captured reference website"/>
+              <div id="overlayLayer" class="rdOverlayLayer" aria-label="Selectable reference regions"></div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="rdInspector">
+          <div class="rdInspectorTop">
+            <div><b>Detected regions</b><small id="selectedSummary">Whole page selected</small></div>
+            <button id="clearSelection" class="rdQuiet" type="button">Clear</button>
+          </div>
+          <input id="candidateSearch" class="rdSearch" placeholder="Filter regions…"/>
+          <div id="selectedChips" class="rdChips"></div>
+          <div id="candidateList" class="rdCandidateList"></div>
+        </aside>
+      </div>
+
+      <div class="rdGenerateBar">
+        <div><b>Evidence capture</b><span>Desktop 1440×900 · Tablet 820×1180 · Mobile 390×844 · Hover/Focus · Motion · CSS breakpoints</span></div>
+        <button id="generateButton" class="rdPrimary rdGenerate" type="button">Generate DESIGN.md</button>
+      </div>
+    </section>
+
+    <section id="resultStage" class="rdCard rdResult" hidden>
+      <div class="rdCardHead">
+        <div><span class="rdStep done">3</span><h2>DESIGN.md ready</h2></div>
+        <span id="confidencePill" class="rdConfidence"></span>
+      </div>
+      <div id="resultFacts" class="rdFacts"></div>
+      <div class="rdResultActions">
+        <button id="downloadButton" class="rdPrimary" type="button">Download DESIGN.md</button>
+        <button id="copyButton" class="rdSecondary" type="button">Copy</button>
+        <button id="newButton" class="rdSecondary" type="button">New Reference</button>
+      </div>
+      <details class="rdPreviewText"><summary>Preview generated specification</summary><pre id="markdownPreview"></pre></details>
+    </section>
+  </main>
+
+  <script type="module" src="/reference-design.js"></script>
+</body>
+</html>
