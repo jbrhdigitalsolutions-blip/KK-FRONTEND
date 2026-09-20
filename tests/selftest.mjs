@@ -35,6 +35,9 @@ const jobs=fs.readFileSync(path.join(CONFIG.packageRoot,"src","jobs.mjs"),"utf8"
 for(const marker of ["pause(id)","resume(id)","stop(id)","KK_STOP"]) assert.ok(jobs.includes(marker),`job control marker missing: ${marker}`);
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","intelligence","design-entities.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","intelligence","source-generator.mjs")));
+assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","target","source-intelligence.mjs")));
+assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","intelligence","design-contract.mjs")));
+assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","intelligence","component-map.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","reference-design","design-md.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","reference-design","browserless.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","reference-design","DESIGN-TEMPLATE.md")));

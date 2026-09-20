@@ -8,6 +8,7 @@ import { id, ensureDir, writeJson, readJson, exists } from "./fs-utils.mjs";
 import { scanWebsite } from "./browser/scanner.mjs";
 import { acquireTarget, githubStatus, gitState, run } from "./target/repo.mjs";
 import { scanSourceProject } from "./target/source-scan.mjs";
+import { buildSourceIntelligence } from "./target/source-intelligence.mjs";
 import { buildComparison } from "./intelligence/compare.mjs";
 import { buildPlan } from "./intelligence/plan.mjs";
 import { writeAuditMarkdown, writeComparisonMarkdown } from "./intelligence/reporter.mjs";
@@ -15,6 +16,8 @@ import { writeDesignBlueprint } from "./intelligence/design-blueprint.mjs";
 import { buildDesignPack } from "./intelligence/design-pack.mjs";
 import { buildReferenceEntityCatalog } from "./intelligence/design-entities.mjs";
 import { generateSelectionSource } from "./intelligence/source-generator.mjs";
+import { buildDesignContract } from "./intelligence/design-contract.mjs";
+import { buildComponentMap } from "./intelligence/component-map.mjs";
 import { prepareExecutionWorkspace, compareTrees, applySafeCopyToOriginal, rollbackSafeCopyApply } from "./execution/workspace.mjs";
 import { runConfiguredAgent } from "./execution/agent-runner.mjs";
 import { verifyProject } from "./execution/verify.mjs";
@@ -61,7 +64,7 @@ function progressFor(job){
   }
 }
 async function newSession(){
-  const s={id:id("session"),createdAt:new Date().toISOString(),reference:null,target:null,comparison:null,designSelection:null,codeGeneration:null,plan:null,execution:null};
+  const s={id:id("session"),createdAt:new Date().toISOString(),reference:null,target:null,comparison:null,designSelection:null,codeGeneration:null,designContract:null,componentMap:null,plan:null,execution:null};
   await ensureDir(sessionDir(s.id));sessions.set(s.id,s);await saveSession(s);return s
 }
 
@@ -90,7 +93,7 @@ async function executionCapability(s){
   };
 }
 
-app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.4.0",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true}));
+app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.4.0",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true,sourceAwareMigration:true}));
 app.get("/api/github/status",async(req,res)=>res.json(await githubStatus()));
 app.post("/api/github/auth/start",async(req,res)=>{
   try{
@@ -170,7 +173,16 @@ app.post("/api/scan/reference",async(req,res)=>{
     });
     progressFor(job)({stage:"design-entities",progress:100,message:"Building selectable Section / Component / Text / Animation catalog"});
     const entityCatalog=await buildReferenceEntityCatalog({referenceRoot:out,outFile:sessionFile(sessionId,"reference-entities.json")});
-    s.reference={url,root:out,auditFile:"reference-audit.json",designFile:"DESIGN.md",designBytes:designResult.bytes,designPack:"DESIGN-PACK",designPackFiles:packResult.manifest.counts.files,designPackScreenshots:packResult.manifest.counts.screenshots,entityCatalog:"reference-entities.json",entityCount:entityCatalog.counts.total,partial:false,cancelled:false};
+    const designContract=await buildDesignContract({auditRoot:out,auditFile:sessionFile(sessionId,"reference-audit.json"),entityCatalog,outFile:sessionFile(sessionId,"design-contract.json")});
+    s.designContract={file:"design-contract.json",schema:designContract.schema,createdAt:designContract.createdAt};
+    if(s.target?.sourceIntelligenceFile){
+      const targetIntelligence=await readJson(path.join(sessionDir(sessionId),s.target.sourceIntelligenceFile));
+      if(targetIntelligence){
+        const map=await buildComponentMap({catalog:entityCatalog,sourceIntelligence:targetIntelligence,outFile:sessionFile(sessionId,"component-map.json")});
+        s.componentMap={file:"component-map.json",mapped:map.counts.mapped,unmapped:map.counts.unmapped,createdAt:map.createdAt};
+      }
+    }
+    s.reference={url,root:out,auditFile:"reference-audit.json",designFile:"DESIGN.md",designContractFile:"design-contract.json",designBytes:designResult.bytes,designPack:"DESIGN-PACK",designPackFiles:packResult.manifest.counts.files,designPackScreenshots:packResult.manifest.counts.screenshots,entityCatalog:"reference-entities.json",entityCount:entityCatalog.counts.total,partial:false,cancelled:false};
     await saveSession(s);return s.reference;
   }).catch(()=>{});
 });
@@ -184,23 +196,30 @@ app.post("/api/scan/target",async(req,res)=>{
     const progress=progressFor(job);
     const acquired=await acquireTarget(source,{progress});
     const out=path.join(sessionDir(sessionId),"target-before");await ensureDir(out);
-    let sourceAudit=null,runtimeAudit=null;
+    let sourceAudit=null,sourceIntelligence=null,runtimeAudit=null;
     if(acquired.root){
       sourceAudit=await scanSourceProject(acquired.root,path.join(out,"source-audit.json"),{progress});
+      sourceIntelligence=await buildSourceIntelligence(acquired.root,sourceAudit,path.join(out,"source-intelligence.json"),{progress});
       const url=options.runtimeUrl||source.runtimeUrl||null;
       if(url)runtimeAudit=await scanWebsite({url,outDir:path.join(out,"runtime"),resume:true,...options,progress,control:jobs.control(job.id)});
     }else if(acquired.url){
       runtimeAudit=await scanWebsite({url:acquired.url,outDir:path.join(out,"runtime"),resume:true,...options,progress,control:jobs.control(job.id)});
     }
     if(runtimeAudit?.cancelled){
-      s.target={source,acquired,root:out,partial:true,cancelled:true,sourceAuditFile:sourceAudit?"target-before/source-audit.json":null,runtimeRoot:path.join(out,"runtime")};
+      s.target={source,acquired,root:out,partial:true,cancelled:true,sourceAuditFile:sourceAudit?"target-before/source-audit.json":null,sourceIntelligenceFile:sourceIntelligence?"target-before/source-intelligence.json":null,runtimeRoot:path.join(out,"runtime")};
       await saveSession(s);return s.target;
     }
     const canonical=runtimeAudit||{schema:"kk-frontend-audit/v2",kind:"source-only",target:acquired.root,evidenceStatus:"VERIFIED",routes:[]};
     canonical.sourceAuditFile=sourceAudit?"source-audit.json":null;
+    canonical.sourceIntelligenceFile=sourceIntelligence?"source-intelligence.json":null;
     await writeJson(sessionFile(sessionId,"target-before-audit.json"),canonical);
     await writeAuditMarkdown(sessionFile(sessionId,"target-before-audit.json"),sessionFile(sessionId,"TARGET-BEFORE-AUDIT.md"),"Target Before Audit");
-    s.target={source,acquired,root:out,auditFile:"target-before-audit.json",sourceAuditFile:sourceAudit?"target-before/source-audit.json":null,runtimeRoot:runtimeAudit?path.join(out,"runtime"):null,partial:false,cancelled:false};
+    s.target={source,acquired,root:out,auditFile:"target-before-audit.json",sourceAuditFile:sourceAudit?"target-before/source-audit.json":null,sourceIntelligenceFile:sourceIntelligence?"target-before/source-intelligence.json":null,runtimeRoot:runtimeAudit?path.join(out,"runtime"):null,partial:false,cancelled:false};
+    const catalog=await readJson(sessionFile(sessionId,"reference-entities.json"));
+    if(catalog&&sourceIntelligence){
+      const map=await buildComponentMap({catalog,sourceIntelligence,outFile:sessionFile(sessionId,"component-map.json")});
+      s.componentMap={file:"component-map.json",mapped:map.counts.mapped,unmapped:map.counts.unmapped,createdAt:map.createdAt};
+    }
     await saveSession(s);return s.target;
   }).catch(()=>{});
 });
@@ -281,7 +300,16 @@ app.post("/api/plan",async(req,res)=>{
   const job=jobs.create("plan",{sessionId,selected:selectedIds.length});res.json({jobId:job.id});
   jobs.run(job,async()=>{
     const sourceAudit=s.target?.sourceAuditFile?await readJson(path.join(sessionDir(sessionId),s.target.sourceAuditFile)):null;
-    const plan=await buildPlan({comparisonFile:sessionFile(sessionId,"comparison.json"),selectedIds,outDir:sessionDir(sessionId),targetSourceAudit:sourceAudit});
+    const sourceIntelligence=s.target?.sourceIntelligenceFile?await readJson(path.join(sessionDir(sessionId),s.target.sourceIntelligenceFile)):null;
+    let componentMap=await readJson(sessionFile(sessionId,"component-map.json"));
+    if(!componentMap&&sourceIntelligence){
+      const catalog=await readJson(sessionFile(sessionId,"reference-entities.json"));
+      if(catalog){
+        componentMap=await buildComponentMap({catalog,sourceIntelligence,outFile:sessionFile(sessionId,"component-map.json")});
+        s.componentMap={file:"component-map.json",mapped:componentMap.counts.mapped,unmapped:componentMap.counts.unmapped,createdAt:componentMap.createdAt};
+      }
+    }
+    const plan=await buildPlan({comparisonFile:sessionFile(sessionId,"comparison.json"),selectedIds,outDir:sessionDir(sessionId),targetSourceAudit:sourceAudit,targetSourceIntelligence:sourceIntelligence,componentMap});
     s.plan={file:"implementation-plan.json",selected:selectedIds.length};await saveSession(s);return s.plan;
   }).catch(()=>{});
 });
@@ -301,8 +329,8 @@ Generated: ${new Date().toISOString()}
 - Runtime: ${s.target?.source?.runtimeUrl||s.target?.acquired?.url||"not supplied"}
 
 ## Use
-1. Read DESIGN-PACK/DESIGN.md and PACK-MANIFEST.json.
-2. Read implementation-plan.json, selected-upgrades.json and AGENT-TASK.md.
+1. Read DESIGN-PACK/DESIGN.md, design-contract.json and PACK-MANIFEST.json.
+2. Read component-map.json, implementation-plan.json, selected-upgrades.json and AGENT-TASK.md.
 3. Apply only approved frontend changes.
 4. Preserve APIs, routes, auth, data/state, business logic and functionality.
 5. Verify against bundled screenshots.
@@ -335,6 +363,10 @@ app.post("/api/execute",async(req,res)=>{
     await fs.copyFile(taskFile,workTask);
     const designPack=path.join(sessionDir(sessionId),"DESIGN-PACK");
     if(await exists(designPack))await fs.cp(designPack,path.join(checkpoint.worktree,"DESIGN-PACK"),{recursive:true,force:true});
+    for(const name of ["design-contract.json","component-map.json","implementation-plan.json"]){
+      const src=sessionFile(sessionId,name);
+      if(await exists(src))await fs.copyFile(src,path.join(checkpoint.worktree,name));
+    }
 
     const agent=await runConfiguredAgent({worktree:checkpoint.worktree,taskFile:workTask,runDir:sessionDir(sessionId),progress});
     const sourceAudit=await scanSourceProject(checkpoint.worktree,path.join(sessionDir(sessionId),"target-after-source-audit.json"),{progress});
@@ -408,10 +440,12 @@ app.get("/api/artifacts/:sessionId",async(req,res)=>{
       const p=path.join(dir,"DESIGN-PACK",name);
       if(await exists(p))rows.unshift({name:`DESIGN-PACK/${name}`,type:"file",featured:true,url:`/data/runs/${sid}/DESIGN-PACK/${encodeURIComponent(name)}`});
     }
-    for(const name of ["reference-entities.json","design-selection.json"]){
+    for(const name of ["design-contract.json","component-map.json","reference-entities.json","design-selection.json"]){
       const p=path.join(dir,name);
       if(await exists(p))rows.unshift({name,type:"file",featured:true,url:`/data/runs/${sid}/${encodeURIComponent(name)}`});
     }
+    const sourceIntelligence=path.join(dir,"target-before","source-intelligence.json");
+    if(await exists(sourceIntelligence))rows.unshift({name:"target-before/source-intelligence.json",type:"file",featured:true,url:"/data/runs/"+sid+"/target-before/source-intelligence.json"});
     const generated=path.join(dir,"generated-source");
     if(await exists(generated)){
       rows.unshift({name:"generated-source/",type:"dir",featured:true,url:`/data/runs/${sid}/generated-source/`});
