@@ -223,20 +223,24 @@ export function analyzeProjectContext(input={}){
   const detectedPackageManager=detectPackageManager(files,pkgInfo);
   const isTypeScript=detectTypeScript(files,pkgInfo);
   const styling=detectStyling(files,pkgInfo);
-  const routes=detectRoutes(files,stack);
+  const packageRoot=pkgInfo.root||"";
+  const routes=detectRoutes(files,stack,packageRoot);
   const assets=assetFiles(files);
   const docs=designDocs(files);
   const sources=sourceFiles(files);
   const mode=["existing","new"].includes(input.mode) ? input.mode : (files.length ? "existing" : "new");
   const projectName=text(input.projectName,pkgInfo.pkg?.name || "my-project").slice(0,100);
   const targetRoute=text(input.targetRoute,routes[0] || "/").slice(0,240);
-  const targetPath=text(input.targetPath,defaultTargetPath(stack,isTypeScript,targetRoute,files)).slice(0,300);
-  const nav=cleanList(input.navItems);
+  const targetPath=text(input.targetPath,defaultTargetPath(stack,isTypeScript,targetRoute,files,packageRoot)).slice(0,300);
+  const web=websiteContent(input);
+  const intelligence=sourceIntelligence(files,packageRoot);
+  const manualNav=cleanList(input.navItems);
+  const nav=manualNav.length?manualNav:web.navItems.slice(0,8);
   const content={
-    brand:text(input.brand).slice(0,120),
-    heroTitle:text(input.heroTitle).slice(0,240),
-    heroBody:text(input.heroBody).slice(0,600),
-    primaryCta:text(input.primaryCta).slice(0,100),
+    brand:text(input.brand,web.title||projectName).slice(0,120),
+    heroTitle:text(input.heroTitle,web.headings[0]||"").slice(0,240),
+    heroBody:text(input.heroBody,web.description||web.paragraphs[0]||"").slice(0,600),
+    primaryCta:text(input.primaryCta,web.buttons[0]||"").slice(0,100),
     secondaryCta:text(input.secondaryCta).slice(0,100),
     navItems:nav,
     footerText:text(input.footerText).slice(0,300),
@@ -273,20 +277,36 @@ export function analyzeProjectContext(input={}){
   if(!nav.length) questions.push(question("navItems","Navigation labels","Required to validate header width and mobile collapse behavior.","list"));
   if(!assets.length && !heroAsset) questions.push(question("assets","Upload relevant logo / hero / UI asset names or set their project paths.","Media dimensions materially affect the design.","file",false));
 
+  const targetExists=files.some(x=>x.path===targetPath);
+  const sourceDepth=intelligence.scannedFiles>=8 && (intelligence.components.length>=2 || stack==="html");
   const readiness={
     stack:stack!=="unknown" && !["vue","svelte"].includes(stack),
-    structure:mode==="new" || Boolean(pkgInfo.pkg || sources.length),
-    content:Boolean(content.brand && content.heroTitle && content.heroBody && content.primaryCta && nav.length),
-    assets:Boolean(assets.length || heroAsset || logoAsset),
+    structure:mode==="new" || Boolean(pkgInfo.pkg && sourceDepth),
+    route:mode==="new" || targetExists || Boolean(targetRoute),
+    content:Boolean(content.brand && (content.heroTitle || web.headings.length || intelligence.contentStrings.length>=4)),
+    assets:Boolean(assets.length || heroAsset || logoAsset || web.images.length),
     designDocs:Boolean(docs.length),
+    website:web.scanned,
+    github:Boolean(input.githubEvidence?.schema),
+    sourceDepth,
   };
   let score=0;
-  score += readiness.stack ? 25 : 0;
-  score += readiness.structure ? 20 : 0;
-  score += readiness.content ? 30 : 0;
-  score += readiness.assets ? 15 : 0;
-  score += readiness.designDocs ? 10 : 0;
+  score += readiness.stack ? 18 : 0;
+  score += readiness.structure ? 22 : 0;
+  score += readiness.route ? 12 : 0;
+  score += readiness.content ? 18 : 0;
+  score += readiness.assets ? 8 : 0;
+  score += readiness.designDocs ? 5 : 0;
+  score += readiness.website ? 7 : 0;
+  score += readiness.github ? 5 : 0;
+  score += readiness.sourceDepth ? 5 : 0;
   score=Math.min(100,score);
+  if(mode==="existing"&&!targetExists){
+    questions.push(question("targetPath","Confirm the exact target source file.","The requested route is not present in the supplied source, so replacing it without confirmation is unsafe.","text"));
+  }
+  if(mode==="existing"&&!sourceDepth){
+    blockers.push("Source-code evidence is too shallow for an Accurate existing-project rewrite.");
+  }
 
   const supportedOutput=stack==="next"?"next":stack==="react"?"react":stack==="html"?"html":"html";
   const packageManager=detectedPackageManager==="none" && mode==="new" && ["react","next"].includes(supportedOutput) ? "pnpm" : detectedPackageManager;
@@ -298,6 +318,7 @@ export function analyzeProjectContext(input={}){
     stack,
     supportedOutput,
     packageManager,
+    packageRoot,
     packageJsonPath:pkgInfo.file,
     packageJson:pkgInfo.pkg ? {
       name:pkgInfo.pkg.name||null,
@@ -310,6 +331,13 @@ export function analyzeProjectContext(input={}){
     routes,
     targetRoute,
     targetPath,
+    sources:{
+      localFiles:Number(input.sourceSummary?.localFiles||0),
+      github:input.githubEvidence?.repository||null,
+      website:web.scanned?{url:web.url,title:web.title}:null,
+    },
+    sourceIntelligence:intelligence,
+    websiteContent:web,
     files:{
       count:files.length,
       textFiles:files.filter(x=>TEXT_EXTENSIONS.has(ext(x.path))).map(x=>x.path).slice(0,120),
@@ -319,7 +347,7 @@ export function analyzeProjectContext(input={}){
     },
     content,
     assetMap:{heroAsset,logoAsset},
-    readiness:{score,...readiness,blockers,questions,accurateReady:blockers.length===0 && score>=75},
+    readiness:{score,...readiness,blockers,questions,accurateReady:blockers.length===0 && score>=85 && readiness.stack && readiness.structure && readiness.route && readiness.content},
     requirements:{
       node:["react","next"].includes(supportedOutput) ? "Node.js 22+" : "Modern browser",
       packageManager,
