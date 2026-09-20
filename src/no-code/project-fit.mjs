@@ -323,3 +323,53 @@ ${profile.packageManager!=="none" ? `if [ -f "$PROJECT_ROOT/package.json" ]; the
     {path:"INTEGRATION.md",content:instructions},
   ];
 }
+
+export function newProjectSupportFiles(profile){
+  if(profile?.mode!=="new") return [];
+  const pm=profile.packageManager==="none" ? "pnpm" : profile.packageManager;
+  const windows=[
+    '$ErrorActionPreference="Stop"',
+    'if(-not (Get-Command node -ErrorAction SilentlyContinue)){throw "Node.js 22+ is required."}',
+    '$Major=[int]((node --version).TrimStart("v").Split(".")[0])',
+    'if($Major -lt 22){throw "Node.js 22+ is required."}',
+    'if(-not (Get-Command '+pm+' -ErrorAction SilentlyContinue)){throw "'+pm+' is required."}',
+    'Push-Location $PSScriptRoot',
+    'try { & '+pm+' install; if($LASTEXITCODE -ne 0){throw "Dependency install failed"} } finally { Pop-Location }',
+    'Write-Host "Setup complete. Read RUN.md." -ForegroundColor Green',
+  ].join("\n");
+  const mac=[
+    '#!/usr/bin/env bash',
+    'set -euo pipefail',
+    'command -v node >/dev/null || { echo "Node.js 22+ is required."; exit 1; }',
+    'MAJOR="$(node --version | sed "s/^v//" | cut -d. -f1)"',
+    '[ "$MAJOR" -ge 22 ] || { echo "Node.js 22+ is required."; exit 1; }',
+    'command -v '+pm+' >/dev/null || { echo "'+pm+' is required."; exit 1; }',
+    'cd "$(dirname "$0")"',
+    pm+' install',
+    'echo "Setup complete. Read RUN.md."',
+  ].join("\n");
+  const run=[
+    '# Run the generated frontend',
+    '',
+    'Stack: '+profile.supportedOutput,
+    'Package manager: '+pm,
+    '',
+    '## PC requirements',
+    '- Windows 10/11: Node.js 22+ and PowerShell 7 recommended.',
+    '- macOS 12+: Node.js 22+ and Terminal (zsh/bash).',
+    '',
+    '## Windows',
+    'Run SETUP-WINDOWS.ps1 from PowerShell 7.',
+    '',
+    '## macOS',
+    'Run: chmod +x SETUP-MAC.command && ./SETUP-MAC.command',
+    '',
+    'Then run '+pm+' run dev when package.json provides a dev script.',
+  ].join("\n");
+  return [
+    {path:"PROJECT-FIT.json",content:JSON.stringify(profile,null,2)},
+    {path:"SETUP-WINDOWS.ps1",content:windows},
+    {path:"SETUP-MAC.command",content:mac},
+    {path:"RUN.md",content:run},
+  ];
+}
