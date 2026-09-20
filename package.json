@@ -1,9 +1,9 @@
 {
   "name": "kk-frontend",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "type": "module",
-  "description": "KK-FRONTEND — web-only reference DESIGN.md extraction, visual design picker, runtime-evidence source generator and safe frontend implementation studio",
+  "description": "KK-FRONTEND — verified web-only reference DESIGN.md extraction, visual design picker, runtime-evidence source generator and safe frontend implementation studio",
   "engines": {
     "node": ">=22"
   },
