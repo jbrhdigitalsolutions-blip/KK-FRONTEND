@@ -3,7 +3,7 @@ import { analyzeProjectContext, integrationSupportFiles, newProjectSupportFiles 
 import { deflateRawSync } from "node:zlib";
 
 const ALLOWED_OUTPUTS = new Set(["html","react","next"]);
-const ALLOWED_CONTENT = new Set(["placeholders","reference-labels"]);
+const ALLOWED_CONTENT = new Set(["placeholders","reference-labels","reference-exact"]);
 const ALLOWED_FIDELITY = new Set(["accurate","balanced","inspired"]);
 
 function arr(value){ return Array.isArray(value) ? value : []; }
@@ -193,9 +193,10 @@ function buildReferenceTree(evidence,project){
   const desktop=viewport(evidence,"desktop");
   const tablet=viewport(evidence,"tablet");
   const mobile=viewport(evidence,"mobile");
-  const desktopNodes=nodesFor(desktop).filter(x=>x?.selector&&x.tag!=="body").slice(0,300);
+  const desktopNodes=nodesFor(desktop).filter(x=>x?.selector&&x.tag!=="body").slice(0,360);
   const included=new Set(desktopNodes.map(x=>x.selector));
   const byVp=(vp,selector)=>nodesFor(vp).find(x=>x.selector===selector);
+  const svgMarkup=new Map(arr(evidence.assets?.svgs).filter(x=>x?.selector&&x?.markup).map(x=>[x.selector,String(x.markup)]));
   const nodes=desktopNodes.map((node,index)=>({
     id:"node-"+(index+1),
     selector:node.selector,
@@ -205,12 +206,17 @@ function buildReferenceTree(evidence,project){
     depth:Number(node.depth)||0,
     tag:node.tag||"div",
     role:node.role||null,
+    className:String(node.className||""),
     label:cleanLabel(node.label)||node.tag||"content",
     text:String(node.text||"").trim(),
+    directText:String(node.directText||"").trim(),
     interactive:Boolean(node.interactive),
     attrs:node.attrs||{},
     rect:node.rect||null,
     style:node.style||{},
+    pseudoBefore:node.pseudoBefore||null,
+    pseudoAfter:node.pseudoAfter||null,
+    markup:node.markup||svgMarkup.get(node.selector)||"",
     tablet:byVp(tablet,node.selector)||null,
     mobile:byVp(mobile,node.selector)||null,
   }));
@@ -233,45 +239,88 @@ function nextPool(pool,key,index,fallback=""){
   return text(list[index%Math.max(1,list.length)],fallback);
 }
 function safeTag(tag){
-  return ["header","nav","main","aside","footer","section","article","div","form","button","a","input","textarea","select","img","video","p","span","ul","ol","li","h1","h2","h3","h4","h5","h6","label"].includes(tag)?tag:"div";
+  return ["header","nav","main","aside","footer","section","article","div","form","button","a","input","textarea","select","img","picture","source","video","p","span","ul","ol","li","h1","h2","h3","h4","h5","h6","label","figure","figcaption","small","strong","em","i","b","details","summary","svg"].includes(tag)?tag:"div";
 }
-function renderTreeNode(node,ctx){
+function safeClassNames(value){
+  return String(value||"").split(/\s+/).filter(x=>/^[A-Za-z_-][\w-]*$/.test(x)).slice(0,12);
+}
+function safeHref(value){
+  const v=String(value||"").trim();
+  if(!v)return"";
+  if(/^\s*(?:javascript|vbscript):/i.test(v))return"";
+  return v;
+}
+function attr(name,value){
+  const v=String(value??"");
+  return v ? ` ${name}="${esc(v)}"` : "";
+}
+function injectSvgClass(markup,className){
+  const raw=String(markup||"").replace(/<script[\s\S]*?<\/script>/gi,"").replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi,"");
+  if(!/^\s*<svg\b/i.test(raw))return"";
+  return raw.replace(/<svg\b([^>]*)>/i,(m,attrs)=>{
+    if(/\bclass\s*=/.test(attrs))return `<svg${attrs.replace(/\bclass\s*=(["'])(.*?)\1/i,(x,q,v)=>`class=${q}${esc(v+" "+className)}${q}`)}>`;
+    return `<svg class="${esc(className)}"${attrs}>`;
+  });
+}
+function renderTreeNode(node){
   const tag=safeTag(node.tag);
-  const cls="kk-node-"+node.id.replace("node-","");
-  const attrs=[`class="${cls}"`,`data-ref-kind="${esc(semanticKind(node))}"`];
+  const kkClass="kk-node-"+node.id.replace("node-","");
+  const classes=[kkClass,...safeClassNames(node.className)];
+  const attrs=[`class="${classes.map(esc).join(" ")}"`,`data-ref-kind="${esc(semanticKind(node))}"`];
   const role=node.role?String(node.role):"";
   if(role)attrs.push(`role="${esc(role)}"`);
-  let content="";
-  if(tag==="h1")content=esc(ctx.project?.content?.heroTitle||nextPool(ctx.pool,"headings",ctx.heading++ ,"Heading"));
-  else if(/^h[2-6]$/.test(tag))content=esc(nextPool(ctx.pool,"headings",ctx.heading++,"Heading"));
-  else if(tag==="p")content=esc(nextPool(ctx.pool,"paragraphs",ctx.paragraph++,""));
-  else if(tag==="button")content=esc(nextPool(ctx.pool,"buttons",ctx.button++,"Action"));
-  else if(tag==="a"){
-    const isNav=node.ancestorSelectors?.some?.(x=>/nav/i.test(x))||node.parentSelector?.includes("nav");
-    content=esc(isNav?nextPool(ctx.pool,"nav",ctx.nav++,"Link"):nextPool(ctx.pool,"generic",ctx.generic++,"Link"));
-    attrs.push('href="#"');
+  if(node.attrs?.id && /^[A-Za-z][\w:.-]*$/.test(node.attrs.id))attrs.push(`id="${esc(node.attrs.id)}"`);
+
+  if(tag==="svg" && node.markup){
+    const markup=injectSvgClass(node.markup,kkClass);
+    if(markup)return markup;
+  }
+
+  let content=esc(node.directText || (node.children.length===0 ? node.text : ""));
+  if(tag==="a"){
+    const href=safeHref(node.attrs?.href);
+    attrs.push(`href="${esc(href||"#")}"`);
   } else if(tag==="img"){
-    const src=nextPool(ctx.pool,"images",ctx.image++,ctx.project?.assetMap?.heroAsset||"");
+    const src=safeHref(node.attrs?.src);
+    const srcset=safeHref(node.attrs?.srcset);
     attrs.push(`alt="${esc(node.attrs?.alt||"")}"`);
     if(src)attrs.push(`src="${esc(src)}"`);
+    if(srcset)attrs.push(`srcset="${esc(srcset)}"`);
+    if(node.attrs?.sizes)attrs.push(`sizes="${esc(node.attrs.sizes)}"`);
+    if(node.attrs?.loading)attrs.push(`loading="${esc(node.attrs.loading)}"`);
+    if(node.attrs?.width)attrs.push(`width="${esc(node.attrs.width)}"`);
+    if(node.attrs?.height)attrs.push(`height="${esc(node.attrs.height)}"`);
+    content="";
+  } else if(tag==="video"){
+    const src=safeHref(node.attrs?.src),poster=safeHref(node.attrs?.poster);
+    if(src)attrs.push(`src="${esc(src)}"`);
+    if(poster)attrs.push(`poster="${esc(poster)}"`);
+    for(const flag of ["autoplay","loop","muted","controls","playsinline"])if(node.attrs?.[flag])attrs.push(flag);
+    content="";
+  } else if(tag==="source"){
+    const src=safeHref(node.attrs?.src),srcset=safeHref(node.attrs?.srcset);
+    if(src)attrs.push(`src="${esc(src)}"`);
+    if(srcset)attrs.push(`srcset="${esc(srcset)}"`);
+    if(node.attrs?.sizes)attrs.push(`sizes="${esc(node.attrs.sizes)}"`);
+    content="";
   } else if(tag==="input"){
     attrs.push(`type="${esc(node.attrs?.type||"text")}"`);
-    const ph=node.attrs?.placeholder||"";
-    if(ph)attrs.push(`placeholder="${esc(ph)}"`);
+    if(node.attrs?.placeholder)attrs.push(`placeholder="${esc(node.attrs.placeholder)}"`);
+    content="";
   } else if(tag==="textarea"){
-    const ph=node.attrs?.placeholder||""; if(ph)attrs.push(`placeholder="${esc(ph)}"`);
-  } else if(node.children.length===0 && ["div","span","label","li"].includes(tag)){
-    content=esc(nextPool(ctx.pool,"generic",ctx.generic++,""));
+    if(node.attrs?.placeholder)attrs.push(`placeholder="${esc(node.attrs.placeholder)}"`);
+  } else if(tag==="button" && node.attrs?.type){
+    attrs.push(`type="${esc(node.attrs.type)}"`);
   }
-  const children=node.children.map(child=>renderTreeNode(child,ctx)).join("");
-  if(["img","input"].includes(tag))return `<${tag} ${attrs.join(" ")} />`;
+  if(node.attrs?.title)attrs.push(`title="${esc(node.attrs.title)}"`);
+  const children=node.children.map(child=>renderTreeNode(child)).join("");
+  if(["img","input","source"].includes(tag))return `<${tag} ${attrs.join(" ")} />`;
   return `<${tag} ${attrs.join(" ")}>${content}${children}</${tag}>`;
 }
 function referenceTreeMarkup(model){
   const tree=model.referenceTree;
   if(!tree?.roots?.length)return"";
-  const ctx={pool:tree.pool||{},project:model.project||{},heading:0,paragraph:0,button:0,nav:0,image:0,generic:0};
-  return tree.roots.map(node=>renderTreeNode(node,ctx)).join("\n");
+  return tree.roots.map(node=>renderTreeNode(node)).join("\n");
 }
 const EXACT_STYLE_KEYS=[
   "display","position","top","right","bottom","left","width","height","minWidth","maxWidth","minHeight","maxHeight",
