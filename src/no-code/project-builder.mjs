@@ -227,18 +227,32 @@ function sourceFiles(model,r){
 function commands(pm){return pm==="pnpm"?{i:"pnpm install",r:"pnpm dev"}:pm==="yarn"?{i:"yarn install",r:"yarn dev"}:pm==="bun"?{i:"bun install",r:"bun run dev"}:{i:"npm install",r:"npm run dev"};}
 function supportFiles(a,generated){
   const pm=a.packageManager==="unknown"?"npm":a.packageManager,c=commands(pm);
-  const req="# PC Requirements\n\n## Project fit\n- Framework: "+a.effectiveFramework+"\n- Language: "+a.language+"\n- Package manager: "+pm+"\n- Target platforms: "+a.targetPlatforms.join(", ")+"\n- Project mode: "+a.projectMode+"\n- Target page: "+(a.targetPage||"not specified")+"\n\n## Windows\n- Windows 10/11 64-bit\n- Node.js 20+; Node 22 LTS recommended\n- PowerShell 7 recommended\n- Git optional\n\n## macOS\n- macOS 13+ recommended\n- Node.js 20+; Node 22 LTS recommended\n- Terminal / zsh\n- Git optional\n\nNo global framework CLI is required.\n";
+  const req="# PC Requirements\n\n## Project fit\n- Framework: "+a.effectiveFramework+"\n- Language: "+a.language+"\n- Package manager: "+pm+"\n- Target platforms: "+a.targetPlatforms.join(", ")+"\n- Project mode: "+a.projectMode+"\n- Target page: "+(a.targetPage||"not specified")+"\n\n## Windows\n- Windows 10/11 64-bit\n- Node.js 20+; Node 22 LTS recommended\n- PowerShell 7 recommended\n- "+pm+" available in PATH (setup script attempts Corepack for pnpm/yarn)\n- Git optional\n\n## macOS\n- macOS 13+ recommended\n- Node.js 20+; Node 22 LTS recommended\n- Terminal / zsh\n- "+pm+" available in PATH (setup script attempts Corepack for pnpm/yarn)\n- Git optional\n\nNo global framework CLI is required.\n";
   const list=generated.map(f=>"- "+f.path).join("\n");
-  const integ="# Project Integration\n\nThe generated source is isolated so it can fit the analyzed project without blindly overwriting current code.\n\n- Framework: "+a.effectiveFramework+"\n- Package manager: "+a.packageManager+"\n- Styling: "+(a.styling.join(", ")||"not detected")+"\n- Source root: "+(a.structure.sourceRoot||"not detected")+"\n- Component root: "+(a.structure.componentRoot||"not detected")+"\n- Route root: "+(a.structure.routeRoot||"not detected")+"\n- Requested target: "+(a.targetPage||"not specified")+"\n\n## Generated source\n"+list+"\n\nCompare imports, handlers, data flow, assets and route conventions before replacing an existing production file.\n";
+  const integ="# Project Integration\n\nThe generated source is isolated so it can fit the analyzed project without blindly overwriting current code.\n\n- Framework: "+a.effectiveFramework+"\n- Package manager: "+a.packageManager+"\n- Styling: "+(a.styling.join(", ")||"not detected")+"\n- Source root: "+(a.structure.sourceRoot||"not detected")+"\n- Component root: "+(a.structure.componentRoot||"not detected")+"\n- Route root: "+(a.structure.routeRoot||"not detected")+"\n- Requested target: "+(a.targetPage||"not specified")+"\n- Project notes: "+(a.projectProfile?.projectNotes||"none")+"\n\n## Generated source\n"+list+"\n\nCompare imports, handlers, data flow, assets and route conventions before replacing an existing production file.\n";
+  const deps="# Dependency Plan\n\n- Package manager: "+pm+"\n- Install command: "+c.i+"\n- Run command: "+c.r+"\n- Existing dependency count detected: "+arr(a.projectProfile?.existingDependencies).length+"\n\nFor a new project, package.json is included in the ZIP. For an existing project, existing dependencies are preserved and generated code is isolated under a kk-generated path.\n";
+  const winPm=pm==="pnpm"||pm==="yarn"
+    ? 'if(-not(Get-Command '+pm+' -ErrorAction SilentlyContinue)){if(Get-Command corepack -ErrorAction SilentlyContinue){corepack enable; corepack prepare '+pm+'@latest --activate}else{throw "'+pm+' is required and Corepack is unavailable."}}\n'
+    : pm==="bun"
+      ? 'if(-not(Get-Command bun -ErrorAction SilentlyContinue)){throw "Bun is required. Install Bun first or choose npm/pnpm."}\n'
+      : "";
+  const macPm=pm==="pnpm"||pm==="yarn"
+    ? 'command -v '+pm+' >/dev/null || { command -v corepack >/dev/null || { echo "'+pm+' is required and Corepack is unavailable."; exit 1; }; corepack enable; corepack prepare '+pm+'@latest --activate; }\n'
+    : pm==="bun"
+      ? 'command -v bun >/dev/null || { echo "Bun is required. Install Bun first or choose npm/pnpm."; exit 1; }\n'
+      : "";
+  const winPre='$ErrorActionPreference="Stop"\nif(-not(Get-Command node -ErrorAction SilentlyContinue)){throw "Node.js 20+ is required."}\n$major=[int]((node -v).TrimStart("v").Split(".")[0]);if($major -lt 20){throw "Node.js 20+ is required."}\n'+winPm;
+  const macPre='#!/bin/zsh\nset -e\ncommand -v node >/dev/null || { echo "Node.js 20+ is required."; exit 1; }\nmajor=$(node -p "process.versions.node.split(\'.\')[0]")\n[ "$major" -ge 20 ] || { echo "Node.js 20+ is required."; exit 1; }\n'+macPm;
   return [
     {path:"SYSTEM-REQUIREMENTS.md",content:req},
+    {path:"DEPENDENCIES.md",content:deps},
     {path:"PROJECT-INTEGRATION.md",content:integ},
-    {path:"SETUP-WINDOWS.ps1",content:'$ErrorActionPreference="Stop"\nif(-not(Get-Command node -ErrorAction SilentlyContinue)){throw "Node.js 20+ is required."}\n$major=[int]((node -v).TrimStart("v").Split(".")[0]);if($major -lt 20){throw "Node.js 20+ is required."}\n'+c.i+'\nWrite-Host "Setup complete." -ForegroundColor Green\n'},
+    {path:"SETUP-WINDOWS.ps1",content:winPre+c.i+'\nWrite-Host "Setup complete." -ForegroundColor Green\n'},
     {path:"RUN-WINDOWS.ps1",content:'$ErrorActionPreference="Stop"\n'+c.r+'\n'},
-    {path:"setup-macos.sh",content:'#!/bin/zsh\nset -e\ncommand -v node >/dev/null || { echo "Node.js 20+ is required."; exit 1; }\n'+c.i+'\necho "Setup complete."\n'},
+    {path:"setup-macos.sh",content:macPre+c.i+'\necho "Setup complete."\n'},
     {path:"run-macos.sh",content:'#!/bin/zsh\nset -e\n'+c.r+'\n'},
-    {path:"SETUP-AND-RUN-WINDOWS.ps1",content:'$ErrorActionPreference="Stop"\nif(-not(Get-Command node -ErrorAction SilentlyContinue)){throw "Node.js 20+ is required."}\n'+c.i+'\n'+c.r+'\n'},
-    {path:"setup-and-run-macos.sh",content:'#!/bin/zsh\nset -e\ncommand -v node >/dev/null || { echo "Node.js 20+ is required."; exit 1; }\n'+c.i+'\n'+c.r+'\n'}
+    {path:"SETUP-AND-RUN-WINDOWS.ps1",content:winPre+c.i+'\n'+c.r+'\n'},
+    {path:"setup-and-run-macos.sh",content:macPre+c.i+'\n'+c.r+'\n'}
   ];
 }
 function crc32(buf){let crc=0xffffffff;for(const b of buf){crc^=b;for(let k=0;k<8;k++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return(crc^0xffffffff)>>>0;}
