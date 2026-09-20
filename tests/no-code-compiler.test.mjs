@@ -77,7 +77,7 @@ test("no-code compiler builds standalone HTML from verified evidence without an 
   assert.equal(result.schema,"kk-no-code-design-build/v1");
   assert.equal(result.output,"html");
   assert.match(result.previewHtml,/<!doctype html>/i);
-  assert.match(result.previewHtml,/VERIFIED DESIGN/);
+  assert.match(result.previewHtml,/Launch your idea/);\n  assert.equal(result.summary.renderer,"pixel-reference");
   const hero=result.model.regions.find(x=>x.kind==="Hero");
   assert.ok(hero);
   assert.ok(hero.children.some(x=>x.kind==="Button"),"measured child controls should be attached to their containing region");
@@ -134,7 +134,7 @@ test("compiler rejects non-evidence input instead of guessing",()=>{
 });
 
 
-test("project-aware accurate build uses real content and exports a safe React patch",()=>{
+test("project-aware Pixel Accurate build preserves reference content and exports a safe React patch",()=>{
   const projectFiles=[
     {path:"package.json",name:"package.json",text:JSON.stringify({
       name:"acme-app",
@@ -170,13 +170,13 @@ test("project-aware accurate build uses real content and exports a safe React pa
     }
   });
   assert.equal(result.output,"react");
-  assert.match(result.previewHtml,/Operate faster with Acme/);
-  assert.match(result.previewHtml,/Start free/);
-  assert.match(result.previewHtml,/\/hero\.webp/);
+  assert.match(result.previewHtml,/Launch your idea/);
+  assert.match(result.previewHtml,/Start/);
+  assert.equal(result.previewHtml.includes("Operate faster with Acme"),false);
   assert.equal(result.summary.projectStack,"react");
   assert.ok(result.summary.projectFitScore>=85);
   assert.equal(result.summary.accurateReady,true);
-  assert.equal(result.summary.renderer,"hierarchy-exact");
+  assert.equal(result.summary.renderer,"pixel-reference");
   assert.ok(result.summary.hierarchyNodes>=6);
   assert.equal(result.previewHtml.includes("Replace this placeholder content"),false);
   assert.equal(result.previewHtml.includes(">Typography<"),false);
@@ -228,7 +228,12 @@ test("new project ZIP carries small uploaded portable assets",()=>{
   const result=compileNoCodeDesign({
     evidence:evidence(),
     markdown:"# DESIGN.md",
-    options:{output:"auto",contentMode:"placeholders",fidelity:"accurate"},
+    test("new project ZIP carries small uploaded portable assets",()=>{
+  const asset=Buffer.from("fake-webp-bytes").toString("base64");
+  const result=compileNoCodeDesign({
+    evidence:evidence(),
+    markdown:"# DESIGN.md",
+    options:{output:"auto",contentMode:"placeholders",fidelity:"balanced"},
     projectContext:{
       mode:"new",
       stack:"react",
@@ -250,7 +255,7 @@ test("new project ZIP carries small uploaded portable assets",()=>{
 });
 
 
-test("Accurate renderer preserves measured hierarchy while substituting target-owned content",()=>{
+test("Pixel Accurate renderer preserves measured hierarchy and reference-owned content",()=>{
   const projectFiles=[
     {path:"package.json",name:"package.json",text:JSON.stringify({name:"deep-app",packageManager:"pnpm@10.28.0",dependencies:{react:"19.0.0",vite:"7.0.0"}})},
     ...["App","Header","Hero","Nav","Card","Footer","Form","CTA"].map(name=>({path:`src/${name}.jsx`,name:`${name}.jsx`,text:`export default function ${name}(){return <div>${name} project content</div>}`})),
@@ -265,11 +270,11 @@ test("Accurate renderer preserves measured hierarchy while substituting target-o
       heroTitle:"Target headline",heroBody:"Target body",primaryCta:"Target action",navItems:"Workspace, Pricing"
     }
   });
-  assert.equal(result.summary.renderer,"hierarchy-exact");
+  assert.equal(result.summary.renderer,"pixel-reference");
   assert.match(result.previewHtml,/kk-node-/);
-  assert.match(result.previewHtml,/Target headline/);
-  assert.match(result.previewHtml,/Target action/);
-  assert.equal(result.previewHtml.includes("Launch your idea"),false,"reference literal copy must not become target content");
+  assert.match(result.previewHtml,/Launch your idea/);
+  assert.match(result.previewHtml,/Start/);
+  assert.equal(result.previewHtml.includes("Target headline"),false,"Pixel Accurate mode must not substitute target copy before visual certification");
   assert.equal(result.previewHtml.includes("Evidence-led content placeholder"),false);
 });
 
