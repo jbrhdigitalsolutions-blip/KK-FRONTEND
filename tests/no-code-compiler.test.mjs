@@ -128,3 +128,81 @@ test("Next.js project export is generated without coding-agent instructions",()=
 test("compiler rejects non-evidence input instead of guessing",()=>{
   assert.throws(()=>compileNoCodeDesign({evidence:{schema:"wrong"}}),/DESIGN-EVIDENCE/);
 });
+
+
+test("project-aware accurate build uses real content and exports a safe React patch",()=>{
+  const projectFiles=[
+    {path:"package.json",name:"package.json",text:JSON.stringify({
+      name:"acme-app",
+      packageManager:"pnpm@10.28.0",
+      dependencies:{react:"19.0.0","react-dom":"19.0.0",vite:"7.0.0"}
+    })},
+    {path:"src/App.jsx",name:"App.jsx",text:"export default function App(){}"},
+    {path:"DESIGN.md",name:"DESIGN.md",text:"# Current design"},
+    {path:"public/logo.svg",name:"logo.svg",size:100,type:"image/svg+xml"},
+    {path:"public/hero.webp",name:"hero.webp",size:100,type:"image/webp"}
+  ];
+  const result=compileNoCodeDesign({
+    evidence:evidence(),
+    markdown:"# DESIGN.md",
+    options:{output:"auto",contentMode:"placeholders",fidelity:"accurate"},
+    projectContext:{
+      mode:"existing",
+      stack:"auto",
+      files:projectFiles,
+      brand:"Acme Cloud",
+      heroTitle:"Operate faster with Acme",
+      heroBody:"A real project-aware headline and body.",
+      primaryCta:"Start free",
+      secondaryCta:"See demo",
+      navItems:"Product, Solutions, Pricing"
+    }
+  });
+  assert.equal(result.output,"react");
+  assert.match(result.previewHtml,/Acme Cloud/);
+  assert.match(result.previewHtml,/Operate faster with Acme/);
+  assert.match(result.previewHtml,/Start free/);
+  assert.match(result.previewHtml,/\/hero\.webp/);
+  assert.equal(result.summary.projectStack,"react");
+  assert.ok(result.summary.projectFitScore>=75);
+  assert.equal(result.summary.accurateReady,true);
+  const paths=result.files.map(x=>x.path);
+  assert.ok(paths.some(x=>x.startsWith("project-patch/")));
+  assert.ok(paths.includes("APPLY-WINDOWS.ps1"));
+  assert.ok(paths.includes("APPLY-MAC.command"));
+  assert.ok(paths.includes("PROJECT-FIT.json"));
+});
+
+test("accurate build is blocked when required project context is incomplete",()=>{
+  assert.throws(()=>compileNoCodeDesign({
+    evidence:evidence(),
+    markdown:"# DESIGN.md",
+    options:{output:"auto",contentMode:"placeholders",fidelity:"accurate"},
+    projectContext:{mode:"new",stack:"react",projectName:"Incomplete"}
+  }),/Accurate mode needs more project information/);
+});
+
+test("new project export includes cross-platform setup scripts",()=>{
+  const result=compileNoCodeDesign({
+    evidence:evidence(),
+    markdown:"# DESIGN.md",
+    options:{output:"auto",contentMode:"placeholders",fidelity:"accurate"},
+    projectContext:{
+      mode:"new",
+      stack:"next",
+      projectName:"Fresh App",
+      brand:"Fresh",
+      heroTitle:"Fresh headline",
+      heroBody:"Fresh body copy.",
+      primaryCta:"Join now",
+      navItems:"Product, Pricing, About",
+      heroAsset:"/hero.webp"
+    }
+  });
+  const paths=result.files.map(x=>x.path);
+  assert.equal(result.output,"next");
+  assert.ok(paths.includes("SETUP-WINDOWS.ps1"));
+  assert.ok(paths.includes("SETUP-MAC.command"));
+  assert.ok(paths.includes("RUN.md"));
+  assert.ok(paths.includes("PROJECT-FIT.json"));
+});
