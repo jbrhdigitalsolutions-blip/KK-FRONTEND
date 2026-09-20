@@ -94,7 +94,7 @@ test("design taxonomy detects meaningful regions before generic motion", () => {
   assert.equal(classifyCandidate({ tag: "header", animation: true }), "Header");
   assert.equal(classifyCandidate({ tag: "aside", className: "app-sidebar", animation: true }), "Sidebar");
   assert.equal(classifyCandidate({ tag: "section", className: "hero-section" }), "Hero");
-  assert.equal(classifyCandidate({ tag: "article", className: "pricing-card" }), "Section");
+  assert.equal(classifyCandidate({ tag: "article", className: "pricing-card" }), "Card");
   assert.equal(classifyCandidate({ tag: "button", className: "primary-cta", interactive: true }), "Button");
   assert.equal(classifyCandidate({ tag: "input", className: "search-box" }), "Search");
   assert.equal(classifyCandidate({ tag: "img", className: "cover-image" }), "Image");
