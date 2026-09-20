@@ -57,7 +57,7 @@ function packageInfo(files){
   return rows[0]||{file:null,root:"",pkg:null,deps:{},score:0};
 }
 
-function detectStack(files,pkgInfo,requested="auto"){
+function detectStack(files,pkgInfo,requested="auto",website={}){
   if(requested && requested!=="auto") return requested;
   const deps=pkgInfo.deps||{};
   const paths=files.map(x=>x.path.toLowerCase());
@@ -66,6 +66,9 @@ function detectStack(files,pkgInfo,requested="auto"){
   if(deps.vue || paths.some(x=>x.endsWith(".vue"))) return "vue";
   if(deps.svelte || deps["@sveltejs/kit"] || paths.some(x=>x.endsWith(".svelte"))) return "svelte";
   if(paths.some(x=>x.endsWith(".html"))) return "html";
+  if(website?.signals?.next) return "next";
+  if(website?.signals?.react) return "react";
+  if(website?.scanned) return "html";
   return "unknown";
 }
 
@@ -198,6 +201,9 @@ function sourceIntelligence(files,packageRoot=""){
 }
 function websiteContent(input={}){
   const w=input.websiteEvidence||{};
+  const url=text(w.url).slice(0,500);
+  let pathname="";
+  try{ pathname=new URL(url).pathname||"/"; }catch{}
   return{
     title:text(w.title).slice(0,160),
     description:text(w.description).slice(0,400),
@@ -206,10 +212,56 @@ function websiteContent(input={}){
     navItems:arr(w.navItems).map(x=>text(x)).filter(Boolean).slice(0,40),
     paragraphs:arr(w.paragraphs).map(x=>text(x)).filter(Boolean).slice(0,80),
     images:arr(w.images).slice(0,120),
-    url:text(w.url).slice(0,500),
+    links:arr(w.links).slice(0,160),
+    signals:w.signals||{},
+    url,
+    pathname,
     scanned:Boolean(w.schema),
   };
 }
+
+function routeFromWebsitePath(pathname=""){
+  let p=String(pathname||"/").split("?")[0].split("#")[0]||"/";
+  if(!p.startsWith("/"))p="/"+p;
+  p=p.replace(/\/{2,}/g,"/");
+  if(/\/index\.html?$/i.test(p))p=p.replace(/index\.html?$/i,"");
+  if(p.length>1)p=p.replace(/\/$/,"");
+  return p||"/";
+}
+function targetSourceCandidates(files,{stack,packageRoot,targetRoute,websitePath}={}){
+  const rows=[];
+  const route=String(targetRoute||"/");
+  const cleanRoute=route.replace(/^\/+|\/+$/g,"");
+  const webBase=String(websitePath||"").split("/").filter(Boolean).pop()?.toLowerCase()||"";
+  for(const file of files){
+    const p=file.path,lower=p.toLowerCase();
+    let score=0; const reasons=[]; let role="source";
+    if(stack==="html" && /\.html?$/i.test(p)){
+      if(webBase && p.toLowerCase().endsWith("/"+webBase) || webBase && p.toLowerCase()===webBase){score+=100;reasons.push("matches live URL filename");}
+      if((!webBase || /index\.html?$/i.test(webBase)) && /(^|\/)index\.html?$/i.test(p)){score+=80;reasons.push("index page candidate");}
+      if(/(^|\/)src\/web\//i.test(p)){score+=80;role="authored-source";reasons.push("authored source path");}
+      else if(/(^|\/)src\//i.test(p)){score+=55;role="authored-source";reasons.push("source directory");}
+      if(/(^|\/)public\//i.test(p)){score+=42;role="production-static";reasons.push("public/static deployment path");}
+      if(/(^|\/)static\//i.test(p)){score+=35;role="production-static";reasons.push("static deployment path");}
+    }
+    if(stack==="next" && /page\.(?:js|jsx|ts|tsx)$/i.test(p)){
+      const rel=stripRoot(p,packageRoot);
+      const expected=(cleanRoute?"app/"+cleanRoute+"/":"app/")+"page.";
+      if(rel.startsWith(expected)){score+=150;reasons.push("exact Next.js route");}
+      if(!cleanRoute && /^app\/page\./i.test(rel)){score+=150;reasons.push("root Next.js route");}
+    }
+    if(stack==="react" && /(^|\/)src\/App\.(?:js|jsx|ts|tsx)$/i.test(p)){score+=125;reasons.push("React application root");}
+    if(packageRoot && p.startsWith(packageRoot+"/")){score+=12;reasons.push("detected frontend package");}
+    if(score>0)rows.push({path:p,score,role,reasons});
+  }
+  rows.sort((a,b)=>b.score-a.score||a.path.localeCompare(b.path));
+  return rows.slice(0,8).map((row,index)=>{
+    const next=rows[index+1];
+    const confidence=row.score>=140?"high":row.score>=90?"medium":"low";
+    return{...row,confidence,recommended:index===0 && (!next || row.score-next.score>=20 || row.score>=140)};
+  });
+}
+
 
 function question(id,label,reason,kind="text",required=true){
   return {id,label,reason,kind,required};
@@ -217,9 +269,13 @@ function question(id,label,reason,kind="text",required=true){
 
 export function analyzeProjectContext(input={}){
   const files=normalizeFiles(input.files);
+  const web=websiteContent(input);
   const pkgInfo=packageInfo(files);
   const requestedStack=text(input.stack,"auto").toLowerCase();
-  const stack=detectStack(files,pkgInfo,requestedStack);
+  const stack=detectStack(files,pkgInfo,requestedStack,web);
+  const sourceConnected=files.length>0;
+  const websiteOnly=!sourceConnected && web.scanned;
+  const deliveryMode=websiteOnly?"standalone-replacement":"source-patch";
   const detectedPackageManager=detectPackageManager(files,pkgInfo);
   const isTypeScript=detectTypeScript(files,pkgInfo);
   const styling=detectStyling(files,pkgInfo);
@@ -228,11 +284,14 @@ export function analyzeProjectContext(input={}){
   const assets=assetFiles(files);
   const docs=designDocs(files);
   const sources=sourceFiles(files);
-  const mode=["existing","new"].includes(input.mode) ? input.mode : (files.length ? "existing" : "new");
-  const projectName=text(input.projectName,pkgInfo.pkg?.name || "my-project").slice(0,100);
-  const targetRoute=text(input.targetRoute,routes[0] || "/").slice(0,240);
-  const targetPath=text(input.targetPath,defaultTargetPath(stack,isTypeScript,targetRoute,files,packageRoot)).slice(0,300);
-  const web=websiteContent(input);
+  const mode=["existing","new"].includes(input.mode) ? input.mode : (files.length || web.scanned ? "existing" : "new");
+  const projectName=text(input.projectName,pkgInfo.pkg?.name || web.title || "my-project").slice(0,100);
+  const inferredWebsiteRoute=routeFromWebsitePath(web.pathname);
+  const targetRoute=text(input.targetRoute,routes.includes(inferredWebsiteRoute)?inferredWebsiteRoute:(web.scanned?inferredWebsiteRoute:(routes[0] || "/"))).slice(0,240);
+  const manualTargetPath=text(input.targetPath);
+  const targetCandidates=targetSourceCandidates(files,{stack,packageRoot,targetRoute,websitePath:web.pathname});
+  const recommendedTarget=targetCandidates.find(x=>x.recommended)?.path || targetCandidates[0]?.path || "";
+  const targetPath=text(manualTargetPath,websiteOnly?"index.html":(recommendedTarget||defaultTargetPath(stack,isTypeScript,targetRoute,files,packageRoot))).slice(0,300);
   const intelligence=sourceIntelligence(files,packageRoot);
   const manualNav=cleanList(input.navItems);
   const nav=manualNav.length?manualNav:web.navItems.slice(0,8);
@@ -266,7 +325,7 @@ export function analyzeProjectContext(input={}){
     blockers.push(`${stack} project detected; v0.9 Accurate compiler currently emits HTML, React, or Next.js patches.`);
     questions.push(question("stack","Choose a supported output or provide a React/Next target.","Current deterministic patch generator does not claim exact Vue/Svelte integration.","choice"));
   }
-  if(mode==="existing" && !pkgInfo.pkg && ["react","next"].includes(stack)){
+  if(mode==="existing" && sourceConnected && !pkgInfo.pkg && ["react","next"].includes(stack)){
     blockers.push("package.json was not provided.");
     questions.push(question("packageJson","Upload package.json (and lockfile if available).","Needed to preserve your real dependencies and package manager.","file"));
   }
@@ -279,10 +338,17 @@ export function analyzeProjectContext(input={}){
 
   const targetExists=files.some(x=>x.path===targetPath);
   const sourceDepth=intelligence.scannedFiles>=8 && (intelligence.components.length>=2 || stack==="html");
+  const sourceResolved=Boolean(manualTargetPath?targetExists:recommendedTarget);
+  const targetResolution=websiteOnly
+    ? {status:"website-only",selected:"index.html",confidence:"runtime-only",candidates:[],message:"No source repository is connected. A standalone replacement package will be generated; connect GitHub or local source for an in-place patch."}
+    : sourceResolved
+      ? {status:"resolved",selected:targetPath,confidence:manualTargetPath?"confirmed":(targetCandidates[0]?.confidence||"medium"),candidates:targetCandidates,message:"Target source mapped from the live route and supplied source."}
+      : {status:"unresolved",selected:targetPath,confidence:"low",candidates:targetCandidates,message:"The live route could not be mapped confidently to a supplied source file."};
   const readiness={
     stack:stack!=="unknown" && !["vue","svelte"].includes(stack),
-    structure:mode==="new" || Boolean(pkgInfo.pkg && sourceDepth),
-    route:mode==="new" || targetExists || Boolean(targetRoute),
+    structure:mode==="new" || websiteOnly || Boolean(pkgInfo.pkg && sourceDepth),
+    route:mode==="new" || websiteOnly || sourceResolved,
+
     content:Boolean(content.brand && (content.heroTitle || web.headings.length || intelligence.contentStrings.length>=4)),
     assets:Boolean(assets.length || heroAsset || logoAsset || web.images.length),
     designDocs:Boolean(docs.length),
@@ -301,18 +367,19 @@ export function analyzeProjectContext(input={}){
   score += readiness.github ? 5 : 0;
   score += readiness.sourceDepth ? 5 : 0;
   score=Math.min(100,score);
-  if(mode==="existing"&&!targetExists){
-    questions.push(question("targetPath","Confirm the exact target source file.","The requested route is not present in the supplied source, so replacing it without confirmation is unsafe.","text"));
+  if(mode==="existing" && sourceConnected && !sourceResolved){
+    questions.push(question("targetPath","Choose the target source file.","The live route could not be mapped confidently. Select one of the detected source candidates or enter a path.","source-choice"));
   }
-  if(mode==="existing"&&!sourceDepth){
-    blockers.push("Source-code evidence is too shallow for an Accurate existing-project rewrite.");
+  if(mode==="existing" && sourceConnected && !sourceDepth){
+    blockers.push("Source-code evidence is too shallow for an Accurate in-place project rewrite.");
   }
 
-  const supportedOutput=stack==="next"?"next":stack==="react"?"react":stack==="html"?"html":"html";
+  const supportedOutput=websiteOnly?"html":stack==="next"?"next":stack==="react"?"react":stack==="html"?"html":"html";
   const packageManager=detectedPackageManager==="none" && mode==="new" && ["react","next"].includes(supportedOutput) ? "pnpm" : detectedPackageManager;
   return {
     schema:"kk-project-fit/v1",
     mode,
+    deliveryMode,
     projectName,
     description:text(input.description).slice(0,1000),
     stack,
@@ -331,6 +398,8 @@ export function analyzeProjectContext(input={}){
     routes,
     targetRoute,
     targetPath,
+    targetResolution,
+    targetCandidates,
     sources:{
       localFiles:Number(input.sourceSummary?.localFiles||0),
       github:input.githubEvidence?.repository||null,
@@ -350,7 +419,7 @@ export function analyzeProjectContext(input={}){
     readiness:{
       score,...readiness,blockers,questions,
       accurateReady:blockers.length===0 && readiness.stack && readiness.structure && readiness.route && readiness.content &&
-        (mode==="new" ? score>=65 : (score>=85 && readiness.sourceDepth))
+        (mode==="new" ? score>=65 : websiteOnly ? score>=70 : (score>=85 && readiness.sourceDepth))
     },
     requirements:{
       node:["react","next"].includes(supportedOutput) ? "Node.js 22+" : "Modern browser",
@@ -365,7 +434,7 @@ function shellQuote(value){ return "'"+String(value).replaceAll("'","'\\''")+"'"
 function psQuote(value){ return "'"+String(value).replaceAll("'","''")+"'"; }
 
 export function integrationSupportFiles(profile, patchFiles=[]){
-  if(profile.mode!=="existing") return [];
+  if(profile.mode!=="existing" || profile.deliveryMode==="standalone-replacement") return [];
   const fileList=patchFiles.map(x=>x.path).filter(Boolean);
   const manifest={
     schema:"kk-project-patch/v1",
@@ -452,7 +521,7 @@ if [ -f "$PACKAGE_ROOT/package.json" ]; then cd "$PACKAGE_ROOT"; ${profile.packa
 }
 
 export function newProjectSupportFiles(profile){
-  if(profile?.mode!=="new") return [];
+  if(profile?.mode!=="new" && profile?.deliveryMode!=="standalone-replacement") return [];
   if(profile.supportedOutput==="html"){
     const windows=[
       '$ErrorActionPreference="Stop"',
