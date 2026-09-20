@@ -165,8 +165,17 @@ export function analyzeProjectContext(input={}){
     navItems:nav,
     footerText:text(input.footerText).slice(0,300),
   };
-  const heroAsset=text(input.heroAsset || publicAssetUrl(bestAsset(assets,["hero","banner","cover","landing"]))).slice(0,500);
-  const logoAsset=text(input.logoAsset || publicAssetUrl(bestAsset(assets,["logo","brand","mark"]))).slice(0,500);
+  const heroCandidate=bestAsset(assets,["hero","banner","cover","landing"]);
+  const logoCandidate=bestAsset(assets,["logo","brand","mark"]);
+  const portableUrl=assetPath=>{
+    if(!assetPath) return "";
+    const publicUrl=publicAssetUrl(assetPath);
+    if(publicUrl) return publicUrl;
+    if(mode==="new") return "/assets/"+pathNorm(assetPath).split("/").pop();
+    return "";
+  };
+  const heroAsset=text(input.heroAsset || portableUrl(heroCandidate)).slice(0,500);
+  const logoAsset=text(input.logoAsset || portableUrl(logoCandidate)).slice(0,500);
   const blockers=[];
   const questions=[];
 
