@@ -478,14 +478,14 @@ h3{margin:10px 0 4px;font-size:20px}.kk-copy p,.kk-lede{max-width:680px;color:va
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
 ${regionRules}`;
 }
-function standaloneHtml(model,css){
-  const body=model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n");
+function standaloneHtml(model,css,bodyOverride=""){
+  const body=bodyOverride || model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n");
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(model.title)}</title><style>${css}</style></head>
 <body>${body}<script>document.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>b.animate([{transform:'scale(1)'},{transform:'scale(.97)'},{transform:'scale(1)'}],{duration:160})));<\/script></body></html>`;
 }
-function reactFiles(model,css){
-  const body=model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n");
+function reactFiles(model,css,bodyOverride=""){
+  const body=bodyOverride || model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n");
   const jsx=body.replaceAll("class=","className=").replace(/<script[\s\S]*?<\/script>/g,"");
   return [
     {path:"package.json",content:JSON.stringify({name:slug(model.title),private:true,scripts:{dev:"vite",build:"vite build"},dependencies:{"@vitejs/plugin-react":"latest","vite":"latest","react":"latest","react-dom":"latest"},devDependencies:{}},null,2)},
@@ -495,8 +495,8 @@ function reactFiles(model,css){
     {path:"src/styles.css",content:css},
   ];
 }
-function nextFiles(model,css){
-  const body=model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n").replaceAll("class=","className=");
+function nextFiles(model,css,bodyOverride=""){
+  const body=(bodyOverride || model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n")).replaceAll("class=","className=");
   return [
     {path:"package.json",content:JSON.stringify({name:slug(model.title),private:true,scripts:{dev:"next dev",build:"next build",start:"next start"},dependencies:{next:"latest",react:"latest","react-dom":"latest"}},null,2)},
     {path:"app/layout.jsx",content:'import "./globals.css";export const metadata={title:"Generated Design"};export default function RootLayout({children}){return <html lang="en"><body>{children}</body></html>}'},
@@ -504,9 +504,9 @@ function nextFiles(model,css){
     {path:"app/globals.css",content:css},
   ];
 }
-function outputFiles(model,css,output,html){
-  if(output==="react") return reactFiles(model,css);
-  if(output==="next") return nextFiles(model,css);
+function outputFiles(model,css,output,html,bodyOverride=""){
+  if(output==="react") return reactFiles(model,css,bodyOverride);
+  if(output==="next") return nextFiles(model,css,bodyOverride);
   return [{path:"index.html",content:html}];
 }
 
@@ -537,11 +537,11 @@ function stylePathFor(profile){
   return "";
 }
 
-function projectPatchFiles(model,css,profile,output,html){
-  if(profile?.mode!=="existing") return outputFiles(model,css,output,html);
+function projectPatchFiles(model,css,profile,output,html,bodyOverride=""){
+  if(profile?.mode!=="existing") return outputFiles(model,css,output,html,bodyOverride);
   const target=profile.targetPath || (output==="html" ? "reference-design.html" : output==="next" ? "app/page.jsx" : "src/components/ReferenceDesign.jsx");
   if(output==="html") return [{path:target,content:html}];
-  const source=output==="next" ? nextFiles(model,css).find(x=>x.path==="app/page.jsx") : reactFiles(model,css).find(x=>x.path==="src/App.jsx");
+  const source=output==="next" ? nextFiles(model,css,bodyOverride).find(x=>x.path==="app/page.jsx") : reactFiles(model,css,bodyOverride).find(x=>x.path==="src/App.jsx");
   const stylePath=stylePathFor(profile);
   let sourceText=source?.content || "";
   if(output==="next") sourceText='import "./reference-design.css";\n'+sourceText;
@@ -597,9 +597,11 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
     throw new Error("Accurate mode needs more project information before build: "+(needed || projectProfile.readiness.blockers.join("; ")));
   }
   const model=layoutModel(evidence,{contentMode,fidelity,markdown,projectProfile});
-  const css=generatedCss(model,{fidelity});
-  const previewHtml=standaloneHtml(model,css);
-  const patchFiles=projectPatchFiles(model,css,projectProfile,output,previewHtml);
+  const exactTree=fidelity==="accurate" && (model.referenceTree?.nodes?.length||0)>=3;
+  const bodyMarkup=exactTree ? referenceTreeMarkup(model) : "";
+  const css=exactTree ? referenceTreeCss(model) : generatedCss(model,{fidelity});
+  const previewHtml=standaloneHtml(model,css,bodyMarkup);
+  const patchFiles=projectPatchFiles(model,css,projectProfile,output,previewHtml,bodyMarkup);
   const files=projectProfile?.mode==="existing"
     ? [
         ...patchFiles.map(file=>({path:"project-patch/"+file.path,content:file.content})),
@@ -648,6 +650,8 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
       projectFitScore:projectProfile?.readiness?.score ?? null,
       projectStack:projectProfile?.stack ?? null,
       accurateReady:projectProfile?.readiness?.accurateReady ?? null,
+      renderer:exactTree?"hierarchy-exact":"semantic-fallback",
+      hierarchyNodes:model.referenceTree?.nodes?.length||0,
     }
   };
 }
