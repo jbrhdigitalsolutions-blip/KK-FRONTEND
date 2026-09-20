@@ -1,3 +1,40 @@
+# KK-FRONTEND v0.5.1 — VISUAL DESIGN EXPLORER + SOURCE-AWARE MIGRATION
+
+v0.5.1 combines the source-aware migration foundation from v0.5.0 with a redesigned **no-code Design Explorer** at `/reference-design.html`.
+
+## v0.5.1 Design Explorer
+
+The reference picker now detects and organizes a much broader set of design-relevant regions:
+
+- Structure: Header, Navigation, Sidebar, Workspace, Hero, Section, Grid, Card, List, Footer and Overlay.
+- Controls: Button, Form, Input, Search, Tabs, Badge and interactive controls.
+- Content: Typography and headings.
+- Media: Image, Video, Carousel, Gallery, Icon, Logo and Avatar.
+- Motion: meaningful animated regions without allowing motion labels to replace semantic identity.
+
+Users can filter by design family, search by label/selector/text, select filtered results, click overlays directly, or use quick presets such as **Essential design**, Structure, Typography, Controls, Media and Motion.
+
+Custom design selection is explicit and bounded to 30 regions. `DESIGN.md` preserves the selected region labels/kinds/families so the exported contract is readable by both humans and machines.
+
+## v0.5.0 source-aware migration foundation included
+
+This branch also carries the verified v0.5.0 foundation:
+
+- machine-readable `design-contract.json`;
+- target source intelligence and component/import/risk graphs;
+- Reference → Target component mapping;
+- bounded migration plans and allowed-file scopes;
+- baseline/hash verification and safe rollback;
+- post-change visual acceptance gate.
+
+The Design Explorer itself does not require a coding agent: a user can inspect a public reference, choose the desired design visually and generate `DESIGN.md` + `DESIGN-EVIDENCE.json` directly. Source mutation remains separately safety-gated.
+
+## UI direction
+
+The dedicated Design Explorer is intentionally slim, glassy and low-noise. Long selectors no longer dominate the interface; semantic type, family, dimensions, motion/interactive/sticky signals and selection state are surfaced first.
+
+---
+
 # KK-FRONTEND v0.4.1 — VERIFIED REFERENCE → DESIGN.md
 
 v0.4.1 hardens the web-only Reference → DESIGN.md workflow for **measurement truth, machine readability, professional output, and production safety**.
