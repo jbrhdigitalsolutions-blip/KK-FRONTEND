@@ -36,38 +36,110 @@ function buildEndpoint() {
   return url.toString();
 }
 
-function privateAddress(address) {
+export function isPrivateOrRestrictedAddress(address) {
   if (!address) return true;
   if (net.isIP(address) === 4) {
     const p = address.split(".").map(Number);
-    return p[0] === 10 || p[0] === 127 || p[0] === 0 ||
+    return p[0] === 0 || p[0] === 10 || p[0] === 127 ||
+      (p[0] === 100 && p[1] >= 64 && p[1] <= 127) ||
       (p[0] === 169 && p[1] === 254) ||
       (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
       (p[0] === 192 && p[1] === 168) ||
-      (p[0] >= 224);
+      (p[0] === 198 && (p[1] === 18 || p[1] === 19)) ||
+      p[0] >= 224;
   }
   if (net.isIP(address) === 6) {
     const x = address.toLowerCase();
-    return x === "::1" || x === "::" || x.startsWith("fc") || x.startsWith("fd") || x.startsWith("fe8") || x.startsWith("fe9") || x.startsWith("fea") || x.startsWith("feb");
+    if (x.startsWith("::ffff:")) return isPrivateOrRestrictedAddress(x.slice(7));
+    return x === "::1" || x === "::" ||
+      x.startsWith("fc") || x.startsWith("fd") ||
+      /^fe[89ab]/.test(x);
   }
   return false;
 }
 
-async function assertPublicReferenceUrl(input) {
+function restrictedHostname(host) {
+  const h = String(host || "").toLowerCase().replace(/\.$/, "");
+  return h === "localhost" || h === "localhost.localdomain" ||
+    h.endsWith(".localhost") || h.endsWith(".local") ||
+    h.endsWith(".internal") || h.endsWith(".lan") || h.endsWith(".home");
+}
+
+async function assertPublicReferenceUrl(input, dnsCache = null) {
   const normalized = normalizeReferenceUrl(input);
   const url = new URL(normalized);
   const host = url.hostname.toLowerCase();
-  if (["localhost", "localhost.localdomain"].includes(host) || host.endsWith(".local")) throw new Error("Private/local reference URLs are not allowed in web-only mode.");
-  if (net.isIP(host) && privateAddress(host)) throw new Error("Private/local reference URLs are not allowed in web-only mode.");
+  if (restrictedHostname(host)) throw new Error("Private/local reference URLs are not allowed in web-only mode.");
+  if (net.isIP(host) && isPrivateOrRestrictedAddress(host)) throw new Error("Private/local reference URLs are not allowed in web-only mode.");
   if (env("KK_REFERENCE_ALLOW_PRIVATE").toLowerCase() === "true") return normalized;
   try {
-    const answers = await dns.lookup(host, { all: true, verbatim: true });
-    if (!answers.length || answers.some(x => privateAddress(x.address))) throw new Error("Reference URL resolves to a private or restricted network address.");
+    let answers = dnsCache?.get(host);
+    if (!answers) {
+      answers = await dns.lookup(host, { all: true, verbatim: true });
+      if (dnsCache) dnsCache.set(host, answers);
+    }
+    if (!answers.length || answers.some(x => isPrivateOrRestrictedAddress(x.address))) {
+      throw new Error("Reference URL resolves to a private or restricted network address.");
+    }
   } catch (error) {
     if (/private|restricted/i.test(String(error?.message))) throw error;
     throw new Error(`Reference hostname could not be resolved safely: ${host}`);
   }
   return normalized;
+}
+
+async function installNetworkGuard(page) {
+  if (env("KK_REFERENCE_ALLOW_PRIVATE").toLowerCase() === "true") return null;
+  const session = await page.context().newCDPSession(page);
+  const dnsCache = new Map();
+  await session.send("Fetch.enable", { patterns: [{ urlPattern: "*", requestStage: "Request" }] });
+  session.on("Fetch.requestPaused", async event => {
+    const requestId = event.requestId;
+    try {
+      const requestUrl = String(event.request?.url || "");
+      const parsed = new URL(requestUrl);
+      if (["data:", "blob:", "about:"].includes(parsed.protocol)) {
+        await session.send("Fetch.continueRequest", { requestId }).catch(() => {});
+        return;
+      }
+      if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Blocked non-web protocol");
+      await assertPublicReferenceUrl(requestUrl, dnsCache);
+      await session.send("Fetch.continueRequest", { requestId }).catch(() => {});
+    } catch {
+      await session.send("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" }).catch(() => {});
+    }
+  });
+  return session;
+}
+
+async function setExactViewport(page, viewport) {
+  const width = Number(viewport?.width);
+  const height = Number(viewport?.height);
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 240 || height < 240) {
+    throw new Error("Invalid reference viewport requested.");
+  }
+  await page.setViewportSize({ width, height });
+  const session = await page.context().newCDPSession(page);
+  try {
+    await session.send("Emulation.setDeviceMetricsOverride", {
+      width, height, screenWidth: width, screenHeight: height,
+      deviceScaleFactor: 1, mobile: false,
+    });
+  } finally {
+    await session.detach().catch(() => {});
+  }
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const observed = await page.evaluate(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+    devicePixelRatio: window.devicePixelRatio,
+    visualWidth: window.visualViewport?.width ?? window.innerWidth,
+    visualHeight: window.visualViewport?.height ?? window.innerHeight,
+  }));
+  if (Math.round(observed.width) !== width || Math.round(observed.height) !== height) {
+    throw new Error(`Viewport verification failed: requested ${width}×${height}, browser reported ${observed.width}×${observed.height}.`);
+  }
+  return observed;
 }
 
 async function connectBrowser() {
@@ -81,9 +153,10 @@ async function connectBrowser() {
 
 async function pageForBrowser(browser) {
   const context = browser.contexts()[0] || await browser.newContext();
-  const page = await context.newPage();
+  const page = context.pages()[0] || await context.newPage();
   page.setDefaultTimeout(12_000);
   page.setDefaultNavigationTimeout(45_000);
+  await installNetworkGuard(page);
   return page;
 }
 
@@ -91,6 +164,7 @@ async function gotoReference(page, url) {
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
   await page.waitForLoadState("networkidle", { timeout: 4_000 }).catch(() => {});
   await page.waitForTimeout(350);
+  await assertPublicReferenceUrl(page.url());
 }
 
 const candidateScript = () => {
@@ -122,8 +196,10 @@ const candidateScript = () => {
     return { x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height };
   }
   function labelFor(el) {
-    return (el.getAttribute("aria-label") || el.getAttribute("title") || el.querySelector?.("h1,h2,h3,h4,h5,h6")?.textContent || el.textContent || "")
-      .replace(/\s+/g, " ").trim().slice(0, 100);
+    const explicit = el.getAttribute("aria-label") || el.getAttribute("title") || el.querySelector?.("h1,h2,h3,h4,h5,h6")?.textContent || "";
+    const clean = String(explicit).replace(/\s+/g, " ").trim();
+    if (clean && !/requestAnimationFrame|function\s*\(/i.test(clean)) return clean.slice(0, 100);
+    return el.tagName.toLowerCase();
   }
   const semantic = [...document.querySelectorAll([
     "header", "nav", "main", "aside", "footer", "section", "form", "dialog",
@@ -133,7 +209,11 @@ const candidateScript = () => {
   ].join(","))];
   const animated = [...document.querySelectorAll("body *")].filter(el => {
     const s = getComputedStyle(el);
-    return (s.animationName && s.animationName !== "none") || (s.transitionDuration && s.transitionDuration.split(",").some(v => parseFloat(v) > 0));
+    const r = el.getBoundingClientRect();
+    const hasAnimation = Boolean(s.animationName && s.animationName !== "none");
+    const hasTransition = Boolean(s.transitionDuration && s.transitionDuration.split(",").some(v => parseFloat(v) > 0));
+    const interactive = el.matches("a,button,input,select,textarea,summary,[role='button'],[role='link'],[role='tab'],[tabindex]");
+    return hasAnimation || (hasTransition && (interactive || r.width * r.height >= 12000));
   }).slice(0, 80);
   const seen = new Set();
   const rows = [];
@@ -169,7 +249,7 @@ export async function inspectReferenceDesign({ url }) {
   const browser = await connectBrowser();
   try {
     const page = await pageForBrowser(browser);
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await setExactViewport(page, VIEWPORTS[0]);
     await gotoReference(page, safeUrl);
     const info = await page.evaluate(candidateScript);
     const maxHeight = Math.min(Math.max(info.document.height, 900), 12_000);
@@ -368,32 +448,65 @@ export async function generateReferenceDesignMd({ url, scope = "whole", selector
   const browser = await connectBrowser();
   try {
     const page = await pageForBrowser(browser);
-    await page.setViewportSize({ width: VIEWPORTS[0].width, height: VIEWPORTS[0].height });
-    await gotoReference(page, safeUrl);
-    const title = await page.title();
-    const finalUrl = page.url();
-    const pageEvidence = await page.evaluate(pageEvidenceScript, { selectors: chosen.selectors });
     const responsive = [];
+    let title = "";
+    let finalUrl = safeUrl;
+    let pageEvidence = null;
+
     for (const viewport of VIEWPORTS) {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.waitForTimeout(220);
+      const observedViewport = await setExactViewport(page, viewport);
+      await gotoReference(page, safeUrl);
+      if (viewport.name === "desktop") {
+        title = await page.title();
+        finalUrl = page.url();
+        pageEvidence = await page.evaluate(pageEvidenceScript, { selectors: chosen.selectors });
+      }
       const shot = await page.evaluate(snapshotScript, { selectors: chosen.selectors, maxElements: chosen.scope === "whole" ? 520 : 360 });
-      responsive.push({ name: viewport.name, viewport: { width: viewport.width, height: viewport.height }, ...shot });
+      responsive.push({
+        name: viewport.name,
+        targetViewport: { width: viewport.width, height: viewport.height },
+        viewport: { width: observedViewport.width, height: observedViewport.height, devicePixelRatio: observedViewport.devicePixelRatio },
+        ...shot,
+      });
     }
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.waitForTimeout(150);
+
+    await setExactViewport(page, VIEWPORTS[0]);
+    await gotoReference(page, safeUrl);
     const interactions = await collectInteractions(page, chosen.selectors);
-    const inspectedInteractive = responsive[0]?.elements?.filter(e => e.interactive).length || 0;
-    const interactionCoveragePercent = inspectedInteractive ? Math.min(100, Math.round((interactions.length / inspectedInteractive) * 100)) : 100;
+    const desktopInteractive = responsive[0]?.elements?.filter(e => e.interactive).length || 0;
+    const interactionCoveragePercent = desktopInteractive
+      ? Math.min(100, Math.round((interactions.length / desktopInteractive) * 100))
+      : null;
+    const meaningfulInteractionCount = interactions.filter(row =>
+      Object.keys(row.hover || {}).length || Object.keys(row.focus || {}).length
+    ).length;
     const componentCount = new Set(responsive.flatMap(v => v.elements.map(e => e.selector))).size;
+    const viewportVerified = responsive.every(v =>
+      v.targetViewport?.width === v.viewport?.width && v.targetViewport?.height === v.viewport?.height
+    );
+    const crossOriginCssBlocked = Number(pageEvidence?.styleSheets?.blocked || 0);
+    const canvasCount = Number(pageEvidence?.assets?.canvasCount || 0);
+    let confidence = 97;
+    const confidenceReasons = [];
+    if (!viewportVerified) { confidence -= 30; confidenceReasons.push("One or more requested viewports did not match browser-reported dimensions."); }
+    else confidenceReasons.push("All three requested viewports were browser-verified exactly.");
+    if (crossOriginCssBlocked > 0) { confidence -= 4; confidenceReasons.push(`${crossOriginCssBlocked} stylesheet(s) were not directly readable; rendered computed styles were still measured.`); }
+    if (canvasCount > 0) { confidence -= 4; confidenceReasons.push(`${canvasCount} canvas element(s) cannot be reconstructed from DOM/CSS evidence alone.`); }
+    if (interactionCoveragePercent != null && interactionCoveragePercent < 80) {
+      confidence -= Math.min(10, Math.ceil((80 - interactionCoveragePercent) / 8));
+      confidenceReasons.push(`Interactive-state sampling covered ${interactionCoveragePercent}% of captured desktop interactive elements.`);
+    }
+    confidence = Math.max(50, Math.min(97, confidence));
+
     const restrictions = [
       "Only states safely observable without submitting forms, clicking destructive actions, bypassing authentication, or defeating bot/CAPTCHA protections are measured.",
       "Chromium rendering is verified; Safari/WebKit and Firefox rasterization are not independently verified by this capture.",
       "Cross-origin stylesheet rules that the browser does not expose remain unverified; computed rendered styles are still captured where visible.",
       "Canvas/WebGL internal drawing instructions cannot be reconstructed from DOM/CSS evidence alone.",
+      "Navigation and subresource requests are blocked when they target localhost, private, link-local, carrier-grade NAT, benchmark, multicast, or otherwise restricted network addresses.",
     ];
     const evidence = {
-      schema: "kk-reference-design-evidence/v1",
+      schema: "kk-reference-design-evidence/v2",
       url: safeUrl,
       finalUrl,
       title,
@@ -404,28 +517,43 @@ export async function generateReferenceDesignMd({ url, scope = "whole", selector
       viewports: responsive,
       interactions,
       ...pageEvidence,
-      coverage: { componentCount, interactionSamples: interactions.length, interactionCoveragePercent, componentCoveragePercent: 100 },
-      confidence: responsive.length === 3 ? 94 : 85,
+      coverage: {
+        componentCount,
+        componentCoveragePercent: null,
+        componentCoverageClaim: "NOT CLAIMED — capture is representative, not an exhaustive DOM census",
+        interactionSamples: interactions.length,
+        meaningfulInteractionCount,
+        interactionCoveragePercent,
+        responsiveCoveragePercent: viewportVerified ? 100 : null,
+      },
+      confidence,
+      confidenceReasons,
       restrictions,
     };
     const template = await fs.readFile(TEMPLATE_FILE, "utf8");
     const markdown = renderDesignMd({ template, evidence });
     return {
-      schema: "kk-reference-design-md/v1",
+      schema: "kk-reference-design-md/v2",
       filename: "DESIGN.md",
       markdown,
+      evidenceFilename: "DESIGN-EVIDENCE.json",
+      evidenceJson: JSON.stringify(evidence, null, 2),
       summary: {
         url: safeUrl,
         finalUrl,
         title,
         scope: chosen.scope,
         selectedCount: chosen.selectors.length,
-        viewports: VIEWPORTS.map(v => `${v.name}:${v.width}x${v.height}`),
+        viewports: responsive.map(v => `${v.name}:${v.viewport.width}x${v.viewport.height}`),
+        viewportVerified,
         componentCount,
         interactionSamples: interactions.length,
-        animationCount: pageEvidence.animations.length,
-        mediaQueryCount: pageEvidence.mediaQueries.length,
-        confidence: evidence.confidence,
+        meaningfulInteractionCount,
+        interactionCoveragePercent,
+        animationCount: pageEvidence?.animations?.length || 0,
+        mediaQueryCount: pageEvidence?.mediaQueries?.length || 0,
+        confidence,
+        confidenceReasons,
       },
     };
   } finally {
