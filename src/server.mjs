@@ -18,6 +18,7 @@ import { generateSelectionSource } from "./intelligence/source-generator.mjs";
 import { prepareExecutionWorkspace, compareTrees, applySafeCopyToOriginal, rollbackSafeCopyApply } from "./execution/workspace.mjs";
 import { runConfiguredAgent } from "./execution/agent-runner.mjs";
 import { verifyProject } from "./execution/verify.mjs";
+import { generateReferenceDesignMd, inspectReferenceDesign, referenceDesignStatus } from "./reference-design/browserless.mjs";
 
 const app=express();
 app.use(express.json({limit:"5mb"}));
@@ -89,7 +90,7 @@ async function executionCapability(s){
   };
 }
 
-app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.3.1",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true}));
+app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.4.0",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true}));
 app.get("/api/github/status",async(req,res)=>res.json(await githubStatus()));
 app.post("/api/github/auth/start",async(req,res)=>{
   try{
@@ -100,6 +101,26 @@ app.post("/api/github/auth/start",async(req,res)=>{
     res.status(202).json({started:true,message:"GitHub CLI authorization started in the KK-FRONTEND terminal/browser flow."});
   }catch(e){res.status(500).json({error:String(e.message||e)})}
 });
+app.get("/api/reference-design/status",(req,res)=>res.json(referenceDesignStatus()));
+app.get("/reference-design",(req,res)=>res.redirect(302,"/reference-design.html"));
+app.post("/api/reference-design/inspect",async(req,res)=>{
+  try{
+    res.json(await inspectReferenceDesign({url:req.body?.url}));
+  }catch(e){
+    const status=e?.code==="BROWSERLESS_NOT_CONFIGURED"?503:400;
+    res.status(status).json({error:String(e.message||e)});
+  }
+});
+app.post("/api/reference-design/generate",async(req,res)=>{
+  try{
+    const {url,scope="whole",selectors=[]}=req.body||{};
+    res.json(await generateReferenceDesignMd({url,scope,selectors}));
+  }catch(e){
+    const status=e?.code==="BROWSERLESS_NOT_CONFIGURED"?503:400;
+    res.status(status).json({error:String(e.message||e)});
+  }
+});
+
 app.post("/api/session",async(req,res)=>res.json(await newSession()));
 app.get("/api/sessions/recent",async(req,res)=>{
   try{
