@@ -448,11 +448,18 @@ export function renderDesignMd({ template, evidence }) {
 
 function evidenceNodeUseful(e) {
   if (!e) return false;
-  const usefulTags = new Set(["body","header","nav","main","aside","footer","section","form","dialog","button","input","textarea","select","img","svg","video"]);
+  const usefulTags = new Set(["body","header","nav","main","aside","footer","section","article","form","dialog","button","a","input","textarea","select","img","svg","video","p","ul","ol","li"]);
+  const display=String(e.style?.display||"");
+  const layoutContainer=["flex","inline-flex","grid","inline-grid"].includes(display);
+  const styledContainer=Boolean(
+    e.style?.backgroundColor && !["rgba(0, 0, 0, 0)","transparent"].includes(e.style.backgroundColor)
+  ) || Boolean(e.style?.border && !String(e.style.border).startsWith("0px")) || Boolean(e.style?.boxShadow && e.style.boxShadow!=="none");
   return Boolean(
     e.interactive ||
     /^h[1-6]$/.test(e.tag || "") ||
     usefulTags.has(e.tag) ||
+    layoutContainer ||
+    styledContainer ||
     ["fixed","sticky"].includes(e.style?.position) ||
     (e.style?.animationName && e.style.animationName !== "none")
   );
@@ -481,10 +488,15 @@ function slimEvidenceStyle(style = {}) {
 function slimEvidenceNode(node = {}) {
   return {
     selector: node.selector || null,
+    parentSelector: node.parentSelector || null,
+    ancestorSelectors: arr(node.ancestorSelectors).slice(0,8),
+    childIndex: Number.isFinite(Number(node.childIndex)) ? Number(node.childIndex) : null,
+    depth: Number.isFinite(Number(node.depth)) ? Number(node.depth) : null,
     tag: node.tag || null,
     role: node.role || null,
     className: node.className || "",
     label: cleanLabel(node.label) || node.tag || "",
+    text: String(node.text || "").replace(/\s+/g," ").trim().slice(0,420),
     interactive: Boolean(node.interactive),
     rect: node.rect || null,
     style: slimEvidenceStyle(node.style),
@@ -504,8 +516,8 @@ export function buildEvidenceCompanion(evidence) {
       runtimeViewport: vp.runtimeViewport || null,
       document: vp.document || null,
       scopes: arr(vp.scopes).map(slimEvidenceNode),
-      representativeElements: semantic.map(slimEvidenceNode),
-      representativeElementPolicy: "Semantic, interactive, media, fixed/sticky, and animated elements; capped at 180 per viewport.",
+      representativeElements: semantic.slice(0,300).map(slimEvidenceNode),
+      representativeElementPolicy: "Semantic, layout-container, styled, interactive, media, fixed/sticky, and animated elements; capped at 300 per viewport with hierarchy links.",
     };
   });
 
