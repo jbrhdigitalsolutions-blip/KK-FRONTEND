@@ -48,4 +48,5 @@ assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"public","reference-design.
 const web=fs.readFileSync(path.join(CONFIG.packageRoot,"src","web","index.html"),"utf8");
 for(const marker of ["Reference Design Picker","Generate Source Code","pickerOverlay"]) assert.ok(web.includes(marker),`design picker marker missing: ${marker}`);
 assert.ok(web.includes("Reference → DESIGN.md"),"web-only DESIGN.md page link missing");
+assert.ok(web.includes("verifyAfterBtn"),"post-change visual verification UI missing");
 console.log("KK-FRONTEND v0.4.0 selftest PASS");

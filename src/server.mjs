@@ -22,6 +22,7 @@ import { prepareExecutionWorkspace, compareTrees, applySafeCopyToOriginal, rollb
 import { runConfiguredAgent } from "./execution/agent-runner.mjs";
 import { verifyProject } from "./execution/verify.mjs";
 import { verifyPlanBaseline, validateChangedFileScope } from "./execution/migration-guard.mjs";
+import { verifyVisualMigration } from "./execution/visual-verify.mjs";
 import { generateReferenceDesignMd, inspectReferenceDesign, referenceDesignStatus } from "./reference-design/browserless.mjs";
 
 const app=express();
@@ -81,16 +82,23 @@ async function executionCapability(s){
   }
   const gs=await gitState(root);
   const mode=gs.isGit&&gs.clean?"git-worktree":"safe-copy";
+  const codeVerified=s.execution?.verificationPassed===true,visualPassed=s.execution?.visualVerificationPassed===true;
+  const visualStatus=s.execution?.visualVerificationStatus||"not-run";
   return {
     ready:!!s.plan,sourceType,mode,agentConfigured,
     canAutoImplement:!!s.plan&&agentConfigured,
-    canApplyBack:s.execution?.checkpoint?.mode==="safe-copy"&&s.execution?.verificationPassed===true&&s.execution?.applied!==true,
+    canVerifyVisual:codeVerified&&s.execution?.applied!==true,
+    canApplyBack:s.execution?.checkpoint?.mode==="safe-copy"&&codeVerified&&visualPassed&&s.execution?.applied!==true,
     canHandoff:!!s.plan,
     originalUntouched:s.execution?.applied!==true,
+    visualVerificationStatus:visualStatus,
+    visualVerificationPassed:visualPassed,
     git:{isGit:gs.isGit,clean:gs.clean??null,branch:gs.branch||null,head:gs.head||null},
-    message:mode==="git-worktree"
-      ?(agentConfigured?"Clean Git project: implementation runs in an isolated worktree; original branch remains untouched.":"Clean Git project detected. Configure a coding agent for automatic implementation, or generate the handoff.")
-      :(agentConfigured?"Git is optional: implementation runs in an isolated safe copy; original folder stays untouched until explicit apply-back.":"Non-Git or dirty-Git project is supported through an isolated safe copy. Configure a coding agent or generate the handoff.")
+    message:codeVerified&&!visualPassed
+      ?"Code verification PASS. Start the changed workspace, enter its runtime URL, and run post-change visual verification before apply-back."
+      :mode==="git-worktree"
+        ?(agentConfigured?"Clean Git project: implementation runs in an isolated worktree; original branch remains untouched.":"Clean Git project detected. Configure a coding agent for automatic implementation, or generate the handoff.")
+        :(agentConfigured?"Git is optional: implementation runs in an isolated safe copy; original folder stays untouched until explicit apply-back.":"Non-Git or dirty-Git project is supported through an isolated safe copy. Configure a coding agent or generate the handoff.")
   };
 }
 
@@ -404,9 +412,41 @@ ${changedText}
 `;
     await fs.writeFile(sessionFile(sessionId,"CHANGELOG.md"),changelog,"utf8");
     if(!verification.passed)throw new Error("Verification failed. Isolated workspace retained; original project remains unchanged.");
-    s.execution={checkpoint,agent,scope,verificationPassed:true,visualVerificationPassed:false,visualVerificationStatus:"pending-runtime",applied:false,completedAt:new Date().toISOString()};
+    s.execution={checkpoint,agent,scope,verificationPassed:true,visualVerificationPassed:false,visualVerificationStatus:"pending-runtime",visualRuntimeUrl:null,applied:false,completedAt:new Date().toISOString()};
     await saveSession(s);
     return s.execution;
+  }).catch(()=>{});
+});
+
+app.post("/api/verify-visual-after",async(req,res)=>{
+  const {sessionId,runtimeUrl}=req.body||{};
+  const s=await ensureSession(sessionId);
+  if(!s.execution?.verificationPassed)return res.status(400).json({error:"Run source implementation and code verification first."});
+  if(!s.reference?.root)return res.status(400).json({error:"Reference scan is required."});
+  if(!runtimeUrl)return res.status(400).json({error:"Changed-workspace runtime URL is required."});
+  const job=jobs.create("visual-verify",{sessionId,runtimeUrl});res.json({jobId:job.id});
+  jobs.run(job,async()=>{
+    const progress=progressFor(job);
+    const out=path.join(sessionDir(sessionId),"target-after","runtime");
+    await fs.rm(out,{recursive:true,force:true});
+    await ensureDir(out);
+    const audit=await scanWebsite({url:runtimeUrl,outDir:out,resume:false,mode:"blueprint-fast",designOnly:true,downloadAssets:false,headless:true,maxRoutes:30,progress,control:jobs.control(job.id)});
+    if(audit.cancelled)throw new Error("Post-change visual scan was stopped before verification completed.");
+    const plan=await readJson(sessionFile(sessionId,"implementation-plan.json"));
+    const visual=await verifyVisualMigration({
+      referenceRoot:s.reference.root,
+      afterRuntimeRoot:out,
+      beforeComparisonFile:sessionFile(sessionId,"comparison.json"),
+      selectedIds:plan?.selectedComparisonIds||[],
+      outDir:path.join(sessionDir(sessionId),"visual-verification"),
+      progress
+    });
+    s.execution.visualVerificationPassed=visual.passed===true;
+    s.execution.visualVerificationStatus=visual.passed?"passed":"failed";
+    s.execution.visualRuntimeUrl=runtimeUrl;
+    s.execution.visualVerifiedAt=new Date().toISOString();
+    await saveSession(s);
+    return {passed:visual.passed,status:s.execution.visualVerificationStatus,resolved:visual.selectedResolution?.resolved||0,unresolved:visual.selectedResolution?.unresolved||0,file:"visual-verification/visual-verification.json"};
   }).catch(()=>{});
 });
 
@@ -456,6 +496,8 @@ app.get("/api/artifacts/:sessionId",async(req,res)=>{
     }
     const sourceIntelligence=path.join(dir,"target-before","source-intelligence.json");
     if(await exists(sourceIntelligence))rows.unshift({name:"target-before/source-intelligence.json",type:"file",featured:true,url:"/data/runs/"+sid+"/target-before/source-intelligence.json"});
+    const visualVerification=path.join(dir,"visual-verification","visual-verification.json");
+    if(await exists(visualVerification))rows.unshift({name:"visual-verification/visual-verification.json",type:"file",featured:true,url:"/data/runs/"+sid+"/visual-verification/visual-verification.json"});
     const generated=path.join(dir,"generated-source");
     if(await exists(generated)){
       rows.unshift({name:"generated-source/",type:"dir",featured:true,url:`/data/runs/${sid}/generated-source/`});

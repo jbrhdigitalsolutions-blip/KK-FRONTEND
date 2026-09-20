@@ -16,3 +16,8 @@
 - Safe-copy apply now verifies original baseline hashes, backup hashes, every applied file hash, and rollback hashes.
 - Verification is change-aware: CSS-only work avoids unnecessary generic tests, while runtime-source changes retain lint/typecheck/test/build checks when available.
 - Apply-back is gated until post-change visual verification passes.
+
+## Visual acceptance gate
+- Added explicit changed-workspace runtime verification; KK-FRONTEND never assumes the original runtime is the AFTER build.
+- Selected comparison signatures are rescanned after implementation and must resolve before safe-copy apply-back is enabled.
+- Pixel diff remains supporting evidence; business-content differences are not mislabeled as semantic equality.

@@ -277,6 +277,16 @@
             <button id="executeBtn" class="primary">Implement in Safe Workspace</button>
             <button id="applyLocalBtn" class="danger" hidden>Apply Verified Changes to Original</button>
           </div>
+          <div class="capabilityCard">
+            <label class="field">Changed workspace runtime URL
+              <span class="fieldHint">Start the migrated workspace, then verify the actual AFTER UI before apply-back.</span>
+              <input id="afterRuntimeUrl" placeholder="http://127.0.0.1:3001"/>
+            </label>
+            <div class="buttonRow">
+              <button id="verifyAfterBtn" disabled>Verify After UI</button>
+              <span id="visualVerificationState" class="small">Visual verification not run.</span>
+            </div>
+          </div>
           <p id="applyLocalNote" class="small" hidden>Apply-back creates a file backup first and automatically restores it if verification fails.</p>
         </article>
       </section>

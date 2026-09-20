@@ -67,14 +67,14 @@ function updateTargetModeUI(){
 }
 $("#targetType").onchange=updateTargetModeUI;
 async function refreshExecutionCapability(){
-  const box=$("#executionCapability"),badge=$("#executionModeBadge"),execute=$("#executeBtn"),handoff=$("#handoffBtn"),apply=$("#applyLocalBtn"),note=$("#applyLocalNote");
-  if(!sessionId){currentCapability=null;box.textContent="Create or resume a session first.";badge.textContent="No session";execute.disabled=true;handoff.disabled=true;apply.hidden=true;return}
+  const box=$("#executionCapability"),badge=$("#executionModeBadge"),execute=$("#executeBtn"),handoff=$("#handoffBtn"),apply=$("#applyLocalBtn"),note=$("#applyLocalNote"),verifyAfter=$("#verifyAfterBtn"),visualState=$("#visualVerificationState");
+  if(!sessionId){currentCapability=null;box.textContent="Create or resume a session first.";badge.textContent="No session";execute.disabled=true;handoff.disabled=true;apply.hidden=true;if(verifyAfter)verifyAfter.disabled=true;if(visualState)visualState.textContent="Visual verification not run.";return}
   try{
     const c=await api(`/api/execution/capability/${sessionId}`);currentCapability=c;box.textContent=c.message;badge.textContent=({"git-worktree":"Git worktree","safe-copy":"Safe copy","handoff-only":"Handoff only","not-ready":"Not ready"}[c.mode]||c.mode);badge.dataset.mode=c.mode;
-    execute.disabled=!c.canAutoImplement;handoff.disabled=!c.canHandoff;apply.hidden=!c.canApplyBack;note.hidden=!c.canApplyBack;
+    execute.disabled=!c.canAutoImplement;handoff.disabled=!c.canHandoff;apply.hidden=!c.canApplyBack;note.hidden=!c.canApplyBack;if(verifyAfter)verifyAfter.disabled=!c.canVerifyVisual;if(visualState)visualState.textContent=c.visualVerificationPassed?"Visual verification PASS":c.visualVerificationStatus==="failed"?"Visual verification FAILED — inspect unresolved differences":c.canVerifyVisual?"Code PASS — visual verification required":"Visual verification not ready";
     execute.textContent=c.mode==="safe-copy"?"Implement in Safe Copy":"Implement in Safe Workspace";
     if(!c.agentConfigured&&c.canHandoff)handoff.textContent="Generate Coding Handoff — Agent Not Configured";else handoff.textContent="Generate Coding Handoff";
-  }catch(e){box.textContent=e.message;badge.textContent="Not ready";execute.disabled=true;handoff.disabled=true;apply.hidden=true}
+  }catch(e){box.textContent=e.message;badge.textContent="Not ready";execute.disabled=true;handoff.disabled=true;apply.hidden=true;if(verifyAfter)verifyAfter.disabled=true}
 }
 $("#githubAuth").onclick=async()=>{try{const r=await api("/api/github/auth/start",{method:"POST",body:"{}"});alert(r.message);setTimeout(refreshGithub,4000)}catch(e){alert(e.message)}};
 $("#githubRefresh").onclick=()=>refreshGithub().catch(e=>alert(e.message));
@@ -224,6 +224,7 @@ $("#clearSelection").onclick=()=>{for(const e of currentComparison?.entries||[])
 $("#planBtn").onclick=async()=>{try{needSession();const selectedIds=(currentComparison?.entries||[]).filter(e=>e.selected).map(e=>e.id);if(!selectedIds.length)throw new Error("Select at least one comparison row.");const x=await api("/api/plan",{method:"POST",body:JSON.stringify({sessionId,selectedIds})});watchJob(x.jobId,async j=>{$("#planPreview").textContent=JSON.stringify(j.result,null,2);await refreshExecutionCapability()})}catch(e){alert(e.message)}};
 $("#handoffBtn").onclick=async()=>{try{needSession();const r=await api("/api/handoff",{method:"POST",body:JSON.stringify({sessionId})});showNotice(`Coding handoff created: ${r.file}`,"success");await refreshArtifacts();await refreshExecutionCapability()}catch(e){showNotice(e.message,"error")}};
 $("#executeBtn").onclick=async()=>{try{needSession();if(!$("#approveExecute").checked)throw new Error("Tick the implementation approval checkbox first.");const x=await api("/api/execute",{method:"POST",body:JSON.stringify({sessionId,approved:true})});watchJob(x.jobId,()=>refreshExecutionCapability())}catch(e){showNotice(e.message,"error")}};
+$("#verifyAfterBtn").onclick=async()=>{try{needSession();const runtimeUrl=$("#afterRuntimeUrl").value.trim();if(!runtimeUrl)throw new Error("Enter the changed workspace runtime URL first.");const x=await api("/api/verify-visual-after",{method:"POST",body:JSON.stringify({sessionId,runtimeUrl})});watchJob(x.jobId,async j=>{if(j.status==="passed"){showNotice(j.result?.passed?"Post-change visual verification PASS.":"Visual verification completed with unresolved differences.","success");await refreshArtifacts();await refreshExecutionCapability()}})}catch(e){showNotice(e.message,"error")}};
 $("#applyLocalBtn").onclick=async()=>{try{needSession();if(!confirm("Apply VERIFIED safe-copy changes to the original local project? KK-FRONTEND will back up affected source files first and roll back automatically if verification fails."))return;const x=await api("/api/apply-local",{method:"POST",body:JSON.stringify({sessionId,approved:true})});watchJob(x.jobId,()=>refreshExecutionCapability())}catch(e){showNotice(e.message,"error")}};
 async function refreshArtifacts(){if(!sessionId)return;try{const a=await api(`/api/artifacts/${sessionId}`);$("#artifacts").innerHTML=a.map(x=>`<a href="${x.url}" target="_blank"${x.featured?' class="featuredArtifact"':''}>${x.featured?"★ ":""}${esc(x.name)}${x.type==="dir"?"/":""}</a>`).join("")}catch{}}
 $("#refreshArtifacts").onclick=refreshArtifacts;
