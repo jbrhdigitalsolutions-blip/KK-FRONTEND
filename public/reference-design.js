@@ -166,6 +166,18 @@ async function readProjectFiles(fileList) {
     rows.push(row);
     if (rows.length >= 500) break;
   }
+  // webkitdirectory prefixes every file with the chosen folder name.
+  // Remove only that browser-added wrapper so generated patch paths remain project-relative.
+  const folderInputs=input.filter(file=>file.webkitRelativePath);
+  if(folderInputs.length){
+    const roots=[...new Set(folderInputs.map(file=>String(file.webkitRelativePath).replaceAll("\\","/").split("/")[0]).filter(Boolean))];
+    if(roots.length===1){
+      const prefix=roots[0]+"/";
+      for(const row of rows){
+        if(row.path.startsWith(prefix))row.path=row.path.slice(prefix.length);
+      }
+    }
+  }
   return rows;
 }
 function projectMode() {
