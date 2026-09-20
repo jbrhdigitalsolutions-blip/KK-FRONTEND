@@ -74,6 +74,17 @@ test("placeholder media blocks exact readiness but still permits explicit protot
   assert.ok(result.exactBlockers.some(x=>/Media/.test(x)));
 });
 
+test("project intake rejects secret-bearing file names before analysis",()=>{
+  assert.throws(
+    ()=>analyzeProjectIntake({
+      evidence:evidence(),
+      files:[{path:".env",content:"API_KEY=do-not-read"}],
+      answers:{projectMode:"existing"}
+    }),
+    /Sensitive project file names/
+  );
+});
+
 test("project-aware compiler reconstructs measured child geometry and project-fit output",()=>{
   const result=compileProjectAwareDesign({
     evidence:evidence(),
