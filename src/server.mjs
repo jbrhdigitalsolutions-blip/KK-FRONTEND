@@ -103,7 +103,7 @@ async function executionCapability(s){
   };
 }
 
-app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.7.0",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true,sourceAwareMigration:true,noCodeDesignCompiler:true}));
+app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.7.0",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true,sourceAwareMigration:true,noCodeDesignCompiler:true,authenticatedReferenceCapture:true}));
 app.get("/api/github/status",async(req,res)=>res.json(await githubStatus()));
 app.post("/api/github/auth/start",async(req,res)=>{
   try{
