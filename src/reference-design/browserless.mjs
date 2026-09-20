@@ -575,6 +575,7 @@ const candidateScript = () => {
       const card=a.closest(cardSelector);
       const img=a.querySelector("img") || card?.querySelector("img");
       const sameOrigin=parsed.origin===location.origin;
+      if(!sameOrigin)continue;
       let score=0;
       if(card)score+=24;
       if(img)score+=20;
@@ -587,7 +588,7 @@ const candidateScript = () => {
       items.push({
         label:(text||clean(img?.alt,160)||parsed.pathname.split("/").filter(Boolean).pop()||"Design item").replace(/^View\s+/i,"").slice(0,160),
         url:parsed.href,
-        image:img ? String(img.currentSrc||img.src||"").slice(0,1000) : "",
+        image:"",
         score,
       });
     }
