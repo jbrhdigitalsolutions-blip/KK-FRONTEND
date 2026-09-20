@@ -1,5 +1,5 @@
 import { candidateFamily, classifyCandidate } from "../reference-design/design-md.mjs";
-import { analyzeProjectContext, integrationSupportFiles } from "./project-fit.mjs";
+import { analyzeProjectContext, integrationSupportFiles, newProjectSupportFiles } from "./project-fit.mjs";
 
 const ALLOWED_OUTPUTS = new Set(["html","react","next"]);
 const ALLOWED_CONTENT = new Set(["placeholders","reference-labels"]);
@@ -456,7 +456,10 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
         ...patchFiles.map(file=>({path:"project-patch/"+file.path,content:file.content})),
         ...integrationSupportFiles(projectProfile,patchFiles),
       ]
-    : patchFiles;
+    : [
+        ...patchFiles,
+        ...newProjectSupportFiles(projectProfile),
+      ];
   files.push({path:"DESIGN-BUILD.json",content:JSON.stringify(model,null,2)});
   const readme=[
     "# Generated with KK-FRONTEND No-Code Design Compiler",
