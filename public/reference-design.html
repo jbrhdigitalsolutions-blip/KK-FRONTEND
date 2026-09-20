@@ -14,7 +14,7 @@
       <span><b>KK-FRONTEND</b><small>Design Explorer</small></span>
     </a>
     <div class="rdTopActions">
-      <span class="rdVersion">v0.6.0</span>
+      <span class="rdVersion">v0.7.0</span>
       <a class="rdBack" href="/index.html">Main workspace</a>
     </div>
   </header>
@@ -39,6 +39,64 @@
         <input id="referenceUrl" inputmode="url" autocomplete="url" placeholder="https://example.com/page" required/>
         <button id="inspectButton" class="rdPrimary" type="submit">Inspect design</button>
       </form>
+
+      <div class="rdAuthShell">
+        <button id="authToggle" class="rdAuthToggle" type="button" aria-expanded="false" aria-controls="authPanel">
+          <span><b>Authentication</b><small>For private or login-required reference pages</small></span>
+          <span id="authModeLabel" class="rdAuthMode">Public</span>
+        </button>
+
+        <div id="authPanel" class="rdAuthPanel" hidden>
+          <div class="rdAuthIntro">
+            <div>
+              <b>Reference access</b>
+              <span>Credentials are used only for this capture and are never written to DESIGN.md, evidence files, logs, or server storage.</span>
+            </div>
+            <select id="authMode" aria-label="Authentication mode">
+              <option value="public">Public — no login</option>
+              <option value="login">Login form</option>
+              <option value="cookie">Session cookie</option>
+              <option value="header">Access token / header</option>
+              <option value="basic">HTTP Basic</option>
+            </select>
+          </div>
+
+          <div id="authLoginFields" class="rdAuthFields" hidden>
+            <label class="wide"><span>Login page URL <small>Optional — leave blank if the reference redirects to login</small></span><input id="authLoginUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://app.example.com/login"/></label>
+            <label><span>Email / username</span><input id="authUsername" autocomplete="username" placeholder="name@example.com"/></label>
+            <label><span>Password</span><input id="authPassword" type="password" autocomplete="current-password" placeholder="Password"/></label>
+            <details class="rdAuthAdvanced wide">
+              <summary>Advanced selectors <small>Only if automatic login detection cannot find the form</small></summary>
+              <div class="rdAuthSelectorGrid">
+                <label><span>Username selector</span><input id="authUsernameSelector" autocomplete="off" placeholder='input[name="email"]'/></label>
+                <label><span>Password selector</span><input id="authPasswordSelector" autocomplete="off" placeholder='input[type="password"]'/></label>
+                <label><span>Submit selector</span><input id="authSubmitSelector" autocomplete="off" placeholder='button[type="submit"]'/></label>
+                <label><span>Success selector</span><input id="authSuccessSelector" autocomplete="off" placeholder=".dashboard"/></label>
+              </div>
+            </details>
+          </div>
+
+          <div id="authCookieFields" class="rdAuthFields" hidden>
+            <label class="wide"><span>Session cookie <small>Cookie header format; kept only in page memory</small></span><textarea id="authCookie" autocomplete="off" spellcheck="false" placeholder="session=…; another_cookie=…"></textarea></label>
+          </div>
+
+          <div id="authHeaderFields" class="rdAuthFields" hidden>
+            <label><span>Header name</span><input id="authHeaderName" autocomplete="off" value="Authorization"/></label>
+            <label><span>Header value</span><input id="authHeaderValue" type="password" autocomplete="off" placeholder="Bearer …"/></label>
+          </div>
+
+          <div id="authBasicFields" class="rdAuthFields" hidden>
+            <label><span>Username</span><input id="authBasicUsername" autocomplete="username" placeholder="Username"/></label>
+            <label><span>Password</span><input id="authBasicPassword" type="password" autocomplete="current-password" placeholder="Password"/></label>
+          </div>
+
+          <div id="authSecurityNote" class="rdAuthSecurity">
+            <span class="rdLock">⌁</span>
+            <div><b>Ephemeral authentication</b><small>No credential persistence. CAPTCHA and MFA are never bypassed; use Session cookie for an already-authorized MFA/SSO session.</small></div>
+          </div>
+        </div>
+      </div>
+
       <div id="notice" class="rdNotice" hidden></div>
     </section>
 

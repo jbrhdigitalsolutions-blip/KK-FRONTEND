@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildEvidenceCompanion, candidateFamily, classifyCandidate, normalizeReferenceUrl, renderDesignMd, UNKNOWN } from "../src/reference-design/design-md.mjs";
 import { isPrivateOrRestrictedAddress } from "../src/reference-design/browserless.mjs";
+import { containsReferenceAuthSecret, normalizeReferenceAuth, parseCookieHeader, referenceAuthHeader, referenceAuthSummary } from "../src/reference-design/auth.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -90,6 +91,42 @@ test("network safety recognizes private, mapped and public addresses", () => {
   assert.equal(isPrivateOrRestrictedAddress("2606:4700:4700::1111"), false);
 });
 
+test("reference authentication normalizes supported modes without exposing secrets", () => {
+  const target="https://app.example.com/dashboard";
+
+  const login=normalizeReferenceAuth({
+    mode:"login",
+    loginUrl:"https://app.example.com/login",
+    username:"user@example.com",
+    password:"super-secret",
+    usernameSelector:"#email",
+    successSelector:".dashboard"
+  },target);
+  assert.equal(login.mode,"login");
+  assert.equal(login.loginUrl,"https://app.example.com/login");
+  assert.equal(login.loginUrlExplicit,true);
+  assert.equal(referenceAuthSummary(login).method,"form-login");
+  assert.equal(JSON.stringify(referenceAuthSummary(login)).includes("super-secret"),false);
+
+  const implicitLogin=normalizeReferenceAuth({mode:"login",username:"u",password:"p"},target);
+  assert.equal(implicitLogin.loginUrlExplicit,false);
+  assert.equal(implicitLogin.loginUrl,target);
+
+  const cookie=normalizeReferenceAuth({mode:"cookie",cookieHeader:"sid=abc123; theme=dark"},target);
+  assert.deepEqual(parseCookieHeader(cookie.cookieHeader,target).map(x=>x.name),["sid","theme"]);
+  assert.equal(containsReferenceAuthSecret(referenceAuthSummary(cookie),cookie),false);
+
+  const basic=normalizeReferenceAuth({mode:"basic",username:"a",password:"b"},target);
+  assert.match(referenceAuthHeader(basic).value,/^Basic /);
+
+  const header=normalizeReferenceAuth({mode:"header",headerName:"Authorization",headerValue:"Bearer secret-token"},target);
+  assert.equal(referenceAuthHeader(header).name,"Authorization");
+  assert.equal(containsReferenceAuthSecret({summary:referenceAuthSummary(header)},header),false);
+
+  assert.throws(()=>normalizeReferenceAuth({mode:"header",headerName:"Host",headerValue:"x"},target),/not allowed/);
+  assert.throws(()=>normalizeReferenceAuth({mode:"login",username:"a",password:"b",loginUrl:"file:///tmp/x"},target),/http\(s\)/);
+});
+
 test("design taxonomy detects meaningful regions before generic motion", () => {
   assert.equal(classifyCandidate({ tag: "header", animation: true }), "Header");
   assert.equal(classifyCandidate({ tag: "aside", className: "app-sidebar", animation: true }), "Sidebar");
@@ -157,7 +194,7 @@ test("Design Explorer exposes filters, presets and explicit custom-selection lim
     fs.readFile(path.join(root, "src", "web", "reference-design.js"), "utf8"),
     fs.readFile(path.join(root, "src", "reference-design", "browserless.mjs"), "utf8"),
   ]);
-  for (const marker of ["familyFilters", "selectFiltered", "Essential design", "Custom design", "Build the page yourself.", "buildPageButton", "downloadProjectButton"]) {
+  for (const marker of ["familyFilters", "selectFiltered", "Essential design", "Custom design", "Build the page yourself.", "buildPageButton", "downloadProjectButton", "authToggle", "authMode", "Session cookie", "HTTP Basic"]) {
     assert.ok(html.includes(marker), "missing Design Explorer marker: " + marker);
   }
   assert.ok(js.includes("MAX_CUSTOM_SELECTION = 30"));
@@ -166,6 +203,11 @@ test("Design Explorer exposes filters, presets and explicit custom-selection lim
   assert.ok(browserless.includes("familyCounts"));
   assert.ok(browserless.includes("selection = []"));
   assert.ok(browserless.includes("supports up to 30 regions"));
+  assert.ok(browserless.includes("establishReferenceSession"));
+  assert.ok(browserless.includes("performFormLogin"));
+  assert.ok(browserless.includes("Authentication secret safety check failed"));
+  assert.ok(browserless.includes("assertCredentialOrigin"));
+  assert.ok(browserless.includes("credentials were not entered"));
 });
 
 test("local and Vercel static copies stay byte-identical", async () => {

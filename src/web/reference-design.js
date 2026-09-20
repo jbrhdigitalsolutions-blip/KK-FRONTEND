@@ -30,7 +30,7 @@ function busy(button, yes, label) {
   }
 }
 async function api(path, options = {}) {
-  const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+  const response = await fetch(path, { cache:"no-store", credentials:"same-origin", headers: { "Content-Type": "application/json" }, ...options });
   let body = {};
   try { body = await response.json(); } catch {}
   if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
@@ -39,6 +39,72 @@ async function api(path, options = {}) {
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>'"]/g, x => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[x]));
 }
+const AUTH_LABELS = {
+  public:"Public",
+  login:"Login form",
+  cookie:"Session cookie",
+  header:"Access token",
+  basic:"HTTP Basic",
+};
+function authMode() {
+  return $("authMode")?.value || "public";
+}
+function currentAuth() {
+  const mode = authMode();
+  if (mode === "public") return { mode };
+  if (mode === "login") {
+    return {
+      mode,
+      loginUrl: $("authLoginUrl").value.trim(),
+      username: $("authUsername").value,
+      password: $("authPassword").value,
+      usernameSelector: $("authUsernameSelector").value.trim(),
+      passwordSelector: $("authPasswordSelector").value.trim(),
+      submitSelector: $("authSubmitSelector").value.trim(),
+      successSelector: $("authSuccessSelector").value.trim(),
+    };
+  }
+  if (mode === "cookie") return { mode, cookieHeader:$("authCookie").value };
+  if (mode === "header") {
+    return {
+      mode,
+      headerName:$("authHeaderName").value.trim() || "Authorization",
+      headerValue:$("authHeaderValue").value,
+    };
+  }
+  return {
+    mode:"basic",
+    username:$("authBasicUsername").value,
+    password:$("authBasicPassword").value,
+  };
+}
+function updateAuthUi() {
+  const mode = authMode();
+  $("authModeLabel").textContent = AUTH_LABELS[mode] || "Authentication";
+  $("authLoginFields").hidden = mode !== "login";
+  $("authCookieFields").hidden = mode !== "cookie";
+  $("authHeaderFields").hidden = mode !== "header";
+  $("authBasicFields").hidden = mode !== "basic";
+  $("authPanel").classList.toggle("hasAuth", mode !== "public");
+}
+function setAuthPanel(open) {
+  $("authPanel").hidden = !open;
+  $("authToggle").setAttribute("aria-expanded", String(open));
+}
+function clearAuthSecrets() {
+  for (const id of [
+    "authLoginUrl","authUsername","authPassword","authUsernameSelector","authPasswordSelector",
+    "authSubmitSelector","authSuccessSelector","authCookie","authHeaderValue","authBasicUsername","authBasicPassword"
+  ]) {
+    const el=$(id);
+    if (el) el.value="";
+  }
+  $("authHeaderName").value="Authorization";
+  $("authMode").value="public";
+  updateAuthUi();
+  setAuthPanel(false);
+}
+
 function scopeMode() {
   return document.querySelector("input[name='scope']:checked")?.value || "whole";
 }
@@ -251,7 +317,7 @@ $("inspectForm").addEventListener("submit", async event => {
   try {
     const data = await api("/api/reference-design/inspect", {
       method: "POST",
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, auth: currentAuth() }),
     });
     state.inspection = data;
     state.selected.clear();
@@ -263,6 +329,9 @@ $("inspectForm").addEventListener("submit", async event => {
     $("referenceHost").textContent = new URL(data.finalUrl).hostname;
     $("candidateCount").textContent = `${data.candidateCount} design regions`;
     $("openReference").href = data.finalUrl;
+    if (data.authentication?.authenticated) {
+      $("authModeLabel").textContent = `${AUTH_LABELS[data.authentication.mode] || "Authenticated"} · verified`;
+    }
 
     renderFamilyFilters();
     renderCandidates();
@@ -323,6 +392,7 @@ $("generateButton").addEventListener("click", async () => {
           kind: x.kind,
           family: x.family,
         })),
+        auth: currentAuth(),
       }),
     });
 
@@ -485,6 +555,9 @@ $("copyButton").addEventListener("click", async () => {
   button.textContent = "Copied";
   setTimeout(() => button.textContent = old, 1200);
 });
+$("authToggle").addEventListener("click", () => setAuthPanel($("authPanel").hidden));
+$("authMode").addEventListener("change", updateAuthUi);
+
 $("newButton").addEventListener("click", () => {
   state.inspection = null;
   state.selected.clear();
@@ -495,8 +568,10 @@ $("newButton").addEventListener("click", () => {
   $("selectionStage").hidden = true;
   $("resultStage").hidden = true;
   $("buildStage").hidden = true;
+  clearAuthSecrets();
   $("referenceUrl").focus();
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
+updateAuthUi();
 checkProvider();

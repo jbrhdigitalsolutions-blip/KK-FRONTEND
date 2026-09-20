@@ -520,6 +520,7 @@ export function buildEvidenceCompanion(evidence) {
       scope: evidence?.scope || null,
       selection: evidence?.selection || [],
     },
+    authentication: evidence?.authentication || { mode:"public", authenticated:false },
     coverage: evidence?.coverage || {},
     confidence: evidence?.confidence ?? null,
     confidenceReasons: arr(evidence?.confidenceReasons),
