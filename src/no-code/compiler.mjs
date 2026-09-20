@@ -597,9 +597,9 @@ function zipStore(files){
   return Buffer.concat([...locals,...centrals,end]);
 }
 
-export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options={},projectContext=null}={}){
+export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options={},projectContext=null,projectProfile:suppliedProjectProfile=null}={}){
   const evidence=parseEvidence(inputEvidence);
-  const projectProfile=projectContext ? analyzeProjectContext(projectContext) : null;
+  const projectProfile=suppliedProjectProfile || (projectContext ? analyzeProjectContext(projectContext) : null);
   const requestedOutput=options.output==="auto" && projectProfile ? projectProfile.supportedOutput : options.output;
   const output=ALLOWED_OUTPUTS.has(requestedOutput) ? requestedOutput : "html";
   const contentMode=ALLOWED_CONTENT.has(options.contentMode) ? options.contentMode : "placeholders";
