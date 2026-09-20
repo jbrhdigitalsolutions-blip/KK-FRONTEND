@@ -215,13 +215,26 @@
               <span>Target page / route</span>
               <input id="targetPageInput" autocomplete="off" placeholder="/landing or src/pages/Home.tsx"/>
             </label>
-            <label id="frameworkField" hidden>
-              <span>Framework</span>
+            <label id="frameworkField">
+              <span id="frameworkLabel">Framework / stack override</span>
               <select id="frameworkPreference">
-                <option value="">Choose…</option>
+                <option value="">Auto-detect / choose…</option>
                 <option value="Next.js">Next.js</option>
                 <option value="React + Vite">React + Vite</option>
+                <option value="React">React</option>
+                <option value="Vue">Vue</option>
+                <option value="Svelte">Svelte</option>
                 <option value="HTML/CSS/JS">HTML/CSS/JS</option>
+              </select>
+            </label>
+            <label>
+              <span>Package manager</span>
+              <select id="packageManagerPreference">
+                <option value="">Auto-detect / choose…</option>
+                <option value="pnpm">pnpm</option>
+                <option value="npm">npm</option>
+                <option value="yarn">Yarn</option>
+                <option value="bun">Bun</option>
               </select>
             </label>
             <label>
@@ -242,6 +255,10 @@
                 <option value="provided">I will map/provide assets</option>
                 <option value="placeholders">Use asset slots</option>
               </select>
+            </label>
+            <label class="rdAssetMapField" id="assetMapField" hidden>
+              <span>Asset paths / URLs</span>
+              <input id="assetMapInput" autocomplete="off" placeholder="/images/hero.webp, /logo.svg"/>
             </label>
           </div>
 
@@ -273,6 +290,11 @@
           </div>
 
           <div class="rdUploadSafety">Do not upload <b>.env</b>, private keys, certificates, API tokens, passwords, database dumps, or other secrets. Project analysis is text-only and size-limited.</div>
+
+          <label class="rdProjectNotes">
+            <span>Project details / constraints <small>Optional but useful</small></span>
+            <textarea id="projectNotes" placeholder="Describe the page purpose, backend/data behavior to preserve, design-system rules, routes, must-keep interactions, or any project constraints."></textarea>
+          </label>
 
           <div class="rdIntakeActions">
             <button id="analyzeProjectButton" class="rdSecondary" type="button">Analyze Project Fit</button>
