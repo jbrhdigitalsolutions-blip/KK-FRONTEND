@@ -138,7 +138,7 @@ export function analyzeProjectContext(input={}){
   const pkgInfo=packageInfo(files);
   const requestedStack=text(input.stack,"auto").toLowerCase();
   const stack=detectStack(files,pkgInfo,requestedStack);
-  const packageManager=detectPackageManager(files,pkgInfo);
+  const detectedPackageManager=detectPackageManager(files,pkgInfo);
   const isTypeScript=detectTypeScript(files,pkgInfo);
   const styling=detectStyling(files,pkgInfo);
   const routes=detectRoutes(files,stack);
@@ -198,6 +198,7 @@ export function analyzeProjectContext(input={}){
   score=Math.min(100,score);
 
   const supportedOutput=stack==="next"?"next":stack==="react"?"react":stack==="html"?"html":"html";
+  const packageManager=detectedPackageManager==="none" && mode==="new" && ["react","next"].includes(supportedOutput) ? "pnpm" : detectedPackageManager;
   return {
     schema:"kk-project-fit/v1",
     mode,
