@@ -158,8 +158,27 @@ function evidenceNeeds(evidence){
 
 function answerValue(answers,key){ return str(answers?.[key]); }
 
-export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={}){
+function normalizeProjectAssets(input=[]){
+  const assets=[];
+  let total=0;
+  for(const raw of arr(input).slice(0,12)){
+    const name=safePath(raw?.name||raw?.path).split("/").pop();
+    const mime=str(raw?.mime||raw?.type).toLowerCase();
+    const base64=str(raw?.base64);
+    const allowed=/^(image\/(png|jpeg|webp|gif|avif|svg\+xml))$/.test(mime);
+    if(!allowed) throw new Error("Only image/SVG project assets are accepted in the web builder.");
+    const estimated=base64 ? Math.floor(base64.length*0.75) : Number(raw?.size||0);
+    if(estimated>500_000) throw new Error("Each uploaded project asset must be 500 KB or smaller.");
+    total+=estimated;
+    if(total>1_000_000) throw new Error("Uploaded project assets exceed the 1 MB web-builder budget.");
+    assets.push({name,mime,size:estimated,base64});
+  }
+  return assets;
+}
+
+export function analyzeProjectIntake({evidence,files:rawFiles=[],assets:rawAssets=[],answers={}}={}){
   const files=normalizeProjectFiles(rawFiles);
+  const assets=normalizeProjectAssets(rawAssets);
   const pkg=packageProfile(files);
   const structure=structureProfile(files);
   const content=contentProfile(files);
@@ -211,7 +230,18 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
       add("projectAssets","Existing asset references",content.assetRefs.length?"complete":"missing","Project asset mode needs source files that reference the images/video used by the target page.");
     }
     if(assetStrategy==="provided"){
-      add("assetMap","Asset path mapping",str(answers?.assetMap)?"complete":"missing","List the project/public asset paths that should fill the measured media slots.");
+      const map=str(answers?.assetMap);
+      const hasRemote=/https?:\/\//i.test(map);
+      const hasUploaded=assets.length>0;
+      const providedReady=projectMode==="existing" ? Boolean(map||hasUploaded) : Boolean(hasRemote||hasUploaded);
+      add(
+        "assetMap",
+        "Asset files / mapping",
+        providedReady?"complete":"missing",
+        projectMode==="existing"
+          ? "Provide existing project/public asset paths or upload small image/SVG assets."
+          : "For a new project, upload the required small image/SVG assets or provide public https URLs."
+      );
     }
   }
   add("targetPlatforms","Target PC platform",targetPlatforms.length?"complete":"missing","Generates correct Windows/macOS install and run helpers.");
@@ -250,6 +280,9 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
     frameworkDetected:pkg.framework,
     fileCount:files.length,
     analyzedBytes:files.reduce((n,f)=>n+f.size,0),
+    assetCount:assets.length,
+    assetBytes:assets.reduce((n,a)=>n+a.size,0),
+    assetFiles:assets.map(({name,mime,size})=>({name,mime,size})),
     structure,
     content,
     designContext,
@@ -284,3 +317,4 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
 export function projectFileSummary(files=[]){
   return normalizeProjectFiles(files).map(({path,size})=>({path,size}));
 }
+export { normalizeProjectAssets };
