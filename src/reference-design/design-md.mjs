@@ -11,20 +11,49 @@ export function normalizeReferenceUrl(input) {
   return url.toString();
 }
 
-export function classifyCandidate({ tag = "", role = "", className = "", animation = false } = {}) {
+export function classifyCandidate({ tag = "", role = "", className = "", label = "", animation = false, interactive = false } = {}) {
   const t = String(tag).toLowerCase();
   const r = String(role).toLowerCase();
   const c = String(className).toLowerCase();
-  if (t === "header" || r === "banner" || /(^|[-_ ])header/.test(c)) return "Header";
+  const l = String(label).toLowerCase();
+  const s = c + " " + l;
+
+  if (t === "header" || r === "banner" || /(^|[-_ ])header|topbar|appbar/.test(c)) return "Header";
   if (t === "footer" || r === "contentinfo" || /(^|[-_ ])footer/.test(c)) return "Footer";
-  if (t === "nav" || r === "navigation" || /(^|[-_ ])nav/.test(c)) return "Navigation";
+  if (t === "nav" || r === "navigation" || /(^|[-_ ])nav|navbar|menu-bar/.test(c)) return "Navigation";
   if (t === "aside" || r === "complementary" || /sidebar|side-nav|sidenav/.test(c)) return "Sidebar";
-  if (t === "main" || r === "main" || /workspace|dashboard|canvas|editor/.test(c)) return "Workspace";
-  if (t === "section" || /hero|section|feature|pricing|testimonial|gallery/.test(c)) return "Section";
+  if (t === "main" || r === "main" || /workspace|dashboard|editor|app-shell/.test(c)) return "Workspace";
+  if (/hero|masthead|jumbotron/.test(s)) return "Hero";
+  if (/carousel|slider|swiper/.test(s)) return "Carousel";
+  if (/gallery|masonry/.test(s)) return "Gallery";
+  if (/pricing|testimonial|feature|section/.test(s) || t === "section") return "Section";
+  if (/card|tile|panel|surface/.test(c)) return "Card";
   if (t === "form" || r === "form") return "Form";
-  if (t === "dialog" || r === "dialog" || /modal|drawer|sheet|popover/.test(c)) return "Overlay";
+  if (["input","textarea","select"].includes(t) || r === "textbox" || r === "combobox" || /input|field|search-box/.test(c)) return /search/.test(s) ? "Search" : "Input";
+  if (t === "button" || r === "button" || /(^|[-_ ])btn|button|cta/.test(c)) return "Button";
+  if (t === "img" || t === "picture" || /image|thumbnail|artwork|cover/.test(c)) return "Image";
+  if (t === "video" || /video|player/.test(c)) return "Video";
+  if (t === "svg" || /icon|logo/.test(c)) return /logo/.test(s) ? "Logo" : "Icon";
+  if (/badge|chip|pill|tag/.test(c)) return "Badge";
+  if (r === "tab" || /tabs?|tab-list/.test(c)) return "Tabs";
+  if (t === "ul" || t === "ol" || r === "list" || /(^|[-_ ])list|feed/.test(c)) return "List";
+  if (/grid|columns|row/.test(c)) return "Grid";
+  if (/avatar|profile-image/.test(c)) return "Avatar";
+  if (t === "dialog" || r === "dialog" || /modal|drawer|sheet|popover|tooltip/.test(c)) return "Overlay";
+  if (/^h[1-6]$/.test(t) || t === "p" || r === "heading" || /headline|heading|title|subtitle|caption|eyebrow/.test(c)) return "Typography";
   if (animation) return "Animation";
+  if (interactive) return "Interactive";
   return "Component";
+}
+
+export function candidateFamily(kind) {
+  if (["Header","Footer","Navigation","Sidebar","Workspace","Hero","Section","Grid","Card","List"].includes(kind)) return "Structure";
+  if (["Button","Form","Input","Search","Tabs","Badge","Interactive"].includes(kind)) return "Controls";
+  if (["Image","Video","Carousel","Gallery","Icon","Logo","Avatar"].includes(kind)) return "Media";
+  if (["Typography"].includes(kind)) return "Content";
+  if (kind === "Animation") return "Motion";
+  if (kind === "Overlay") return "Structure";
+  return "Components";
 }
 
 function arr(v) { return Array.isArray(v) ? v : []; }
