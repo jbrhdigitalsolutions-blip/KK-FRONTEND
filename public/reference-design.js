@@ -10,6 +10,8 @@ const state = {
   evidenceJson: "",
   evidenceFilename: "DESIGN-EVIDENCE.json",
   build: null,
+  projectFiles: [],
+  projectIntake: null,
 };
 
 function notice(message, kind = "error") {
@@ -103,6 +105,144 @@ function clearAuthSecrets() {
   $("authMode").value="public";
   updateAuthUi();
   setAuthPanel(false);
+}
+
+const PROJECT_TEXT_EXTENSIONS = new Set([
+  "md","mdx","txt","json","js","mjs","cjs","jsx","ts","tsx","css","scss","sass","less",
+  "html","htm","vue","svelte","astro","yaml","yml","toml"
+]);
+const PROJECT_IMPORTANT_NAMES = new Set(["package.json","pnpm-lock.yaml","package-lock.json","yarn.lock","bun.lockb","design.md"]);
+function projectAnswers() {
+  const platforms = [];
+  if ($("platformWindows")?.checked) platforms.push("windows");
+  if ($("platformMacos")?.checked) platforms.push("macos");
+  const content = {
+    "text-1": $("contentHeadline")?.value.trim() || "",
+    "text-2": $("contentBody")?.value.trim() || "",
+    "action-1": $("contentPrimaryAction")?.value.trim() || "",
+  };
+  return {
+    projectMode: $("projectMode")?.value || "existing",
+    projectName: $("projectNameInput")?.value.trim() || "",
+    targetPage: $("targetPageInput")?.value.trim() || "",
+    frameworkPreference: $("frameworkPreference")?.value || "",
+    packageManagerPreference: $("packageManagerPreference")?.value || "",
+    contentStrategy: $("contentStrategy")?.value || "",
+    assetStrategy: $("assetStrategy")?.value || "",
+    assetMap: $("assetMapInput")?.value.trim() || "",
+    projectNotes: $("projectNotes")?.value.trim() || "",
+    targetPlatforms: platforms,
+    content,
+  };
+}
+function updateProjectModeUi() {
+  const existing = $("projectMode").value === "existing";
+  $("targetPageField").hidden = !existing;
+  $("frameworkLabel").textContent = existing ? "Framework / stack override" : "Framework";
+}
+function updateProvidedContentUi() {
+  $("providedContentFields").hidden = $("contentStrategy").value !== "provided";
+}
+function updateAssetMapUi() {
+  $("assetMapField").hidden = $("assetStrategy").value !== "provided";
+}
+function invalidateProjectFit() {
+  state.projectIntake = null;
+  $("buildPageButton").disabled = $("buildFidelity").value !== "prototype";
+  $("intakeReadiness").querySelector("b").textContent = "Project fit changed";
+  $("intakeReadiness").querySelector("span").textContent = "Analyze again before generating an accurate package.";
+  $("intakeReadiness").querySelector("i").style.width = "0%";
+}
+function safeProjectFile(file) {
+  const path = file.webkitRelativePath || file.name;
+  const name = file.name.toLowerCase();
+  if (/^\.env($|\.)|secret|credential|private[-_.]?key|\.pem$|\.key$|id_rsa|id_ed25519/i.test(name)) return false;
+  const extension = name.includes(".") ? name.split(".").pop() : "";
+  return PROJECT_IMPORTANT_NAMES.has(name) || PROJECT_TEXT_EXTENSIONS.has(extension);
+}
+async function readProjectFiles(fileList) {
+  const files = [...fileList].filter(safeProjectFile).slice(0, 160);
+  const current = new Map(state.projectFiles.map(file => [file.path, file]));
+  let total = [...current.values()].reduce((sum,file)=>sum + new Blob([file.content]).size, 0);
+  let skipped = 0;
+  for (const file of files) {
+    const path = file.webkitRelativePath || file.name;
+    if (current.has(path)) continue;
+    const lockfile = /^(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|bun\.lockb)$/i.test(file.name);
+    if (!lockfile && file.size > 600000) { skipped++; continue; }
+    const content = lockfile && file.size > 600000 ? "" : await file.text();
+    const size = new Blob([content]).size;
+    if (total + size > 2500000) { skipped++; continue; }
+    total += size;
+    current.set(path, { path, content });
+  }
+  state.projectFiles = [...current.values()];
+  invalidateProjectFit();
+  const summary = `${state.projectFiles.length} relevant file(s) · ${Math.round(total/1024)} KB${skipped ? ` · ${skipped} skipped by size/safety limit` : ""}`;
+  $("projectFolderStatus").textContent = summary;
+  $("projectFilesStatus").textContent = summary;
+}
+function renderProjectIntake(data) {
+  state.projectIntake = data;
+  const readiness = $("intakeReadiness");
+  readiness.querySelector("b").textContent = data.exactReady
+    ? `Exact project fit ready · ${data.readinessPercent}%`
+    : data.ready
+      ? `Project fit complete · exact build still blocked`
+      : `Project fit ${data.readinessPercent}%`;
+  readiness.querySelector("span").textContent = data.exactReady
+    ? `${data.effectiveFramework} · ${data.packageManager} · ${data.fileCount} analyzed files`
+    : data.ready
+      ? (data.exactBlockers || []).join(" ")
+      : `${data.missing.length} required item(s) still missing`;
+  readiness.querySelector("i").style.width = `${data.readinessPercent}%`;
+  readiness.classList.toggle("ready", data.exactReady);
+
+  const requirements = (data.requirements || []).map(item =>
+    `<div class="rdRequirement ${item.status}"><span>${item.status === "complete" ? "✓" : item.status === "recommended" ? "○" : "!"}</span><div><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.why)}</small></div></div>`
+  ).join("");
+  const recommendations = [...(data.exactBlockers || []), ...(data.recommendations || [])].map(x => `<li>${escapeHtml(x)}</li>`).join("");
+  $("intakeDetails").innerHTML = `
+    <div class="rdDetectedStack">
+      <span><b>Framework</b>${escapeHtml(data.effectiveFramework)}</span>
+      <span><b>Package manager</b>${escapeHtml(data.packageManager)}</span>
+      <span><b>Language</b>${escapeHtml(data.language)}</span>
+      <span><b>Styling</b>${escapeHtml((data.styling || []).join(", ") || "Not detected")}</span>
+    </div>
+    <div class="rdRequirementGrid">${requirements}</div>
+    ${recommendations ? `<div class="rdRecommendations"><b>For higher project fit</b><ul>${recommendations}</ul></div>` : ""}
+  `;
+  $("intakeDetails").hidden = false;
+  const prototype = $("buildFidelity").value === "prototype";
+  $("buildPageButton").disabled = !data.exactReady && !prototype;
+  $("buildPageButton").textContent = prototype ? "Build Prototype" : (data.exactReady ? "Build Exact Project" : "Resolve Exact Build Requirements");
+  const output = $("buildOutput");
+  output.innerHTML = `<option value="auto">${escapeHtml(data.effectiveFramework)} · auto-match project</option>`;
+}
+async function analyzeProjectFit() {
+  if (!state.evidenceJson) {
+    notice("Generate DESIGN.md first, then analyze your project.");
+    return null;
+  }
+  busy($("analyzeProjectButton"), true, "Analyzing project…");
+  notice("");
+  try {
+    const data = await api("/api/reference-design/project-intake", {
+      method: "POST",
+      body: JSON.stringify({
+        evidenceJson: state.evidenceJson,
+        files: state.projectFiles,
+        answers: projectAnswers(),
+      }),
+    });
+    renderProjectIntake(data);
+    return data;
+  } catch (error) {
+    notice(error.message);
+    return null;
+  } finally {
+    busy($("analyzeProjectButton"), false);
+  }
 }
 
 function scopeMode() {
@@ -294,6 +434,7 @@ function resetResult() {
   state.markdown = "";
   state.evidenceJson = "";
   state.build = null;
+  state.projectIntake = null;
   $("resultStage").hidden = true;
   $("buildStage").hidden = true;
 }
@@ -470,11 +611,18 @@ function renderBuildResult(data) {
   state.build = data;
   $("buildReferenceImage").src = state.inspection?.screenshot || "";
   $("buildFrame").srcdoc = data.previewHtml;
-  $("buildSummary").textContent = `${data.output.toUpperCase()} · ${data.summary.regions} compiled regions · ${data.summary.projectFiles} project files`;
+  const framework = data.summary.framework || data.output?.toUpperCase() || "Generated";
+  const measured = data.summary.measuredLayers ?? data.summary.regions;
+  $("buildSummary").textContent = `${framework} · ${measured} measured layer(s) · ${data.summary.projectFiles} project files`;
   $("projectName").textContent = data.filename;
   $("projectFiles").textContent = data.files.map(file => file.path).join(" · ");
 
-  const facts = [
+  const facts = data.schema === "kk-project-aware-design-build/v1" ? [
+    [`${data.summary.projectReadiness}%`, "Project fit"],
+    [data.summary.measuredLayers, "Measured layers"],
+    [`${data.summary.responsiveMatchPercent}%`, "Responsive evidence"],
+    [data.summary.projectFiles, "Project files"],
+  ] : [
     [data.summary.regions, "Compiled regions"],
     [`${data.summary.evidenceConfidence ?? "—"}%`, "Evidence confidence"],
     [data.summary.unknownCount, "Unresolved fields"],
@@ -495,27 +643,52 @@ $("buildPageButton").addEventListener("click", async () => {
     notice("Generate DESIGN.md first, then build the page.");
     return;
   }
+  const prototype = $("buildFidelity").value === "prototype";
+  if (!prototype && !state.projectIntake?.exactReady) {
+    const analyzed = await analyzeProjectFit();
+    if (!analyzed?.exactReady) {
+      notice("Resolve the required Project Fit and exact-build items before generating an accurate project package.");
+      return;
+    }
+  }
   notice("");
-  busy($("buildPageButton"), true, "Compiling page…");
+  busy($("buildPageButton"), true, prototype ? "Building prototype…" : "Reconstructing project…");
   try {
     const data = await api("/api/reference-design/build", {
       method: "POST",
       body: JSON.stringify({
         evidenceJson: state.evidenceJson,
         markdown: state.markdown,
-        options: {
-          output: $("buildOutput").value,
-          contentMode: $("buildContent").value,
-          fidelity: $("buildFidelity").value,
+        options: { allowPrototype: prototype },
+        project: {
+          enabled: true,
+          files: state.projectFiles,
+          answers: projectAnswers(),
         },
       }),
     });
+    if (data.intake) renderProjectIntake(data.intake);
     renderBuildResult(data);
   } catch (error) {
     notice(error.message);
   } finally {
     busy($("buildPageButton"), false);
   }
+});
+
+$("projectMode").addEventListener("change", () => { updateProjectModeUi(); invalidateProjectFit(); });
+$("contentStrategy").addEventListener("change", () => { updateProvidedContentUi(); invalidateProjectFit(); });
+$("assetStrategy").addEventListener("change", () => { updateAssetMapUi(); invalidateProjectFit(); });
+for (const id of ["projectNameInput","targetPageInput","frameworkPreference","packageManagerPreference","assetMapInput","projectNotes","platformWindows","platformMacos","contentHeadline","contentPrimaryAction","contentBody"]) {
+  $(id)?.addEventListener("change", invalidateProjectFit);
+}
+$("projectFolderInput").addEventListener("change", event => readProjectFiles(event.target.files));
+$("projectFilesInput").addEventListener("change", event => readProjectFiles(event.target.files));
+$("analyzeProjectButton").addEventListener("click", analyzeProjectFit);
+$("buildFidelity").addEventListener("change", () => {
+  const prototype = $("buildFidelity").value === "prototype";
+  $("buildPageButton").disabled = !prototype && !state.projectIntake?.exactReady;
+  $("buildPageButton").textContent = prototype ? "Build Prototype" : (state.projectIntake?.exactReady ? "Build Exact Project" : "Resolve Exact Build Requirements");
 });
 
 document.querySelectorAll("[data-build-view]").forEach(button =>
@@ -565,13 +738,33 @@ $("newButton").addEventListener("click", () => {
   state.markdown = "";
   state.evidenceJson = "";
   state.build = null;
+  state.projectFiles = [];
+  state.projectIntake = null;
   $("selectionStage").hidden = true;
   $("resultStage").hidden = true;
   $("buildStage").hidden = true;
   clearAuthSecrets();
+  $("projectMode").value = "existing";
+  $("projectNameInput").value = "";
+  $("targetPageInput").value = "";
+  $("frameworkPreference").value = "";
+  $("packageManagerPreference").value = "";
+  $("contentStrategy").value = "";
+  $("assetStrategy").value = "";
+  $("assetMapInput").value = "";
+  $("projectNotes").value = "";
+  $("projectFolderInput").value = "";
+  $("projectFilesInput").value = "";
+  $("intakeDetails").hidden = true;
+  updateProjectModeUi();
+  updateProvidedContentUi();
+  updateAssetMapUi();
   $("referenceUrl").focus();
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
 updateAuthUi();
+updateProjectModeUi();
+updateProvidedContentUi();
+updateAssetMapUi();
 checkProvider();
