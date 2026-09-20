@@ -118,7 +118,7 @@ async function executionCapability(s){
   };
 }
 
-app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.9.4",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true,sourceAwareMigration:true,noCodeDesignCompiler:true,authenticatedReferenceCapture:true,projectAwareDesignBuilder:true,multiSourceProjectIntelligence:true,visualCertification:true,urlSourceMapping:true,referenceIntentGuard:true,compressedBuildTransport:true,largeBuildOverflow:r2TransportStatus().ready?"cloudflare-r2":"not-configured"}));
+app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.9.5",compressedReferenceEvidence:true,platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true,sourceAwareMigration:true,noCodeDesignCompiler:true,authenticatedReferenceCapture:true,projectAwareDesignBuilder:true,multiSourceProjectIntelligence:true,visualCertification:true,urlSourceMapping:true,referenceIntentGuard:true,compressedBuildTransport:true,largeBuildOverflow:r2TransportStatus().ready?"cloudflare-r2":"not-configured"}));
 app.get("/api/github/status",async(req,res)=>res.json(await githubStatus()));
 app.post("/api/github/auth/start",async(req,res)=>{
   try{
