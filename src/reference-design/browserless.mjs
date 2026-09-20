@@ -623,7 +623,38 @@ const snapshotScript = ({ selectors, maxElements }) => {
     const interactive = el.matches("a,button,input,select,textarea,summary,[role='button'],[role='link'],[role='tab'],[role='menuitem'],[tabindex]");
     const semanticallyUseful = interactive || /^h[1-6]$/.test(el.tagName.toLowerCase()) || ["header","nav","main","aside","footer","section","form","dialog","img","svg","video","p"].includes(el.tagName.toLowerCase()) || s.position === "fixed" || s.position === "sticky" || s.animationName !== "none" || parseFloat(s.transitionDuration) > 0;
     if (!semanticallyUseful && elements.length > 220) continue;
-    elements.push({ selector, tag: el.tagName.toLowerCase(), role: role(el), className: typeof el.className === "string" ? el.className.slice(0,220) : "", label: label(el), text: (el.textContent || "").replace(/\s+/g," ").trim().slice(0,320), interactive, rect: r, style: s, attrs: { href: el.getAttribute("href"), type: el.getAttribute("type"), ariaExpanded: el.getAttribute("aria-expanded"), ariaSelected: el.getAttribute("aria-selected"), ariaChecked: el.getAttribute("aria-checked"), ariaDisabled: el.getAttribute("aria-disabled") }, pseudoBefore: pseudo(el,"::before"), pseudoAfter: pseudo(el,"::after") });
+    const ancestors=[]; let parent=el.parentElement; let depth=0;
+    while(parent && depth<8){ const q=selectorFor(parent); if(q)ancestors.push(q); parent=parent.parentElement; depth++; }
+    const parentSelector=selectorFor(el.parentElement);
+    const childIndex=el.parentElement ? [...el.parentElement.children].indexOf(el) : 0;
+    elements.push({
+      selector,
+      parentSelector,
+      ancestorSelectors:ancestors,
+      childIndex,
+      depth:ancestors.length,
+      tag: el.tagName.toLowerCase(),
+      role: role(el),
+      className: typeof el.className === "string" ? el.className.slice(0,220) : "",
+      label: label(el),
+      text: (el.textContent || "").replace(/\s+/g," ").trim().slice(0,420),
+      interactive,
+      rect: r,
+      style: s,
+      attrs: {
+        href: el.getAttribute("href"),
+        src: compactCssValue(el.currentSrc || el.getAttribute("src") || ""),
+        alt: el.getAttribute("alt"),
+        placeholder: el.getAttribute("placeholder"),
+        type: el.getAttribute("type"),
+        ariaExpanded: el.getAttribute("aria-expanded"),
+        ariaSelected: el.getAttribute("aria-selected"),
+        ariaChecked: el.getAttribute("aria-checked"),
+        ariaDisabled: el.getAttribute("aria-disabled")
+      },
+      pseudoBefore: pseudo(el,"::before"),
+      pseudoAfter: pseudo(el,"::after")
+    });
   }
   return {
     runtimeViewport: { width: innerWidth, height: innerHeight, devicePixelRatio },
