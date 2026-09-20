@@ -554,6 +554,61 @@ const candidateScript = () => {
     return el.children.length >= 2 && (shadowed || (rounded && painted) || (bordered && painted));
   }
 
+  function detectReferenceIntent() {
+    const pathname=location.pathname.toLowerCase();
+    const pathSignal=/(^|\/)(tags?|search|discover|explore|gallery|collections?|templates?|inspiration)(\/|$)/i.test(pathname);
+    const cardSelector="article,[class*='shot' i],[class*='card' i],[class*='tile' i],[class*='gallery' i],[class*='grid-item' i],[class*='result' i]";
+    const visible=el=>{
+      const s=getComputedStyle(el),r=el.getBoundingClientRect();
+      return s.display!=="none"&&s.visibility!=="hidden"&&Number(s.opacity||1)>0.001&&r.width>4&&r.height>4;
+    };
+    const items=[];
+    const seenHref=new Set();
+    for(const a of document.querySelectorAll("a[href]")){
+      if(items.length>=80)break;
+      if(!visible(a))continue;
+      let parsed;
+      try{parsed=new URL(a.href,location.href)}catch{continue}
+      if(!/^https?:$/.test(parsed.protocol))continue;
+      if(parsed.href===location.href || seenHref.has(parsed.href))continue;
+      const text=clean(a.getAttribute("aria-label")||a.getAttribute("title")||a.textContent,160);
+      const card=a.closest(cardSelector);
+      const img=a.querySelector("img") || card?.querySelector("img");
+      const sameOrigin=parsed.origin===location.origin;
+      let score=0;
+      if(card)score+=24;
+      if(img)score+=20;
+      if(/^view\s+/i.test(text))score+=18;
+      if(/\/(shots?|designs?|projects?|templates?)\//i.test(parsed.pathname))score+=35;
+      if(sameOrigin)score+=10;
+      if(text.length>=4)score+=8;
+      if(score<28)continue;
+      seenHref.add(parsed.href);
+      items.push({
+        label:(text||clean(img?.alt,160)||parsed.pathname.split("/").filter(Boolean).pop()||"Design item").replace(/^View\s+/i,"").slice(0,160),
+        url:parsed.href,
+        image:img ? String(img.currentSrc||img.src||"").slice(0,1000) : "",
+        score,
+      });
+    }
+    items.sort((a,b)=>b.score-a.score);
+    const top=items.slice(0,16);
+    const repeatedCardCount=[...document.querySelectorAll(cardSelector)].filter(visible).length;
+    const collection=(pathSignal && top.length>=3) || top.length>=8 || repeatedCardCount>=10;
+    const reasons=[];
+    if(pathSignal)reasons.push("URL path looks like a collection, search, discovery, gallery, or tag page.");
+    if(repeatedCardCount>=6)reasons.push(`${repeatedCardCount} repeated card/tile surfaces were detected.`);
+    if(top.length>=3)reasons.push(`${top.length} likely design-item links were detected.`);
+    return {
+      kind:collection?"collection":"single-page",
+      confidence:collection ? (pathSignal && top.length>=6 ? "high" : "medium") : "medium",
+      requiresChoice:collection,
+      reasons,
+      itemCount:top.length,
+      items:top,
+    };
+  }
+
   const explicitSelector = [
     "header","nav","main","aside","footer","section","form","dialog",
     "h1","h2","h3","button","input","textarea","select","picture","img","video","svg",
@@ -633,6 +688,7 @@ const candidateScript = () => {
       width: Math.max(document.documentElement.scrollWidth, innerWidth),
       height: Math.max(document.documentElement.scrollHeight, innerHeight)
     },
+    intent:detectReferenceIntent(),
     rows,
   };
 };
@@ -675,6 +731,7 @@ export async function inspectReferenceDesign({ url, auth = {} }) {
       candidates,
       candidateCount: candidates.length,
       facets: { familyCounts, kindCounts },
+      intent: info.intent || {kind:"single-page",confidence:"low",requiresChoice:false,reasons:[],itemCount:0,items:[]},
       authentication: authSummary,
     };
     if (containsReferenceAuthSecret(result, normalizedAuth)) throw new Error("Authentication secret safety check failed.");
