@@ -348,6 +348,64 @@ export async function captureReferencePreview({ url, viewport = "desktop", auth 
   }
 }
 
+export async function inspectProjectWebsite({ url, auth = {} }) {
+  const safeUrl = await assertPublicReferenceUrl(url);
+  const normalizedAuth = normalizeReferenceAuth(auth, safeUrl);
+  const authSummary = referenceAuthSummary(normalizedAuth);
+  const browser = await connectBrowser();
+  try {
+    const page = await pageForBrowser(browser, normalizedAuth, safeUrl);
+    await setExactViewport(page, VIEWPORTS[0]);
+    await establishReferenceSession(page, safeUrl, normalizedAuth);
+    await setExactViewport(page, VIEWPORTS[0]);
+    const evidence = await page.evaluate(() => {
+      const clean=(v,n=300)=>String(v||"").replace(/\s+/g," ").trim().slice(0,n);
+      const visible=el=>{
+        const s=getComputedStyle(el),r=el.getBoundingClientRect();
+        return s.display!=="none"&&s.visibility!=="hidden"&&Number(s.opacity)>0.001&&r.width>1&&r.height>1;
+      };
+      const texts=(selector,limit=100)=>[...document.querySelectorAll(selector)].filter(visible).map(el=>clean(el.innerText||el.textContent)).filter(Boolean).slice(0,limit);
+      const navItems=[...document.querySelectorAll("header a,nav a,[role='navigation'] a")].filter(visible).map(el=>clean(el.textContent,100)).filter(Boolean);
+      const buttons=[...document.querySelectorAll("button,[role='button'],input[type='submit'],input[type='button']")].filter(visible).map(el=>clean(el.innerText||el.value||el.getAttribute("aria-label"),120)).filter(Boolean);
+      const images=[...document.images].filter(visible).slice(0,160).map(img=>{
+        const r=img.getBoundingClientRect();
+        return{src:String(img.currentSrc||img.src||"").startsWith("data:")?"data:[inline-asset-omitted]":String(img.currentSrc||img.src||""),alt:clean(img.alt,180),naturalWidth:img.naturalWidth,naturalHeight:img.naturalHeight,width:r.width,height:r.height};
+      });
+      const links=[...document.querySelectorAll("a[href]")].filter(visible).slice(0,220).map(a=>({text:clean(a.textContent,120),href:a.href}));
+      const inputs=[...document.querySelectorAll("input,textarea,select")].filter(visible).slice(0,120).map(el=>({tag:el.tagName.toLowerCase(),type:el.getAttribute("type"),name:el.getAttribute("name"),placeholder:clean(el.getAttribute("placeholder"),160),ariaLabel:clean(el.getAttribute("aria-label"),160)}));
+      const root=getComputedStyle(document.documentElement),body=getComputedStyle(document.body);
+      const cssVars={};
+      for(let i=0;i<root.length;i++){const k=root[i];if(k.startsWith("--")&&Object.keys(cssVars).length<240)cssVars[k]=root.getPropertyValue(k).trim();}
+      return{
+        title:document.title,
+        description:document.querySelector('meta[name="description"]')?.content||"",
+        lang:document.documentElement.lang||"",
+        url:location.href,
+        headings:texts("h1,h2,h3,h4,h5,h6",120),
+        paragraphs:texts("main p,article p,section p",120),
+        navItems:[...new Set(navItems)].slice(0,60),
+        buttons:[...new Set(buttons)].slice(0,80),
+        links,
+        inputs,
+        images,
+        tokens:{rootBackground:root.backgroundColor,bodyBackground:body.backgroundColor,color:body.color,fontFamily:body.fontFamily,fontSize:body.fontSize,cssVars},
+        signals:{next:Boolean(document.querySelector("#__NEXT_DATA__")||document.querySelector('script[src*="_next"]')),react:Boolean(document.querySelector("[data-reactroot]")||document.querySelector('script[src*="react"]')),forms:document.forms.length},
+      };
+    });
+    const shot=await page.screenshot({type:"jpeg",quality:58,clip:{x:0,y:0,width:1440,height:900}});
+    const result={
+      schema:"kk-project-website-scan/v1",
+      ...evidence,
+      screenshot:`data:image/jpeg;base64,${shot.toString("base64")}`,
+      authentication:authSummary,
+    };
+    if (containsReferenceAuthSecret(result, normalizedAuth)) throw new Error("Authentication secret safety check failed.");
+    return result;
+  } finally {
+    await browser.close().catch(()=>{});
+  }
+}
+
 const candidateScript = () => {
   function selectorFor(el) {
     if (!el || el.nodeType !== 1) return null;
