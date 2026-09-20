@@ -381,6 +381,25 @@ function outputFiles(model,css,output,html){
   return [{path:"index.html",content:html}];
 }
 
+function portableProjectAssets(projectContext, profile){
+  if(profile?.mode!=="new") return [];
+  const rows=arr(projectContext?.files);
+  const out=[];
+  const seen=new Set();
+  for(const file of rows){
+    if(!file?.base64 || !/\.(png|jpe?g|webp|avif|gif|svg|ico|mp4|webm|woff2?|ttf|otf)$/i.test(file?.name||file?.path||"")) continue;
+    const normalized=String(file.path||file.name||"").replaceAll("\\","/");
+    const base=normalized.split("/").pop();
+    let target=/^public\//i.test(normalized) ? normalized : "public/assets/"+base;
+    target=target.replace(/^\/+|\.\.\//g,"");
+    if(seen.has(target)) continue;
+    seen.add(target);
+    out.push({path:target,content:String(file.base64),encoding:"base64"});
+    if(out.length>=30) break;
+  }
+  return out;
+}
+
 function stylePathFor(profile){
   const target=String(profile?.targetPath||"").replaceAll("\\","/");
   const dir=target.includes("/") ? target.slice(0,target.lastIndexOf("/")+1) : "";
@@ -417,7 +436,7 @@ function zipStore(files){
   let offset=0;
   for(const file of files){
     const name=Buffer.from(file.path.replaceAll("\\","/"));
-    const data=Buffer.from(file.content,"utf8");
+    const data=file.encoding==="base64" ? Buffer.from(file.content,"base64") : Buffer.from(file.content,"utf8");
     const crc=crc32(data);
     const local=Buffer.alloc(30+name.length);
     local.writeUInt32LE(0x04034b50,0);local.writeUInt16LE(20,4);local.writeUInt16LE(0,6);local.writeUInt16LE(0,8);
@@ -459,6 +478,7 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
       ]
     : [
         ...patchFiles,
+        ...portableProjectAssets(projectContext,projectProfile),
         ...newProjectSupportFiles(projectProfile),
       ];
   files.push({path:"DESIGN-BUILD.json",content:JSON.stringify(model,null,2)});
