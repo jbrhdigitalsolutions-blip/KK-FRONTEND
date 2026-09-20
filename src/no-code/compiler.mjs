@@ -133,9 +133,41 @@ function buildRegions(evidence,contentMode){
     pruned.push({id:"region-1",selector:"body",kind:"Hero",family:"Structure",label:"Primary content",rect:{width:1440,height:560},style:{}});
   }
 
+  const containedChildren = region => {
+    const p=region.rect||{};
+    if(!num(p.width)||!num(p.height)) return [];
+    const out=[];
+    const childSeen=new Set();
+    for(const node of all){
+      if(!node?.selector || node.selector===region.selector || childSeen.has(node.selector)) continue;
+      const r=node.rect||{};
+      if(!num(r.width)||!num(r.height)) continue;
+      const cx=(r.x||0)+(r.width||0)/2, cy=(r.y||0)+(r.height||0)/2;
+      const inside=cx>=(p.x||0) && cx<=((p.x||0)+(p.width||0)) && cy>=(p.y||0) && cy<=((p.y||0)+(p.height||0));
+      if(!inside) continue;
+      const kind=semanticKind(node);
+      if(["Component","Interactive"].includes(kind)) continue;
+      childSeen.add(node.selector);
+      out.push({
+        selector:node.selector,
+        kind,
+        family:candidateFamily(kind),
+        label:cleanLabel(node.label)||kind,
+        rect:node.rect||null,
+        style:node.style||{},
+      });
+      if(out.length>=12) break;
+    }
+    return out;
+  };
+
   return pruned.map((region,index)=>({
     ...region,
     displayLabel: contentMode==="reference-labels" ? region.label : placeholderFor(region.kind,index),
+    children:containedChildren(region).map((child,childIndex)=>({
+      ...child,
+      displayLabel:contentMode==="reference-labels" ? child.label : placeholderFor(child.kind,childIndex),
+    })),
   }));
 }
 function placeholderFor(kind,index){
@@ -188,32 +220,70 @@ function layoutModel(evidence,options){
   };
 }
 
+function childMarkup(children=[]){
+  const textNode=children.find(x=>x.kind==="Typography");
+  const buttons=children.filter(x=>x.kind==="Button").slice(0,2);
+  const hasInput=children.some(x=>["Input","Search","Form"].includes(x.kind));
+  const media=children.filter(x=>["Image","Video","Gallery","Carousel"].includes(x.kind)).slice(0,3);
+  return {
+    heading:textNode ? esc(textNode.displayLabel) : null,
+    actions:buttons.map((x,i)=>`<button class="${i?"secondary":""}" type="button">${esc(x.displayLabel)}</button>`).join(""),
+    input:hasInput ? '<div class="kk-input"><span>Input</span><button type="button">Submit</button></div>' : "",
+    media:media.length ? `<div class="kk-media-grid">${media.map(x=>`<div class="kk-media-tile"><span>${esc(x.displayLabel)}</span></div>`).join("")}</div>` : "",
+  };
+}
 function regionMarkup(region,index){
+  const id=`section-${index+1}`;
   const label=esc(region.displayLabel);
   const kind=region.kind;
+  const child=childMarkup(region.children);
   if(kind==="Header" || kind==="Navigation"){
-    return `<header class="kk-region kk-header" data-kind="${esc(kind)}"><a class="kk-logo" href="#">Brand</a><nav><a href="#section-1">Explore</a><a href="#section-2">Features</a><button type="button">Get started</button></nav></header>`;
+    return `<header id="${id}" class="kk-region kk-header" data-kind="${esc(kind)}"><a class="kk-logo" href="#">Brand</a><nav><a href="#section-1">Explore</a><a href="#section-2">Features</a><button type="button">Get started</button></nav></header>`;
   }
   if(kind==="Footer"){
-    return `<footer class="kk-region kk-footer" data-kind="Footer"><strong>Brand</strong><span>Built from verified reference evidence.</span></footer>`;
+    return `<footer id="${id}" class="kk-region kk-footer" data-kind="Footer"><strong>Brand</strong><span>${label}</span></footer>`;
   }
   if(kind==="Hero"){
-    return `<section id="section-${index+1}" class="kk-region kk-hero" data-kind="Hero"><div class="kk-copy"><span class="kk-eyebrow">VERIFIED DESIGN</span><h1>${label}</h1><p>Replace this placeholder with your own content. Layout, typography and responsive anchors are compiled from the selected reference evidence.</p><div class="kk-actions"><button type="button">Primary action</button><button class="secondary" type="button">Secondary</button></div></div><div class="kk-media"><span>Media</span></div></section>`;
+    return `<section id="${id}" class="kk-region kk-hero" data-kind="Hero"><div class="kk-copy"><span class="kk-eyebrow">VERIFIED DESIGN</span><h1>${child.heading||label}</h1><p>Replace this placeholder with your own content. Layout, typography and responsive anchors are compiled from the selected reference evidence.</p><div class="kk-actions">${child.actions||'<button type="button">Primary action</button><button class="secondary" type="button">Secondary</button>'}</div>${child.input}</div>${child.media||'<div class="kk-media"><span>Media</span></div>'}</section>`;
   }
   if(kind==="Card" || kind==="Grid" || kind==="List"){
-    return `<section id="section-${index+1}" class="kk-region kk-section" data-kind="${esc(kind)}"><div class="kk-section-head"><span>SECTION ${index+1}</span><h2>${label}</h2></div><div class="kk-grid"><article><b>01</b><h3>Component</h3><p>Evidence-led content placeholder.</p></article><article><b>02</b><h3>Responsive</h3><p>Adapts across verified viewport anchors.</p></article><article><b>03</b><h3>Reusable</h3><p>Generated without a coding agent.</p></article></div></section>`;
+    return `<section id="${id}" class="kk-region kk-section" data-kind="${esc(kind)}"><div class="kk-section-head"><span>SECTION ${index+1}</span><h2>${child.heading||label}</h2></div>${child.media}<div class="kk-grid"><article><b>01</b><h3>Component</h3><p>Evidence-led content placeholder.</p></article><article><b>02</b><h3>Responsive</h3><p>Adapts across verified viewport anchors.</p></article><article><b>03</b><h3>Reusable</h3><p>Generated without a coding agent.</p></article></div>${child.input}<div class="kk-actions">${child.actions}</div></section>`;
   }
   if(kind==="Sidebar"){
-    return `<aside class="kk-region kk-sidebar" data-kind="Sidebar"><strong>${label}</strong><a href="#">Overview</a><a href="#">Library</a><a href="#">Settings</a></aside>`;
+    return `<aside id="${id}" class="kk-region kk-sidebar" data-kind="Sidebar"><strong>${label}</strong><a href="#">Overview</a><a href="#">Library</a><a href="#">Settings</a></aside>`;
   }
-  return `<section id="section-${index+1}" class="kk-region kk-section" data-kind="${esc(kind)}"><div class="kk-section-head"><span>${esc(kind.toUpperCase())}</span><h2>${label}</h2></div><p class="kk-lede">This region was generated from measured reference geometry and design tokens. Replace the placeholder content without changing the compiled visual system.</p></section>`;
+  if(kind==="Button"){
+    return `<section id="${id}" class="kk-region kk-section kk-control-region" data-kind="Button"><button type="button">${label}</button></section>`;
+  }
+  if(kind==="Input" || kind==="Search" || kind==="Form"){
+    return `<section id="${id}" class="kk-region kk-section kk-control-region" data-kind="${esc(kind)}"><div class="kk-input"><span>${label}</span><button type="button">Submit</button></div></section>`;
+  }
+  if(["Image","Video","Gallery","Carousel"].includes(kind)){
+    return `<section id="${id}" class="kk-region kk-section" data-kind="${esc(kind)}"><div class="kk-media-grid"><div class="kk-media-tile"><span>${label}</span></div></div></section>`;
+  }
+  return `<section id="${id}" class="kk-region kk-section" data-kind="${esc(kind)}"><div class="kk-section-head"><span>${esc(kind.toUpperCase())}</span><h2>${child.heading||label}</h2></div><p class="kk-lede">This region was generated from measured reference geometry and design tokens. Replace the placeholder content without changing the compiled visual system.</p>${child.media}${child.input}<div class="kk-actions">${child.actions}</div></section>`;
 }
 function generatedCss(model,options){
   const t=model.tokens;
   const regionRules=model.regions.map((r,i)=>{
     const h=regionHeight(r);
     const mh=mobileHeight(r);
-    return `#section-${i+1}{${h?`min-height:${h}px;`:""}} @media(max-width:820px){#section-${i+1}{${mh?`min-height:${mh}px;`:""}}}`;
+    const measuredWidth=num(r.rect?.width);
+    const bg=!isTransparent(r.style?.backgroundColor) ? cssEsc(r.style.backgroundColor) : null;
+    const color=r.style?.color ? cssEsc(r.style.color) : null;
+    const radius=px(r.style?.borderRadius);
+    const padding=["paddingTop","paddingRight","paddingBottom","paddingLeft"].map(k=>px(r.style?.[k]));
+    const hasPadding=padding.some(v=>v!=null && v>0);
+    const desktop=[
+      h?`min-height:${h}px`:"",
+      measuredWidth && measuredWidth<1380?`max-width:${Math.round(measuredWidth)}px`:"",
+      bg?`background:${bg}`:"",
+      color?`color:${color}`:"",
+      radius!=null && radius>0 && radius<100?`border-radius:${radius}px`:"",
+      hasPadding?`padding:${padding.map(v=>(v??0)+"px").join(" ")}`:"",
+    ].filter(Boolean).join(";");
+    const mobile=[mh?`min-height:${mh}px`:"","max-width:100%"].filter(Boolean).join(";");
+    return `#section-${i+1}{${desktop}} @media(max-width:820px){#section-${i+1}{${mobile}}}`;
   }).join("\n");
   const fidelity=options.fidelity;
   const density=fidelity==="inspired" ? ".88" : fidelity==="balanced" ? ".94" : "1";
@@ -245,6 +315,7 @@ h1{font-size:clamp(48px,7vw,92px);line-height:.98;letter-spacing:-.045em;margin:
 h2{font-size:clamp(34px,5vw,64px);line-height:1.02;letter-spacing:-.035em;margin:0;font-weight:500}
 h3{margin:10px 0 4px;font-size:20px}.kk-copy p,.kk-lede{max-width:680px;color:var(--kk-muted);font-size:clamp(16px,1.5vw,20px)}
 .kk-actions{display:flex;gap:10px;margin-top:28px}.kk-media{aspect-ratio:4/5;border-radius:calc(var(--kk-radius)*1.5);display:grid;place-items:center;background:linear-gradient(145deg,color-mix(in srgb,var(--kk-accent) 30%,var(--kk-surface)),var(--kk-surface));border:1px solid color-mix(in srgb,var(--kk-text) 12%,transparent);color:var(--kk-muted)}
+.kk-media-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:var(--kk-gap);margin-top:28px}.kk-media-tile{min-height:180px;display:grid;place-items:center;border-radius:var(--kk-radius);background:linear-gradient(145deg,color-mix(in srgb,var(--kk-accent) 18%,var(--kk-surface)),var(--kk-surface));border:1px solid color-mix(in srgb,var(--kk-text) 10%,transparent);color:var(--kk-muted)}.kk-input{max-width:720px;margin-top:22px;padding:8px 8px 8px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid color-mix(in srgb,var(--kk-text) 14%,transparent);border-radius:var(--kk-radius);background:var(--kk-surface);color:var(--kk-muted)}.kk-control-region{display:flex;align-items:center;justify-content:center}
 .kk-section{padding:clamp(56px,8vw,120px) clamp(18px,5vw,80px);border-top:1px solid color-mix(in srgb,var(--kk-text) 8%,transparent)}
 .kk-section-head{max-width:900px}.kk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--kk-gap);margin-top:42px}
 .kk-grid article{min-height:180px;padding:calc(24px*var(--kk-density));border-radius:var(--kk-radius);background:var(--kk-surface);border:1px solid color-mix(in srgb,var(--kk-text) 9%,transparent)}
