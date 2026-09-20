@@ -287,9 +287,15 @@
               <input id="projectFilesInput" type="file" multiple accept=".md,.mdx,.json,.js,.mjs,.cjs,.jsx,.ts,.tsx,.css,.scss,.sass,.less,.html,.vue,.svelte,.astro,.yaml,.yml,.toml,.txt"/>
               <b id="projectFilesStatus">No files selected</b>
             </label>
+            <label class="rdUploadCard">
+              <span class="rdUploadTitle">Upload design image assets</span>
+              <small>Optional for a new project. Small PNG/JPG/WebP/AVIF/GIF/SVG files can be included directly in the ZIP and live preview.</small>
+              <input id="projectAssetFilesInput" type="file" multiple accept="image/png,image/jpeg,image/webp,image/avif,image/gif,image/svg+xml"/>
+              <b id="projectAssetFilesStatus">No image assets selected</b>
+            </label>
           </div>
 
-          <div class="rdUploadSafety">Do not upload <b>.env</b>, private keys, certificates, API tokens, passwords, database dumps, or other secrets. Project analysis is text-only and size-limited.</div>
+          <div class="rdUploadSafety">Do not upload <b>.env</b>, private keys, certificates, API tokens, passwords, database dumps, or other secrets. Project source analysis is text-only and size-limited. Optional image assets are separately limited to 500 KB each / 1 MB total.</div>
 
           <label class="rdProjectNotes">
             <span>Project details / constraints <small>Optional but useful</small></span>
