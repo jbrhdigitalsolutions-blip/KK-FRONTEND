@@ -104,8 +104,13 @@ test("reference authentication normalizes supported modes without exposing secre
   },target);
   assert.equal(login.mode,"login");
   assert.equal(login.loginUrl,"https://app.example.com/login");
+  assert.equal(login.loginUrlExplicit,true);
   assert.equal(referenceAuthSummary(login).method,"form-login");
   assert.equal(JSON.stringify(referenceAuthSummary(login)).includes("super-secret"),false);
+
+  const implicitLogin=normalizeReferenceAuth({mode:"login",username:"u",password:"p"},target);
+  assert.equal(implicitLogin.loginUrlExplicit,false);
+  assert.equal(implicitLogin.loginUrl,target);
 
   const cookie=normalizeReferenceAuth({mode:"cookie",cookieHeader:"sid=abc123; theme=dark"},target);
   assert.deepEqual(parseCookieHeader(cookie.cookieHeader,target).map(x=>x.name),["sid","theme"]);
@@ -201,6 +206,8 @@ test("Design Explorer exposes filters, presets and explicit custom-selection lim
   assert.ok(browserless.includes("establishReferenceSession"));
   assert.ok(browserless.includes("performFormLogin"));
   assert.ok(browserless.includes("Authentication secret safety check failed"));
+  assert.ok(browserless.includes("assertCredentialOrigin"));
+  assert.ok(browserless.includes("credentials were not entered"));
 });
 
 test("local and Vercel static copies stay byte-identical", async () => {
