@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import { chromium } from "playwright";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { classifyCandidate, normalizeReferenceUrl, renderDesignMd } from "./design-md.mjs";
+import { buildEvidenceCompanion, classifyCandidate, normalizeReferenceUrl, renderDesignMd } from "./design-md.mjs";
 
 const VIEWPORTS = [
   { name: "desktop", width: 1440, height: 900 },
@@ -572,12 +572,17 @@ export async function generateReferenceDesignMd({ url, scope = "whole", selector
     };
     const template = await fs.readFile(TEMPLATE_FILE, "utf8");
     const markdown = renderDesignMd({ template, evidence });
+    const evidenceJson = JSON.stringify(buildEvidenceCompanion(evidence), null, 2);
+    const responseBytes = Buffer.byteLength(markdown, "utf8") + Buffer.byteLength(evidenceJson, "utf8");
+    if (responseBytes > 4_000_000) {
+      throw new Error("Generated reference evidence exceeds the safe web response budget. Select a smaller reference region and retry.");
+    }
     return {
       schema: "kk-reference-design-md/v2",
       filename: "DESIGN.md",
       markdown,
       evidenceFilename: "DESIGN-EVIDENCE.json",
-      evidenceJson: JSON.stringify(evidence, null, 2),
+      evidenceJson,
       summary: {
         url: safeUrl,
         finalUrl,
@@ -594,6 +599,7 @@ export async function generateReferenceDesignMd({ url, scope = "whole", selector
         mediaQueryCount: pageEvidence?.mediaQueries?.length || 0,
         confidence,
         confidenceReasons,
+        responseBytes,
       },
     };
   } finally {
