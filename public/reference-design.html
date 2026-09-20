@@ -14,7 +14,7 @@
       <span><b>KK-FRONTEND</b><small>Design Explorer</small></span>
     </a>
     <div class="rdTopActions">
-      <span class="rdVersion">v0.7.0</span>
+      <span class="rdVersion">v0.8.0</span>
       <a class="rdBack" href="/index.html">Main workspace</a>
     </div>
   </header>
@@ -195,13 +195,85 @@
               <p>Compile the verified design evidence into a working frontend. No coding agent, prompt, or source editing required.</p>
             </div>
           </div>
-          <span class="rdCompilerBadge">Deterministic compiler</span>
+          <span class="rdCompilerBadge">Project-aware compiler</span>
         </div>
+
+        <section class="rdProjectFit" aria-labelledby="projectFitTitle">
+          <div class="rdProjectFitHead">
+            <div>
+              <span class="rdMiniStep">A</span>
+              <div>
+                <b id="projectFitTitle">Tell us where this design must fit</b>
+                <small>Upload only the project/design files that matter. We detect the stack, dependencies, routes, styling system, assets and missing information before Accurate build is allowed.</small>
+              </div>
+            </div>
+            <div id="projectFitScore" class="rdReadinessScore" data-state="empty"><b>—</b><span>Project fit</span></div>
+          </div>
+
+          <div class="rdProjectMode" role="radiogroup" aria-label="Project type">
+            <label><input type="radio" name="projectMode" value="existing" checked/><span><b>Existing project</b><small>Generate files that fit my current codebase</small></span></label>
+            <label><input type="radio" name="projectMode" value="new"/><span><b>New project</b><small>Create a complete standalone frontend</small></span></label>
+          </div>
+
+          <div id="existingProjectUpload" class="rdProjectUpload">
+            <div class="rdUploadCopy">
+              <b>Project evidence</b>
+              <span>Recommended: <code>package.json</code>, lockfile, current <code>DESIGN.md</code>, relevant page/components, CSS/theme/tokens and asset filenames.</span>
+            </div>
+            <div class="rdUploadActions">
+              <label class="rdFileButton">Choose files<input id="projectFiles" type="file" multiple accept=".json,.md,.txt,.html,.htm,.css,.scss,.sass,.less,.js,.jsx,.mjs,.cjs,.ts,.tsx,.vue,.svelte,.yaml,.yml,.toml,.png,.jpg,.jpeg,.webp,.avif,.gif,.svg,.ico,.mp4,.webm,.woff,.woff2,.ttf,.otf"/></label>
+              <label class="rdFileButton">Choose project folder<input id="projectFolder" type="file" webkitdirectory directory multiple/></label>
+            </div>
+            <div id="projectFileSummary" class="rdFileSummary">No project files selected.</div>
+          </div>
+
+          <div class="rdProjectFields">
+            <label><span>Project name</span><input id="fitProjectName" autocomplete="off" placeholder="My product"/></label>
+            <label><span>Tech stack</span><select id="fitStack"><option value="auto">Auto detect</option><option value="next">Next.js</option><option value="react">React / Vite</option><option value="html">HTML/CSS/JS</option><option value="vue">Vue / Nuxt</option><option value="svelte">Svelte / SvelteKit</option></select></label>
+            <label><span>Target route</span><input id="fitTargetRoute" autocomplete="off" placeholder="/"/></label>
+            <label><span>Target source file <small>Optional — auto detected</small></span><input id="fitTargetPath" autocomplete="off" placeholder="app/page.tsx"/></label>
+          </div>
+
+          <details class="rdProjectContent" open>
+            <summary>Page content & assets <small>Real text is required for accurate typography and spacing</small></summary>
+            <div class="rdProjectFields rdContentFields">
+              <label><span>Brand / product</span><input id="fitBrand" autocomplete="off" placeholder="Your product"/></label>
+              <label><span>Navigation <small>Comma separated</small></span><input id="fitNav" autocomplete="off" placeholder="Product, Solutions, Pricing"/></label>
+              <label class="wide"><span>Hero headline</span><input id="fitHeroTitle" autocomplete="off" placeholder="Your real headline"/></label>
+              <label class="wide"><span>Hero supporting text</span><textarea id="fitHeroBody" placeholder="Your real supporting copy"></textarea></label>
+              <label><span>Primary CTA</span><input id="fitPrimaryCta" autocomplete="off" placeholder="Get started"/></label>
+              <label><span>Secondary CTA <small>Optional</small></span><input id="fitSecondaryCta" autocomplete="off" placeholder="Learn more"/></label>
+              <label><span>Logo project path <small>Optional</small></span><input id="fitLogoAsset" autocomplete="off" placeholder="/logo.svg"/></label>
+              <label><span>Hero asset project path <small>Optional</small></span><input id="fitHeroAsset" autocomplete="off" placeholder="/hero.webp"/></label>
+            </div>
+          </details>
+
+          <div class="rdProjectFitActions">
+            <button id="analyzeProjectButton" class="rdSecondary" type="button">Analyze Project Fit</button>
+            <span id="projectFitHint">Accurate mode stays locked until required project evidence is ready.</span>
+          </div>
+
+          <div id="projectFitResult" class="rdProjectFitResult" hidden>
+            <div class="rdDetectedGrid">
+              <div><span>Stack</span><b id="fitDetectedStack">—</b></div>
+              <div><span>Package manager</span><b id="fitDetectedPm">—</b></div>
+              <div><span>Styling</span><b id="fitDetectedStyling">—</b></div>
+              <div><span>Target</span><b id="fitDetectedTarget">—</b></div>
+            </div>
+            <div id="fitBlockers" class="rdFitBlockers"></div>
+            <div id="fitQuestions" class="rdFitQuestions"></div>
+            <div class="rdRequirements">
+              <b>Run requirements</b>
+              <span id="fitRequirements">Will appear after analysis.</span>
+            </div>
+          </div>
+        </section>
 
         <div class="rdBuildControls">
           <label>
             <span>Output</span>
             <select id="buildOutput">
+              <option value="auto">Auto — match project</option>
               <option value="html">Standalone HTML</option>
               <option value="react">React + Vite</option>
               <option value="next">Next.js</option>
@@ -228,7 +300,7 @@
         <div class="rdBuildRule">
           <span>Verified measurements are compiled directly.</span>
           <span>Unknown values stay unresolved instead of being invented.</span>
-          <span>Generated source is isolated from your existing project.</span>
+          <span>Existing projects receive a safe patch + Windows/macOS apply scripts with backups.</span>
         </div>
       </section>
 
