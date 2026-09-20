@@ -263,7 +263,7 @@ export function analyzeProjectContext(input={}){
     blockers.push("Target frontend stack is unknown.");
     questions.push(question("stack","Which frontend stack does this project use?","Required to generate compatible source files.","choice"));
   } else if(["vue","svelte"].includes(stack)) {
-    blockers.push(`${stack} project detected; v0.8 accurate compiler currently emits HTML, React, or Next.js patches.`);
+    blockers.push(`${stack} project detected; v0.9 Accurate compiler currently emits HTML, React, or Next.js patches.`);
     questions.push(question("stack","Choose a supported output or provide a React/Next target.","Current deterministic patch generator does not claim exact Vue/Svelte integration.","choice"));
   }
   if(mode==="existing" && !pkgInfo.pkg && ["react","next"].includes(stack)){
@@ -347,7 +347,11 @@ export function analyzeProjectContext(input={}){
     },
     content,
     assetMap:{heroAsset,logoAsset},
-    readiness:{score,...readiness,blockers,questions,accurateReady:blockers.length===0 && score>=85 && readiness.stack && readiness.structure && readiness.route && readiness.content},
+    readiness:{
+      score,...readiness,blockers,questions,
+      accurateReady:blockers.length===0 && readiness.stack && readiness.structure && readiness.route && readiness.content &&
+        (mode==="new" ? score>=65 : (score>=85 && readiness.sourceDepth))
+    },
     requirements:{
       node:["react","next"].includes(supportedOutput) ? "Node.js 22+" : "Modern browser",
       packageManager,
@@ -368,6 +372,7 @@ export function integrationSupportFiles(profile, patchFiles=[]){
     projectName:profile.projectName,
     detectedStack:profile.stack,
     packageManager:profile.packageManager,
+    packageRoot:profile.packageRoot||"",
     targetRoute:profile.targetRoute,
     targetPath:profile.targetPath,
     files:fileList,
@@ -392,8 +397,9 @@ foreach($Rel in $Files){
   Copy-Item -LiteralPath $Src -Destination $Dst -Force
 }
 Write-Host "Design patch applied. Backup: $BackupRoot" -ForegroundColor Green
-${profile.packageManager!=="none" ? `if(Test-Path -LiteralPath (Join-Path $ProjectRoot "package.json")){
-  Push-Location $ProjectRoot
+${profile.packageManager!=="none" ? `$PackageRoot=Join-Path $ProjectRoot ${psQuote(profile.packageRoot||".")}
+if(Test-Path -LiteralPath (Join-Path $PackageRoot "package.json")){
+  Push-Location $PackageRoot
   try { & ${profile.packageManager} install; if($LASTEXITCODE -ne 0){throw "Dependency install failed"} } finally { Pop-Location }
 }` : ""}
 `;
@@ -410,13 +416,15 @@ if [ -f "$DST" ]; then mkdir -p "$BACKUP_ROOT/$(dirname "$REL")"; cp "$DST" "$BA
 mkdir -p "$(dirname "$DST")"
 cp "$SRC" "$DST"`).join("\n")}
 echo "Design patch applied. Backup: $BACKUP_ROOT"
-${profile.packageManager!=="none" ? `if [ -f "$PROJECT_ROOT/package.json" ]; then cd "$PROJECT_ROOT"; ${profile.packageManager} install; fi` : ""}
+${profile.packageManager!=="none" ? `PACKAGE_ROOT="$PROJECT_ROOT/${profile.packageRoot||"."}"
+if [ -f "$PACKAGE_ROOT/package.json" ]; then cd "$PACKAGE_ROOT"; ${profile.packageManager} install; fi` : ""}
 `;
   const instructions=[
     "# KK-FRONTEND Project Integration",
     "",
     `Detected stack: ${profile.stack}`,
     `Package manager: ${profile.packageManager}`,
+    `Package root: ${profile.packageRoot||"."}`,
     `Target route: ${profile.targetRoute}`,
     `Primary target file: ${profile.targetPath}`,
     "",
