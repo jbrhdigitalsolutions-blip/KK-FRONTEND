@@ -330,6 +330,11 @@ a{color:inherit}
 .rdUploadCard b{font-size:8px;color:#8ba0bc;font-weight:600}
 .rdUploadSafety{margin-top:8px;padding:7px 8px;border-radius:8px;border:1px solid rgba(255,190,110,.12);background:rgba(255,190,110,.025);font-size:7px;line-height:1.45;color:#8c8174}
 .rdUploadSafety b{color:#b99b7b}
+.rdProjectNotes{display:grid;gap:5px;margin-top:8px}
+.rdProjectNotes>span{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.rdProjectNotes>span small{font-size:7px;color:var(--muted-2);text-transform:none;letter-spacing:0}
+.rdProjectNotes textarea{min-height:78px;resize:vertical;border:1px solid var(--line-strong);border-radius:9px;padding:9px 10px;background:#070a0f;color:var(--text);outline:none;font:9px/1.45 inherit}
+.rdProjectNotes textarea:focus{border-color:rgba(126,151,255,.62);box-shadow:0 0 0 3px rgba(126,151,255,.07)}
 .rdIntakeActions{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:center;margin-top:10px}
 .rdReadiness{display:grid;gap:5px}
 .rdReadiness>div:first-child{display:flex;justify-content:space-between;gap:10px;align-items:center}
