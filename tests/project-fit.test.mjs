@@ -62,7 +62,7 @@ test("project fit detects React, pnpm, design docs and public assets",()=>{
 test("project fit asks only for missing accuracy information",()=>{
   const profile=analyzeProjectContext({mode:"new",stack:"react",projectName:"New app"});
   const ids=profile.readiness.questions.map(x=>x.id);
-  assert.ok(ids.includes("brand"));
+  assert.equal(ids.includes("brand"),false,"project name is a valid brand fallback for a new project");
   assert.ok(ids.includes("heroTitle"));
   assert.ok(ids.includes("heroBody"));
   assert.ok(ids.includes("primaryCta"));
