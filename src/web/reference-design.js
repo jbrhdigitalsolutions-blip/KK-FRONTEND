@@ -18,6 +18,7 @@ const state = {
   certifications: {},
   currentDevice: "desktop",
   previewScaleMode: "fit",
+  referenceIntentChoice: null,
 };
 
 function notice(message, kind = "error") {
@@ -249,6 +250,37 @@ function updateAccurateAvailability() {
     : "Accurate mode stays locked until required project evidence is ready.";
   $("projectFitHint").dataset.ready=ready ? "true" : "false";
 }
+function renderTargetMapping(profile) {
+  const host=$("fitTargetMapping");
+  if(!host)return;
+  const resolution=profile.targetResolution||{};
+  const candidates=profile.targetCandidates||[];
+  if(profile.deliveryMode==="standalone-replacement"){
+    host.innerHTML=`<div class="rdTargetMode standalone">
+      <div><span>Website-only target</span><b>Standalone replacement package</b><small>${escapeHtml(resolution.message||"The live site is scanned, but no source repository is connected.")}</small></div>
+      <em>No source file confirmation required</em>
+    </div>`;
+    return;
+  }
+  const candidateHtml=candidates.slice(0,6).map((row,index)=>{
+    const selected=row.path===profile.targetPath;
+    return `<button type="button" class="rdTargetCandidate ${selected?"selected":""}" data-target-path="${escapeHtml(row.path)}">
+      <span>${selected?"Selected":row.recommended?"Recommended":"Candidate"}</span>
+      <b>${escapeHtml(row.path)}</b>
+      <small>${escapeHtml((row.reasons||[]).join(" · ")||row.role||"source file")}</small>
+    </button>`;
+  }).join("");
+  host.innerHTML=`<div class="rdTargetMode ${resolution.status==="resolved"?"resolved":"needs-choice"}">
+    <div><span>URL → source mapping</span><b>${resolution.status==="resolved"?"Target source resolved":"Choose the target source"}</b><small>${escapeHtml(resolution.message||"")}</small></div>
+    <em>${escapeHtml(resolution.confidence||"")}</em>
+  </div>${candidateHtml?`<div class="rdTargetCandidates">${candidateHtml}</div>`:""}`;
+  host.querySelectorAll("[data-target-path]").forEach(button=>button.addEventListener("click",async()=>{
+    $("fitTargetPath").value=button.dataset.targetPath;
+    invalidateProjectFit();
+    await analyzeProjectFit({quiet:true});
+  }));
+}
+
 function renderProjectFit(profile) {
   state.projectProfile=profile;
   const score=Number(profile.readiness?.score||0);
@@ -259,7 +291,7 @@ function renderProjectFit(profile) {
   $("fitDetectedStack").textContent=profile.stack || "Unknown";
   $("fitDetectedPm").textContent=profile.packageManager || "—";
   $("fitDetectedStyling").textContent=(profile.styling||[]).join(", ") || "—";
-  $("fitDetectedTarget").textContent=profile.targetPath || "—";
+  $("fitDetectedTarget").textContent=profile.deliveryMode==="standalone-replacement" ? "Standalone index.html" : (profile.targetPath || "—");
   if (!$("fitProjectName").value.trim() && profile.projectName) $("fitProjectName").value=profile.projectName;
   if (!$("fitTargetRoute").value.trim() && profile.targetRoute) $("fitTargetRoute").value=profile.targetRoute;
   if (!$("fitTargetPath").value.trim() && profile.targetPath) $("fitTargetPath").value=profile.targetPath;
@@ -276,6 +308,8 @@ function renderProjectFit(profile) {
     const option=[...$("fitStack").options].find(x=>x.value===profile.stack);
     if (option) option.selected=true;
   }
+
+  renderTargetMapping(profile);
 
   const blockers=profile.readiness?.blockers||[];
   $("fitBlockers").innerHTML=blockers.length
@@ -511,6 +545,8 @@ function resetResult() {
   state.markdown = "";
   state.evidenceJson = "";
   state.build = null;
+  state.referenceIntentChoice = null;
+  if($("referenceIntentPanel")) $("referenceIntentPanel").hidden=true;
   $("resultStage").hidden = true;
   $("buildStage").hidden = true;
 }
@@ -529,6 +565,7 @@ async function handleProjectFiles(files) {
   state.projectFiles=await readProjectFiles(files);
   renderProjectFileSummary();
   invalidateProjectFit();
+  if(state.projectFiles.length) await analyzeProjectFit({quiet:true});
 }
 async function scanGithubProject() {
   const url=$("githubRepoUrl").value.trim();
@@ -547,7 +584,8 @@ async function scanGithubProject() {
     $("githubRepoStatus").textContent=`${result.coverage.textFilesRead} source files · ${result.coverage.assetFilesIndexed} assets · ${result.repository.branch}`;
     updateSourceSummary();
     invalidateProjectFit();
-    notice("GitHub repository source indexed. Combine it with local files and/or the live website for stronger project fit.","info");
+    await analyzeProjectFit({quiet:true});
+    notice("GitHub repository source indexed. URL-to-source mapping was recalculated automatically.","info");
   }catch(error){
     $("githubRepoToken").value="";
     $("githubRepoStatus").textContent="Scan failed";
@@ -568,7 +606,10 @@ async function scanProjectWebsite() {
     $("projectWebsiteStatus").textContent=`${result.headings?.length||0} headings · ${result.buttons?.length||0} actions · ${result.images?.length||0} images`;
     updateSourceSummary();
     invalidateProjectFit();
-    notice("Current website evidence captured. Empty project-content fields can now be filled from live content.","info");
+    await analyzeProjectFit({quiet:true});
+    notice(state.projectProfile?.deliveryMode==="standalone-replacement"
+      ? "Website scanned. No source repository is connected, so KK-FRONTEND will generate a standalone replacement package."
+      : "Website scanned. Live URL was mapped against the connected project source automatically.","info");
   }catch(error){
     $("projectWebsiteStatus").textContent="Scan failed";
     notice(error.message);
@@ -593,11 +634,35 @@ $("analyzeProjectButton").addEventListener("click",()=>analyzeProjectFit());
 updateSourceSummary();
 updateAccurateAvailability();
 
-$("inspectForm").addEventListener("submit", async event => {
-  event.preventDefault();
+function renderReferenceIntent(intent) {
+  const panel=$("referenceIntentPanel");
+  if(!panel)return;
+  const collection=intent?.kind==="collection" && intent?.requiresChoice;
+  panel.hidden=!collection;
+  if(!collection){
+    state.referenceIntentChoice="single-page";
+    $("generateButton").disabled=false;
+    return;
+  }
+  state.referenceIntentChoice=null;
+  $("generateButton").disabled=true;
+  $("referenceIntentReason").textContent=(intent.reasons||[]).join(" ") || "Multiple design items were detected on this page.";
+  const items=(intent.items||[]).slice(0,12);
+  $("referenceIntentItems").innerHTML=items.map((item,index)=>`<button type="button" class="rdIntentItem" data-intent-url="${escapeHtml(item.url)}">
+    ${item.image?`<img src="${escapeHtml(item.image)}" alt=""/>`:""}
+    <span><small>Design ${index+1}</small><b>${escapeHtml(item.label||"Open design")}</b></span>
+    <em>Inspect →</em>
+  </button>`).join("") || '<div class="rdIntentEmpty">No direct design links were safely detected. Paste a specific design URL above, or use the entire collection page.</div>';
+  panel.querySelectorAll("[data-intent-url]").forEach(button=>button.addEventListener("click",()=>{
+    const next=button.dataset.intentUrl;
+    $("referenceUrl").value=next;
+    void inspectReferenceUrl(next);
+  }));
+}
+async function inspectReferenceUrl(url) {
   notice("");
   resetResult();
-  const url = $("referenceUrl").value.trim();
+  state.referenceIntentChoice=null;
   busy($("inspectButton"), true, "Inspecting design…");
   try {
     const data = await api("/api/reference-design/inspect", {
@@ -618,16 +683,30 @@ $("inspectForm").addEventListener("submit", async event => {
       $("authModeLabel").textContent = `${AUTH_LABELS[data.authentication.mode] || "Authenticated"} · verified`;
     }
 
+    renderReferenceIntent(data.intent);
     renderFamilyFilters();
     renderCandidates();
     renderOverlays();
     setScopeUi();
     $("selectionStage").scrollIntoView({ behavior: "smooth", block: "start" });
+    return data;
   } catch (error) {
     notice(error.message);
+    return null;
   } finally {
     busy($("inspectButton"), false);
   }
+}
+$("useCollectionButton").addEventListener("click",()=>{
+  state.referenceIntentChoice="whole-collection";
+  $("generateButton").disabled=false;
+  $("referenceIntentPanel").classList.add("accepted");
+  notice("Using the collection page itself as the reference design.","info");
+});
+
+$("inspectForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  await inspectReferenceUrl($("referenceUrl").value.trim());
 });
 
 document.querySelectorAll("input[name='scope']").forEach(input =>
@@ -651,6 +730,11 @@ $("clearSelection").addEventListener("click", () => {
 
 $("generateButton").addEventListener("click", async () => {
   if (!state.inspection) return;
+  if(state.inspection.intent?.requiresChoice && !state.referenceIntentChoice){
+    notice("This reference is a collection/gallery. Choose the entire collection page or inspect one specific design first.");
+    $("referenceIntentPanel").scrollIntoView({behavior:"smooth",block:"center"});
+    return;
+  }
   const scope = scopeMode();
   const selected = [...state.selected].map(candidateById).filter(Boolean);
   if (scope === "selected" && !selected.length) {
