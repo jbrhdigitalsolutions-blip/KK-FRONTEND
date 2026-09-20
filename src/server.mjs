@@ -27,6 +27,19 @@ import { captureReferencePreview, certifyGeneratedPreview, generateReferenceDesi
 import { compileNoCodeDesign } from "./no-code/compiler.mjs";
 import { analyzeProjectContext } from "./no-code/project-fit.mjs";
 import { scanGitHubProject } from "./no-code/project-sources.mjs";
+import { gunzipSync } from "node:zlib";
+import {
+  createR2Download,
+  createTransportTicket,
+  deleteR2Objects,
+  getR2Object,
+  inputChunkKey,
+  newTransportSession,
+  outputZipKey,
+  putR2Object,
+  r2TransportStatus,
+  verifyTransportTicket,
+} from "./storage/r2-transport.mjs";
 
 const app=express();
 app.use(express.json({limit:"4mb"}));
@@ -105,7 +118,7 @@ async function executionCapability(s){
   };
 }
 
-app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.9.2",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true,sourceAwareMigration:true,noCodeDesignCompiler:true,authenticatedReferenceCapture:true,projectAwareDesignBuilder:true,multiSourceProjectIntelligence:true,visualCertification:true,urlSourceMapping:true,referenceIntentGuard:true}));
+app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.9.3",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true,sourceAwareMigration:true,noCodeDesignCompiler:true,authenticatedReferenceCapture:true,projectAwareDesignBuilder:true,multiSourceProjectIntelligence:true,visualCertification:true,urlSourceMapping:true,referenceIntentGuard:true,compressedBuildTransport:true,largeBuildOverflow:r2TransportStatus().ready?"cloudflare-r2":"not-configured"}));
 app.get("/api/github/status",async(req,res)=>res.json(await githubStatus()));
 app.post("/api/github/auth/start",async(req,res)=>{
   try{
@@ -190,27 +203,139 @@ app.post("/api/reference-design/project-website",async(req,res)=>{
   }
 });
 
-app.post("/api/reference-design/build",(req,res)=>{
-  try{
-    const {evidenceJson,evidence,markdown="",options={},projectContext=null,projectProfile=null}=req.body||{};
-    const input=evidenceJson||evidence;
-    if(!input)throw new Error("Generate DESIGN.md and DESIGN-EVIDENCE.json before building the page.");
-    const result=compileNoCodeDesign({evidence:input,markdown,options,projectContext,projectProfile});
+const BUILD_DIRECT_RESPONSE_MAX_BYTES=3_800_000;
+const BUILD_MAX_DECOMPRESSED_BYTES=50_000_000;
+const BUILD_CHUNK_BYTES=2_000_000;
+const BUILD_MAX_CHUNKS=25;
 
-    // Do not duplicate every generated file and the full layout model beside
-    // zipBase64. The browser only needs file paths and viewport anchors.
-    const response={
-      ...result,
-      files:(result.files||[]).map(file=>({path:file.path,encoding:file.encoding||"utf8"})),
-      model:{viewports:result.model?.viewports||{}},
-    };
-    const responseBytes=Buffer.byteLength(JSON.stringify(response),"utf8");
-    if(responseBytes>4_000_000)throw new Error("Generated ZIP exceeds the safe Vercel response budget. Remove large portable assets or build a smaller custom selection.");
-    res.json({...response,responseBytes});
+function parseCompressedBuildBody(req){
+  if(!Buffer.isBuffer(req.body))return req.body||{};
+  const inflated=gunzipSync(req.body,{maxOutputLength:BUILD_MAX_DECOMPRESSED_BYTES});
+  return JSON.parse(inflated.toString("utf8"));
+}
+async function readChunkedBuildPayload(ref){
+  if(ref?.provider!=="cloudflare-r2")throw new Error("Unsupported large-build payload provider.");
+  const sessionId=String(ref.sessionId||"");
+  const ticket=String(ref.ticket||"");
+  const chunks=Number(ref.chunks);
+  const encoding=String(ref.encoding||"identity");
+  if(!verifyTransportTicket(sessionId,ticket))throw new Error("Large-build transport ticket is invalid or expired.");
+  if(!Number.isInteger(chunks)||chunks<1||chunks>BUILD_MAX_CHUNKS)throw new Error("Invalid large-build chunk count.");
+  if(!["identity","gzip"].includes(encoding))throw new Error("Unsupported large-build payload encoding.");
+  const keys=Array.from({length:chunks},(_,index)=>inputChunkKey(sessionId,index));
+  try{
+    const parts=[];
+    let total=0;
+    for(const key of keys){
+      const part=await getR2Object(key,{maxBytes:BUILD_CHUNK_BYTES+64_000});
+      total+=part.length;
+      if(total>BUILD_MAX_DECOMPRESSED_BYTES)throw new Error("Large-build payload exceeds the 50 MB safety limit.");
+      parts.push(part);
+    }
+    let body=Buffer.concat(parts,total);
+    if(encoding==="gzip")body=gunzipSync(body,{maxOutputLength:BUILD_MAX_DECOMPRESSED_BYTES});
+    return JSON.parse(body.toString("utf8"));
+  }finally{
+    await deleteR2Objects(keys);
+  }
+}
+
+app.get("/api/reference-design/transport/status",(req,res)=>{
+  res.json({
+    compression:true,
+    directBudgetBytes:BUILD_DIRECT_RESPONSE_MAX_BYTES,
+    chunkBytes:BUILD_CHUNK_BYTES,
+    maxChunks:BUILD_MAX_CHUNKS,
+    overflow:r2TransportStatus(),
+  });
+});
+app.post("/api/reference-design/transport/start",(req,res)=>{
+  try{
+    const status=r2TransportStatus();
+    if(!status.ready)return res.status(503).json({error:"Cloudflare R2 overflow transport is not configured.",overflow:status});
+    const requestBytes=Number(req.body?.requestBytes||0);
+    if(!Number.isFinite(requestBytes)||requestBytes<1||requestBytes>BUILD_MAX_DECOMPRESSED_BYTES){
+      return res.status(400).json({error:"Large-build request size is outside the 1 byte–50 MB safety range."});
+    }
+    const sessionId=newTransportSession();
+    const signed=createTransportTicket(sessionId);
+    res.json({
+      provider:"cloudflare-r2",
+      sessionId,
+      ticket:signed.ticket,
+      expiresAt:signed.expiresAt,
+      chunkBytes:BUILD_CHUNK_BYTES,
+      maxChunks:BUILD_MAX_CHUNKS,
+    });
   }catch(e){
     res.status(400).json({error:String(e.message||e)});
   }
 });
+app.put(
+  "/api/reference-design/transport/chunk/:sessionId/:index",
+  express.raw({type:"application/octet-stream",limit:"2100kb"}),
+  async(req,res)=>{
+    try{
+      const sessionId=String(req.params.sessionId||"");
+      const index=Number(req.params.index);
+      const ticket=String(req.get("x-kk-transport-ticket")||"");
+      if(!verifyTransportTicket(sessionId,ticket))return res.status(403).json({error:"Large-build transport ticket is invalid or expired."});
+      if(!Buffer.isBuffer(req.body)||req.body.length<1||req.body.length>BUILD_CHUNK_BYTES){
+        return res.status(400).json({error:"Chunk body must be 1–2,000,000 bytes."});
+      }
+      const key=inputChunkKey(sessionId,index);
+      await putR2Object(key,req.body,{contentType:"application/octet-stream"});
+      res.json({ok:true,index,bytes:req.body.length});
+    }catch(e){
+      res.status(400).json({error:String(e.message||e)});
+    }
+  }
+);
+
+app.post(
+  "/api/reference-design/build",
+  express.raw({type:"application/vnd.kk-frontend.build+gzip",limit:"4mb"}),
+  async(req,res)=>{
+    try{
+      let payload=parseCompressedBuildBody(req);
+      if(payload?.payloadRef)payload=await readChunkedBuildPayload(payload.payloadRef);
+      const {evidenceJson,evidence,markdown="",options={},projectContext=null,projectProfile=null}=payload||{};
+      const input=evidenceJson||evidence;
+      if(!input)throw new Error("Generate DESIGN.md and DESIGN-EVIDENCE.json before building the page.");
+      const result=compileNoCodeDesign({evidence:input,markdown,options,projectContext,projectProfile});
+
+      let response={
+        ...result,
+        files:(result.files||[]).map(file=>({path:file.path,encoding:file.encoding||"utf8"})),
+        model:{viewports:result.model?.viewports||{}},
+      };
+      let responseBytes=Buffer.byteLength(JSON.stringify(response),"utf8");
+      if(responseBytes>BUILD_DIRECT_RESPONSE_MAX_BYTES){
+        const status=r2TransportStatus();
+        if(!status.ready){
+          throw new Error("Generated ZIP is too large for Vercel's response limit. Configure the free Cloudflare R2 overflow transport to download large builds without reducing design scope.");
+        }
+        const zip=Buffer.from(result.zipBase64,"base64");
+        const key=outputZipKey();
+        const disposition=`attachment; filename="${String(result.filename||"kk-frontend-build.zip").replace(/["\\r\\n]/g,"_")}"`;
+        await putR2Object(key,zip,{contentType:"application/zip",contentDisposition:disposition});
+        response={
+          ...response,
+          zipBase64:"",
+          download:createR2Download({key,filename:result.filename,expiresSeconds:1800}),
+        };
+        responseBytes=Buffer.byteLength(JSON.stringify(response),"utf8");
+      }
+      if(responseBytes>BUILD_DIRECT_RESPONSE_MAX_BYTES){
+        throw new Error("Build metadata still exceeds the safe Vercel response budget after ZIP offload.");
+      }
+      res.json({...response,responseBytes});
+    }catch(e){
+      const status=e?.code==="R2_NOT_CONFIGURED"?503:400;
+      res.status(status).json({error:String(e.message||e)});
+    }
+  }
+);
 
 app.post("/api/session",async(req,res)=>res.json(await newSession()));
 app.get("/api/sessions/recent",async(req,res)=>{
