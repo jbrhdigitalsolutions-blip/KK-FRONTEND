@@ -224,8 +224,20 @@ async function submitLoginStep(page, customSelector = "") {
   await page.waitForTimeout(450);
 }
 
+function assertCredentialOrigin(page, auth) {
+  const approved = new URL(auth.loginUrl);
+  const current = new URL(page.url());
+  if (current.origin !== approved.origin) {
+    const hint = auth.loginUrlExplicit
+      ? "The configured login page redirected to another origin."
+      : "The reference redirected to a different login origin.";
+    throw new Error(`${hint} For safety, credentials were not entered. Explicitly use that login URL if you trust it, or use Session Cookie mode for SSO/MFA.`);
+  }
+}
+
 async function performFormLogin(page, auth, targetUrl) {
   await gotoReference(page, auth.loginUrl || targetUrl);
+  assertCredentialOrigin(page, auth);
 
   const username = await firstVisibleLocator(page, [
     auth.usernameSelector,
@@ -247,6 +259,7 @@ async function performFormLogin(page, auth, targetUrl) {
 
   if (!password) {
     await submitLoginStep(page, auth.submitSelector);
+    assertCredentialOrigin(page, auth);
     password = await firstVisibleLocator(page, [
       auth.passwordSelector,
       'input[autocomplete="current-password"]',
