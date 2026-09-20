@@ -198,6 +198,7 @@ function buildReferenceTree(evidence,project){
     id:"node-"+(index+1),
     selector:node.selector,
     parentSelector:included.has(node.parentSelector)?node.parentSelector:closestIncludedAncestor(node,included),
+    ancestorSelectors:arr(node.ancestorSelectors),
     childIndex:Number.isFinite(Number(node.childIndex))?Number(node.childIndex):index,
     depth:Number(node.depth)||0,
     tag:node.tag||"div",
@@ -597,7 +598,7 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
     throw new Error("Accurate mode needs more project information before build: "+(needed || projectProfile.readiness.blockers.join("; ")));
   }
   const model=layoutModel(evidence,{contentMode,fidelity,markdown,projectProfile});
-  const exactTree=fidelity==="accurate" && (model.referenceTree?.nodes?.length||0)>=3;
+  const exactTree=fidelity==="accurate" && Boolean(projectProfile) && (model.referenceTree?.nodes?.length||0)>=3;
   const bodyMarkup=exactTree ? referenceTreeMarkup(model) : "";
   const css=exactTree ? referenceTreeCss(model) : generatedCss(model,{fidelity});
   const previewHtml=standaloneHtml(model,css,bodyMarkup);
