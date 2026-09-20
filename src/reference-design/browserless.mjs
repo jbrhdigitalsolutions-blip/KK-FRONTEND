@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import { chromium } from "playwright";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { buildEvidenceCompanion, classifyCandidate, normalizeReferenceUrl, renderDesignMd } from "./design-md.mjs";
+import { buildEvidenceCompanion, candidateFamily, classifyCandidate, normalizeReferenceUrl, renderDesignMd } from "./design-md.mjs";
 
 const VIEWPORTS = [
   { name: "desktop", width: 1440, height: 900 },
@@ -170,10 +170,17 @@ async function gotoReference(page, url) {
 const candidateScript = () => {
   function selectorFor(el) {
     if (!el || el.nodeType !== 1) return null;
-    if (el.id) return `#${CSS.escape(el.id)}`;
+    if (el.id) return "#" + CSS.escape(el.id);
     for (const attr of ["data-testid", "data-test", "data-qa"]) {
       const v = el.getAttribute(attr);
-      if (v) return `${el.tagName.toLowerCase()}[${attr}="${CSS.escape(v)}"]`;
+      if (v) return el.tagName.toLowerCase() + "[" + attr + "=\"" + CSS.escape(v) + "\"]";
+    }
+    const cls = typeof el.className === "string"
+      ? el.className.trim().split(/\s+/).filter(x => /^[A-Za-z_-][\w-]*$/.test(x)).slice(0,2)
+      : [];
+    if (cls.length) {
+      const q = el.tagName.toLowerCase() + cls.map(x => "." + CSS.escape(x)).join("");
+      try { if (document.querySelectorAll(q).length === 1) return q; } catch {}
     }
     const parts = [];
     let node = el;
@@ -182,7 +189,7 @@ const candidateScript = () => {
       const parent = node.parentElement;
       if (parent) {
         const same = [...parent.children].filter(x => x.tagName === node.tagName);
-        if (same.length > 1) part += `:nth-of-type(${same.indexOf(node) + 1})`;
+        if (same.length > 1) part += ":nth-of-type(" + (same.indexOf(node) + 1) + ")";
       }
       parts.unshift(part);
       const test = parts.join(" > ");
@@ -195,55 +202,120 @@ const candidateScript = () => {
     const r = el.getBoundingClientRect();
     return { x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height };
   }
+  function clean(v, max = 100) {
+    const text = String(v || "").replace(/\s+/g, " ").trim();
+    if (!text || /requestAnimationFrame|function\s*\(/i.test(text)) return "";
+    return text.slice(0, max);
+  }
   function labelFor(el) {
-    const explicit = el.getAttribute("aria-label") || el.getAttribute("title") || el.querySelector?.("h1,h2,h3,h4,h5,h6")?.textContent || "";
-    const clean = String(explicit).replace(/\s+/g, " ").trim();
-    if (clean && !/requestAnimationFrame|function\s*\(/i.test(clean)) return clean.slice(0, 100);
+    const explicit = el.getAttribute("aria-label") || el.getAttribute("title") || el.getAttribute("name");
+    if (clean(explicit)) return clean(explicit);
+    const heading = el.matches("h1,h2,h3,h4,h5,h6") ? el : el.querySelector?.("h1,h2,h3,h4,h5,h6");
+    if (clean(heading?.textContent)) return clean(heading.textContent);
+    if (el.matches("button,a,label,summary,[role='button'],[role='tab']") && clean(el.textContent)) return clean(el.textContent);
+    const alt = el.getAttribute("alt");
+    if (clean(alt)) return clean(alt);
     return el.tagName.toLowerCase();
   }
-  const semantic = [...document.querySelectorAll([
-    "header", "nav", "main", "aside", "footer", "section", "form", "dialog",
-    "[role='banner']", "[role='navigation']", "[role='main']", "[role='complementary']", "[role='dialog']",
-    "[class*='sidebar' i]", "[class*='workspace' i]", "[class*='dashboard' i]", "[class*='hero' i]",
-    "[class*='header' i]", "[class*='footer' i]", "[class*='nav' i]", "[class*='modal' i]", "[class*='drawer' i]"
-  ].join(","))];
-  const animated = [...document.querySelectorAll("body *")].filter(el => {
+  function transitionActive(s) {
+    return Boolean(s.transitionDuration && s.transitionDuration.split(",").some(v => parseFloat(v) > 0));
+  }
+  function animationActive(s) {
+    return Boolean(s.animationName && s.animationName !== "none");
+  }
+  function visualSurface(el, s, r) {
+    if (r.width < 80 || r.height < 36 || r.width * r.height < 5000) return false;
+    const classText = typeof el.className === "string" ? el.className.toLowerCase() : "";
+    if (/card|tile|panel|surface|feature|pricing|testimonial|gallery|carousel|grid|list|hero|banner|cta|badge|chip|avatar|logo|player/.test(classText)) return true;
+    const rounded = parseFloat(s.borderRadius) >= 6;
+    const shadowed = s.boxShadow && s.boxShadow !== "none";
+    const bordered = s.borderStyle && s.borderStyle !== "none" && parseFloat(s.borderWidth) > 0;
+    const painted = s.backgroundColor && !/rgba?\(0,\s*0,\s*0,\s*0\)/.test(s.backgroundColor);
+    return el.children.length >= 2 && (shadowed || (rounded && painted) || (bordered && painted));
+  }
+
+  const explicitSelector = [
+    "header","nav","main","aside","footer","section","form","dialog",
+    "h1","h2","h3","button","input","textarea","select","picture","img","video","svg",
+    "[role='banner']","[role='navigation']","[role='main']","[role='complementary']","[role='dialog']",
+    "[role='button']","[role='tab']","[role='tablist']","[role='list']","[role='search']","[role='combobox']",
+    "[class*='sidebar' i]","[class*='workspace' i]","[class*='dashboard' i]","[class*='hero' i]",
+    "[class*='header' i]","[class*='footer' i]","[class*='nav' i]","[class*='modal' i]","[class*='drawer' i]",
+    "[class*='card' i]","[class*='tile' i]","[class*='panel' i]","[class*='pricing' i]","[class*='feature' i]",
+    "[class*='testimonial' i]","[class*='gallery' i]","[class*='carousel' i]","[class*='slider' i]",
+    "[class*='grid' i]","[class*='list' i]","[class*='cta' i]","[class*='button' i]","[class*='badge' i]",
+    "[class*='chip' i]","[class*='tabs' i]","[class*='search' i]","[class*='logo' i]","[class*='avatar' i]",
+    "[class*='image' i]","[class*='video' i]","[class*='player' i]"
+  ].join(",");
+  const explicit = [...document.querySelectorAll(explicitSelector)];
+  const visual = [...document.querySelectorAll("body *")].filter(el => {
     const s = getComputedStyle(el);
     const r = el.getBoundingClientRect();
-    const hasAnimation = Boolean(s.animationName && s.animationName !== "none");
-    const hasTransition = Boolean(s.transitionDuration && s.transitionDuration.split(",").some(v => parseFloat(v) > 0));
+    return visualSurface(el, s, r);
+  }).slice(0, 180);
+  const motion = [...document.querySelectorAll("body *")].filter(el => {
+    const s = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
     const interactive = el.matches("a,button,input,select,textarea,summary,[role='button'],[role='link'],[role='tab'],[tabindex]");
-    return hasAnimation || (hasTransition && (interactive || r.width * r.height >= 12000));
-  }).slice(0, 80);
+    return animationActive(s) || (transitionActive(s) && interactive && r.width >= 16 && r.height >= 12);
+  }).slice(0, 100);
+
   const seen = new Set();
   const rows = [];
-  for (const el of [...semantic, ...animated]) {
+  for (const el of [...explicit, ...visual, ...motion]) {
     const rect = absoluteRect(el);
-    if (rect.width < 16 || rect.height < 12) continue;
+    if (rect.width < 12 || rect.height < 10 || rect.y < -20) continue;
     const selector = selectorFor(el);
     if (!selector || seen.has(selector)) continue;
     seen.add(selector);
     const s = getComputedStyle(el);
+    const className = typeof el.className === "string" ? el.className.slice(0, 220) : "";
+    const interactive = el.matches("a,button,input,select,textarea,summary,[role='button'],[role='link'],[role='tab'],[tabindex]");
+    const animation = animationActive(s) || transitionActive(s);
+    const visibleText = clean(el.textContent, 120);
+    const score =
+      (["HEADER","NAV","MAIN","ASIDE","FOOTER","SECTION","FORM","DIALOG"].includes(el.tagName) ? 40 : 0) +
+      (interactive ? 28 : 0) +
+      (visualSurface(el, s, el.getBoundingClientRect()) ? 24 : 0) +
+      (animationActive(s) ? 16 : 0) +
+      (/^H[1-3]$/.test(el.tagName) ? 20 : 0) +
+      (["IMG","VIDEO","PICTURE","SVG"].includes(el.tagName) ? 18 : 0) +
+      Math.min(20, Math.round(Math.log10(Math.max(100, rect.width * rect.height)) * 4));
     rows.push({
       selector,
       tag: el.tagName.toLowerCase(),
       role: el.getAttribute("role"),
-      className: typeof el.className === "string" ? el.className.slice(0, 220) : "",
+      className,
       label: labelFor(el),
+      textPreview: visibleText,
       rect,
-      animation: (s.animationName && s.animationName !== "none") || (s.transitionDuration && s.transitionDuration.split(",").some(v => parseFloat(v) > 0)),
-      interactive: el.matches("a,button,input,select,textarea,[role='button'],[role='link'],[tabindex]"),
+      animation,
+      interactive,
+      sticky: ["fixed","sticky"].includes(s.position),
+      score,
+      styleHint: {
+        display: s.display,
+        position: s.position,
+        backgroundColor: s.backgroundColor,
+        borderRadius: s.borderRadius,
+        boxShadow: s.boxShadow,
+        fontSize: s.fontSize,
+        fontWeight: s.fontWeight,
+      }
     });
-    if (rows.length >= 220) break;
+    if (rows.length >= 360) break;
   }
+  rows.sort((a,b) => b.score - a.score || a.rect.y - b.rect.y || a.rect.x - b.rect.x);
   return {
     title: document.title,
     finalUrl: location.href,
-    document: { width: Math.max(document.documentElement.scrollWidth, innerWidth), height: Math.max(document.documentElement.scrollHeight, innerHeight) },
+    document: {
+      width: Math.max(document.documentElement.scrollWidth, innerWidth),
+      height: Math.max(document.documentElement.scrollHeight, innerHeight)
+    },
     rows,
   };
 };
-
 export async function inspectReferenceDesign({ url }) {
   const safeUrl = await assertPublicReferenceUrl(url);
   const browser = await connectBrowser();
@@ -255,13 +327,23 @@ export async function inspectReferenceDesign({ url }) {
     const info = await page.evaluate(candidateScript);
     const maxHeight = Math.min(Math.max(info.document.height, 900), 12_000);
     const shot = await page.screenshot({ type: "jpeg", quality: 58, clip: { x: 0, y: 0, width: 1440, height: maxHeight } });
-    const candidates = info.rows.filter(x => x.rect.y < maxHeight).map((row, index) => ({
-      id: `ref-${index + 1}`,
-      ...row,
-      kind: classifyCandidate(row),
-    }));
+    const candidates = info.rows.filter(x => x.rect.y < maxHeight).map((row, index) => {
+      const kind = classifyCandidate(row);
+      return {
+        id: `ref-${index + 1}`,
+        ...row,
+        kind,
+        family: candidateFamily(kind),
+      };
+    });
+    const familyCounts = {};
+    const kindCounts = {};
+    for (const candidate of candidates) {
+      familyCounts[candidate.family] = (familyCounts[candidate.family] || 0) + 1;
+      kindCounts[candidate.kind] = (kindCounts[candidate.kind] || 0) + 1;
+    }
     return {
-      schema: "kk-reference-design-inspection/v1",
+      schema: "kk-reference-design-inspection/v2",
       url: safeUrl,
       finalUrl: info.finalUrl,
       title: info.title,
@@ -270,6 +352,7 @@ export async function inspectReferenceDesign({ url }) {
       screenshotHeight: maxHeight,
       candidates,
       candidateCount: candidates.length,
+      facets: { familyCounts, kindCounts },
     };
   } finally {
     await browser.close().catch(() => {});
