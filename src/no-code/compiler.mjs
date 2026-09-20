@@ -321,6 +321,7 @@ function layoutModel(evidence,options){
   const tokens=deriveTokens(evidence);
   const regions=buildRegions(evidence,options.contentMode);
   const project=options.projectProfile || null;
+  const referenceTree=buildReferenceTree(evidence,project);
   const desktop=viewport(evidence,"desktop");
   const tablet=viewport(evidence,"tablet");
   const mobile=viewport(evidence,"mobile");
@@ -331,6 +332,7 @@ function layoutModel(evidence,options){
     referenceUrl:text(evidence.capture?.finalUrl || evidence.capture?.referenceUrl),
     tokens,
     regions,
+    referenceTree,
     viewports:{
       desktop:desktop.viewport||desktop.targetViewport||{width:1440,height:900},
       tablet:tablet.viewport||tablet.targetViewport||{width:820,height:1180},
