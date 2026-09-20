@@ -1,3 +1,74 @@
+# KK-FRONTEND v0.8.0 — PROJECT-AWARE EXACT DESIGN BUILDER
+
+v0.8.0 fixes the main weakness of the earlier Build Preview: a reference design is no longer compiled into a generic semantic template before the system knows the user's actual project.
+
+The new workflow is:
+
+```text
+Reference URL
+→ optional Authentication
+→ Inspect / select exact design
+→ DESIGN.md + DESIGN-EVIDENCE.json
+→ Project Fit intake
+→ analyze current project / stack / content / assets / design files
+→ resolve missing requirements
+→ measured project-aware reconstruction
+→ Desktop / Tablet / Mobile preview
+→ project-fit ZIP
+```
+
+## Project Fit intake
+
+Before an accurate build, the user can provide:
+
+- existing project folder or selected frontend/design files;
+- current project `DESIGN.md`;
+- `package.json` and lockfile;
+- page/route/component files;
+- CSS / SCSS / Tailwind / theme / token files;
+- project name and target route;
+- framework / stack override if auto-detection is not possible;
+- package-manager preference;
+- Windows / macOS target;
+- text/content source;
+- image/video asset strategy and asset paths;
+- page/project constraints and must-preserve behavior.
+
+The analyzer then reports a Project Fit readiness score, detected framework/package manager/language/styling, required missing items, and optional recommendations. Accurate build remains disabled until required information is complete and placeholder-only media/text choices are resolved. Prototype mode remains explicit.
+
+## Measured reconstruction
+
+The v0.8.0 builder no longer renders generic `Brand / Get started / Image` templates for Accurate mode. It reconstructs captured semantic children from measured Desktop / Tablet / Mobile geometry and carries observed typography, colors, borders, radii, shadows and responsive positions into generated source.
+
+Media slots use the user's existing project asset references or explicitly supplied asset paths when available. Project text can come from the current target source files or user-provided final copy.
+
+## Project-aware source output
+
+Existing projects receive isolated source under a `kk-generated` path matched to the detected React / Next.js / HTML structure, avoiding blind overwrites.
+
+New projects receive a runnable project tree including `package.json` and the required app/source entry files.
+
+Every project-fit ZIP also includes:
+
+- `REFERENCE-DESIGN.md`
+- `PROJECT-FIT.json`
+- `DESIGN-BUILD.json`
+- `SYSTEM-REQUIREMENTS.md`
+- `DEPENDENCIES.md`
+- `PROJECT-INTEGRATION.md`
+- `SETUP-WINDOWS.ps1`
+- `RUN-WINDOWS.ps1`
+- `SETUP-AND-RUN-WINDOWS.ps1`
+- `setup-macos.sh`
+- `run-macos.sh`
+- `setup-and-run-macos.sh`
+
+Project uploads are text-only, size-bounded, and reject sensitive filenames such as `.env`, credential files and private keys.
+
+> "Exact" in v0.8.0 means project-fit readiness plus measured reconstruction. It does not claim a pixel-similarity percentage unless an independent screenshot-diff verification is actually run.
+
+---
+
 # KK-FRONTEND v0.7.0 — AUTHENTICATED REFERENCE CAPTURE
 
 v0.7.0 extends the no-code Design Explorer to reference pages that legitimately require authentication.
