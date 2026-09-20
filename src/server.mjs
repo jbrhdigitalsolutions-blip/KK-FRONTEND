@@ -25,6 +25,8 @@ import { verifyPlanBaseline, validateChangedFileScope } from "./execution/migrat
 import { verifyVisualMigration } from "./execution/visual-verify.mjs";
 import { generateReferenceDesignMd, inspectReferenceDesign, referenceDesignStatus } from "./reference-design/browserless.mjs";
 import { compileNoCodeDesign } from "./no-code/compiler.mjs";
+import { analyzeProjectIntake } from "./no-code/project-intake.mjs";
+import { compileProjectAwareDesign } from "./no-code/project-builder.mjs";
 
 const app=express();
 app.use(express.json({limit:"5mb"}));
@@ -103,7 +105,7 @@ async function executionCapability(s){
   };
 }
 
-app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.7.0",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true,sourceAwareMigration:true,noCodeDesignCompiler:true,authenticatedReferenceCapture:true}));
+app.get("/api/health",(req,res)=>res.json({ok:true,version:"0.8.0",platform:CONFIG.platform,port:CONFIG.port,agentConfigured:!!CONFIG.agent.command,scanModes:["blueprint-fast","design-only","fast-deep","standard","extreme"],designPicker:true,sourceGenerator:true,referenceDesignMd:true,sourceAwareMigration:true,noCodeDesignCompiler:true,authenticatedReferenceCapture:true,projectAwareExactBuilder:true}));
 app.get("/api/github/status",async(req,res)=>res.json(await githubStatus()));
 app.post("/api/github/auth/start",async(req,res)=>{
   try{
@@ -140,17 +142,40 @@ app.post("/api/reference-design/generate",async(req,res)=>{
   }
 });
 
-app.post("/api/reference-design/build",(req,res)=>{
+app.post("/api/reference-design/project-intake",(req,res)=>{
   try{
-    const {evidenceJson,evidence,markdown="",options={}}=req.body||{};
+    const {evidenceJson,evidence,files=[],answers={}}=req.body||{};
     const input=evidenceJson||evidence;
-    if(!input)throw new Error("Generate DESIGN.md and DESIGN-EVIDENCE.json before building the page.");
-    const result=compileNoCodeDesign({evidence:input,markdown,options});
-    const responseBytes=Buffer.byteLength(JSON.stringify(result),"utf8");
-    if(responseBytes>4_000_000)throw new Error("Generated project exceeds the safe web response budget. Build a smaller custom design selection.");
-    res.json({...result,responseBytes});
+    if(!input)throw new Error("Generate DESIGN.md and DESIGN-EVIDENCE.json before analyzing project fit.");
+    res.json(analyzeProjectIntake({evidence:input,files,answers}));
   }catch(e){
     res.status(400).json({error:String(e.message||e)});
+  }
+});
+
+app.post("/api/reference-design/build",(req,res)=>{
+  try{
+    const {evidenceJson,evidence,markdown="",options={},project=null}=req.body||{};
+    const input=evidenceJson||evidence;
+    if(!input)throw new Error("Generate DESIGN.md and DESIGN-EVIDENCE.json before building the page.");
+    const result=project?.enabled
+      ? compileProjectAwareDesign({
+          evidence:input,
+          markdown,
+          files:project.files||[],
+          answers:project.answers||{},
+          options:{allowPrototype:Boolean(options.allowPrototype)},
+        })
+      : compileNoCodeDesign({evidence:input,markdown,options});
+    const responseBytes=Buffer.byteLength(JSON.stringify(result),"utf8");
+    if(responseBytes>4_000_000)throw new Error("Generated project exceeds the safe web response budget. Reduce uploaded project files or build a smaller custom design selection.");
+    res.json({...result,responseBytes});
+  }catch(e){
+    res.status(400).json({
+      error:String(e.message||e),
+      code:e?.code||null,
+      intake:e?.intake||undefined,
+    });
   }
 });
 
