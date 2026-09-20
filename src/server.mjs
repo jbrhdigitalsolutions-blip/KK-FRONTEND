@@ -144,10 +144,10 @@ app.post("/api/reference-design/generate",async(req,res)=>{
 
 app.post("/api/reference-design/project-intake",(req,res)=>{
   try{
-    const {evidenceJson,evidence,files=[],answers={}}=req.body||{};
+    const {evidenceJson,evidence,files=[],assets=[],answers={}}=req.body||{};
     const input=evidenceJson||evidence;
     if(!input)throw new Error("Generate DESIGN.md and DESIGN-EVIDENCE.json before analyzing project fit.");
-    res.json(analyzeProjectIntake({evidence:input,files,answers}));
+    res.json(analyzeProjectIntake({evidence:input,files,assets,answers}));
   }catch(e){
     res.status(400).json({error:String(e.message||e)});
   }
@@ -163,6 +163,7 @@ app.post("/api/reference-design/build",(req,res)=>{
           evidence:input,
           markdown,
           files:project.files||[],
+          assets:project.assets||[],
           answers:project.answers||{},
           options:{allowPrototype:Boolean(options.allowPrototype)},
         })
