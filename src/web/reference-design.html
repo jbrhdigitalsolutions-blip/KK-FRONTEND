@@ -44,7 +44,7 @@
 
       <div class="rdScopeToggle" role="radiogroup" aria-label="Reference scope">
         <label><input type="radio" name="scope" value="whole" checked/><span><b>Whole Page</b><small>Complete page design</small></span></label>
-        <label><input type="radio" name="scope" value="selected"/><span><b>Select Regions</b><small>Header, section, sidebar, animation…</small></span></label>
+        <label><input type="radio" name="scope" value="selected"/><span><b>Select Regions</b><small>Header, section, sidebar, component, motion…</small></span></label>
       </div>
 
       <div id="pickerGrid" class="rdPickerGrid isWhole">
@@ -70,7 +70,7 @@
       </div>
 
       <div class="rdGenerateBar">
-        <div><b>Evidence capture</b><span>Desktop 1440×900 · Tablet 820×1180 · Mobile 390×844 · Hover/Focus · Motion · CSS breakpoints</span></div>
+        <div><b>Verified evidence capture</b><span>Exact Desktop 1440×900 · Tablet 820×1180 · Mobile 390×844 · semantic regions · Hover/Focus · Motion · exact CSS conditions</span></div>
         <button id="generateButton" class="rdPrimary rdGenerate" type="button">Generate DESIGN.md</button>
       </div>
     </section>
@@ -83,10 +83,11 @@
       <div id="resultFacts" class="rdFacts"></div>
       <div class="rdResultActions">
         <button id="downloadButton" class="rdPrimary" type="button">Download DESIGN.md</button>
-        <button id="copyButton" class="rdSecondary" type="button">Copy</button>
+        <button id="downloadEvidenceButton" class="rdSecondary" type="button">Download Evidence JSON</button>
+        <button id="copyButton" class="rdSecondary" type="button">Copy DESIGN.md</button>
         <button id="newButton" class="rdSecondary" type="button">New Reference</button>
       </div>
-      <details class="rdPreviewText"><summary>Preview generated specification</summary><pre id="markdownPreview"></pre></details>
+      <details class="rdPreviewText"><summary>Preview professional implementation specification</summary><pre id="markdownPreview"></pre></details>
     </section>
   </main>
 
