@@ -1,3 +1,38 @@
+# KK-FRONTEND v0.6.0 — NO-CODE DESIGN COMPILER
+
+v0.6.0 adds a deterministic **Build Page** workflow to the visual Design Explorer. A user can now go from a public reference website to a working frontend without a coding agent:
+
+```text
+Reference URL
+→ Inspect Design
+→ Select Whole Page or Visual Regions
+→ Generate DESIGN.md + DESIGN-EVIDENCE.json
+→ Build Page
+→ Live Preview
+→ Desktop / Tablet / Mobile review
+→ Reference / Build / Split comparison
+→ Download Project ZIP
+```
+
+## No-code compiler
+
+- Compiles the verified compact evidence JSON directly; it does not prompt an AI coding agent.
+- Supports standalone HTML, React + Vite and Next.js project outputs.
+- Uses verified colors, typography, geometry, responsive anchors and selected semantic regions.
+- Counts unresolved `UNKNOWN — DO NOT INVENT` fields instead of silently guessing them.
+- Provides Safe placeholders or Reference labels content modes.
+- Provides Accurate, Balanced and Inspired fidelity modes.
+- Generates a deterministic `DESIGN-BUILD.json` manifest with the exported project.
+- Creates a ZIP archive in-memory without modifying the user's existing project.
+
+## Live visual review
+
+The generated page renders immediately in a sandboxed iframe. Users can switch between Desktop, Tablet and Mobile preview anchors and compare the generated page with the captured reference in Build, Reference or Split modes.
+
+> Evidence confidence remains evidence confidence. v0.6.0 does not claim a pixel-similarity score unless an independent screenshot-diff verification is actually performed.
+
+---
+
 # KK-FRONTEND v0.5.1 — VISUAL DESIGN EXPLORER + SOURCE-AWARE MIGRATION
 
 v0.5.1 combines the source-aware migration foundation from v0.5.0 with a redesigned **no-code Design Explorer** at `/reference-design.html`.

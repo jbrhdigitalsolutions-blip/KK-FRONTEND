@@ -157,7 +157,7 @@ test("Design Explorer exposes filters, presets and explicit custom-selection lim
     fs.readFile(path.join(root, "src", "web", "reference-design.js"), "utf8"),
     fs.readFile(path.join(root, "src", "reference-design", "browserless.mjs"), "utf8"),
   ]);
-  for (const marker of ["familyFilters", "selectFiltered", "Essential design", "Custom design", "No coding agent required"]) {
+  for (const marker of ["familyFilters", "selectFiltered", "Essential design", "Custom design", "Build the page yourself.", "buildPageButton", "downloadProjectButton"]) {
     assert.ok(html.includes(marker), "missing Design Explorer marker: " + marker);
   }
   assert.ok(js.includes("MAX_CUSTOM_SELECTION = 30"));
