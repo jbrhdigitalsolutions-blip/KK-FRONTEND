@@ -124,16 +124,27 @@ async function readProjectFiles(fileList) {
   const seen=new Set();
   const rows=[];
   let textBudget=0;
+  let binaryBudget=0;
+  const isPortableAsset=name=>/\.(png|jpe?g|webp|avif|gif|svg|ico|mp4|webm|woff2?|ttf|otf)$/i.test(name);
   for (const file of input) {
     const path=(file.webkitRelativePath || file.name || "").replaceAll("\\","/");
     if (!path || seen.has(path) || PROJECT_SKIP_PATH.test(path) || PROJECT_SECRET_PATH.test(path)) continue;
     seen.add(path);
-    const row={path,name:file.name,size:file.size,type:file.type||"",text:""};
+    const row={path,name:file.name,size:file.size,type:file.type||"",text:"",base64:""};
     const extension=fileExtension(file.name);
-    if (PROJECT_TEXT_EXTENSIONS.has(extension) && file.size <= 300_000 && textBudget + file.size <= 2_500_000) {
+    if (PROJECT_TEXT_EXTENSIONS.has(extension) && file.size <= 300_000 && textBudget + file.size <= 1_500_000) {
       try {
         row.text=await file.text();
         textBudget += file.size;
+      } catch {}
+    } else if (isPortableAsset(file.name) && file.size <= 1_000_000 && binaryBudget + file.size <= 1_500_000) {
+      try {
+        const bytes=new Uint8Array(await file.arrayBuffer());
+        let binary="";
+        const chunk=0x8000;
+        for(let i=0;i<bytes.length;i+=chunk) binary+=String.fromCharCode(...bytes.subarray(i,i+chunk));
+        row.base64=btoa(binary);
+        binaryBudget += file.size;
       } catch {}
     }
     rows.push(row);
@@ -237,7 +248,8 @@ function renderProjectFileSummary() {
   }
   const withText=rows.filter(x=>x.text).length;
   const assets=rows.filter(x=>/\.(png|jpe?g|webp|avif|gif|svg|mp4|webm|woff2?|ttf|otf)$/i.test(x.path)).length;
-  $("projectFileSummary").textContent=`${rows.length} files · ${withText} readable source/design files · ${assets} asset filenames · secret/config-private files excluded`;
+  const portable=rows.filter(x=>x.base64).length;
+  $("projectFileSummary").textContent=`${rows.length} files · ${withText} readable source/design files · ${assets} asset filenames · ${portable} portable assets included · secret/config-private files excluded`;
 }
 
 function scopeMode() {
