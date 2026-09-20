@@ -55,7 +55,7 @@ for(const marker of ["scanGitHubProject","parseGitHubRepoUrl","kk-project-github
 const projectFit=fs.readFileSync(path.join(CONFIG.packageRoot,"src","no-code","project-fit.mjs"),"utf8");
 for(const marker of ["analyzeProjectContext","sourceIntelligence","websiteContent","routeFromWebsitePath","targetSourceCandidates","deliveryMode","targetResolution","packageRoot","integrationSupportFiles","newProjectSupportFiles","kk-project-fit/v1","APPLY-WINDOWS.ps1","APPLY-MAC.command"]) assert.ok(projectFit.includes(marker),`project-fit marker missing: ${marker}`);
 const noCodeCompiler=fs.readFileSync(path.join(CONFIG.packageRoot,"src","no-code","compiler.mjs"),"utf8");
-for(const marker of ["kk-no-code-design-build/v1","compileNoCodeDesign","buildReferenceTree","referenceTreeMarkup","referenceTreeCss","hierarchy-exact","zipStore","standaloneHtml","reactFiles","nextFiles"]) assert.ok(noCodeCompiler.includes(marker),`no-code compiler marker missing: ${marker}`);
+for(const marker of ["kk-no-code-design-build/v1","compileNoCodeDesign","buildReferenceTree","referenceTreeMarkup","referenceTreeCss","pixel-reference","zipStore","standaloneHtml","reactFiles","nextFiles"]) assert.ok(noCodeCompiler.includes(marker),`no-code compiler marker missing: ${marker}`);
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","web","reference-design.html")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"public","reference-design.html")));
 const referenceDesign=fs.readFileSync(path.join(CONFIG.packageRoot,"src","reference-design","design-md.mjs"),"utf8");
