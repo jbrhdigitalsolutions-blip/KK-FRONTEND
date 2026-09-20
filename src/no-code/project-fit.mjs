@@ -25,8 +25,14 @@ function cleanList(value){
 }
 function fileBy(files, predicate){ return files.find(predicate); }
 
+const SECRET_OR_PRIVATE_PATH=/(^|\/)(\.env(?:\.|$)|id_rsa|id_ed25519|.*\.(?:pem|key|p12|pfx)|credentials?(?:\.|$)|secrets?(?:\.|$))/i;
+const SKIP_PROJECT_PATH=/(^|\/)(node_modules|\.git|\.next|dist|build|coverage|\.cache|vendor)(\/|$)/i;
+
 function normalizeFiles(input=[]){
-  return arr(input).slice(0,220).map(file=>({
+  return arr(input).slice(0,500).filter(file=>{
+    const p=pathNorm(file?.path || file?.webkitRelativePath || file?.name);
+    return p && !SECRET_OR_PRIVATE_PATH.test(p) && !SKIP_PROJECT_PATH.test(p);
+  }).slice(0,220).map(file=>({
     path:pathNorm(file?.path || file?.webkitRelativePath || file?.name),
     name:text(file?.name || pathNorm(file?.path).split("/").pop()),
     size:Number(file?.size)||0,
