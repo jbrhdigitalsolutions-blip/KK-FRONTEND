@@ -486,8 +486,9 @@ function slimEvidenceStyle(style = {}) {
   return out;
 }
 
-function slimEvidenceNode(node = {}) {
-  return {
+function slimEvidenceNode(node = {}, internStyle = null) {
+  const style=slimEvidenceStyle(node.style);
+  const out={
     selector: node.selector || null,
     parentSelector: node.parentSelector || null,
     ancestorSelectors: arr(node.ancestorSelectors).slice(0,8),
@@ -501,14 +502,26 @@ function slimEvidenceNode(node = {}) {
     directText: String(node.directText || "").replace(/\s+/g," ").trim().slice(0,420),
     interactive: Boolean(node.interactive),
     rect: node.rect || null,
-    style: slimEvidenceStyle(node.style),
     attrs: node.attrs || undefined,
     pseudoBefore: node.pseudoBefore || undefined,
     pseudoAfter: node.pseudoAfter || undefined,
   };
+  if(internStyle)out.styleRef=internStyle(style);
+  else out.style=style;
+  return out;
 }
 
 export function buildEvidenceCompanion(evidence) {
+  const styles=[];
+  const styleMap=new Map();
+  const internStyle=style=>{
+    const key=JSON.stringify(style||{});
+    if(styleMap.has(key))return styleMap.get(key);
+    const index=styles.length;
+    styles.push(style||{});
+    styleMap.set(key,index);
+    return index;
+  };
   const viewports = arr(evidence?.viewports).map(vp => {
     const raw=arr(vp.elements);
     const useful=raw.filter(evidenceNodeUseful);
@@ -517,16 +530,16 @@ export function buildEvidenceCompanion(evidence) {
       if(node?.selector)required.add(node.selector);
       for(const ancestor of arr(node?.ancestorSelectors))if(ancestor)required.add(ancestor);
     }
-    const hierarchy=raw.filter(node=>node?.selector && required.has(node.selector)).slice(0,360);
+    const hierarchy=raw.filter(node=>node?.selector && required.has(node.selector)).slice(0,480);
     return {
       name: vp.name,
       targetViewport: vp.targetViewport || vp.viewport || null,
       viewport: vp.viewport || null,
       runtimeViewport: vp.runtimeViewport || null,
       document: vp.document || null,
-      scopes: arr(vp.scopes).map(slimEvidenceNode),
-      representativeElements: hierarchy.map(slimEvidenceNode),
-      representativeElementPolicy: "Fidelity-critical semantic/layout nodes plus required DOM ancestors; capped at 360 per viewport with hierarchy links.",
+      scopes: arr(vp.scopes).map(node=>slimEvidenceNode(node,internStyle)),
+      representativeElements: hierarchy.map(node=>slimEvidenceNode(node,internStyle)),
+      representativeElementPolicy: "Fidelity-critical semantic/layout nodes plus required DOM ancestors; capped at 480 per viewport with hierarchy links and interned computed styles.",
     };
   });
 
@@ -545,6 +558,7 @@ export function buildEvidenceCompanion(evidence) {
     coverage: evidence?.coverage || {},
     confidence: evidence?.confidence ?? null,
     confidenceReasons: arr(evidence?.confidenceReasons),
+    styles,
     viewports,
     responsiveCss: {
       mediaQueries: arr(evidence?.mediaQueries),
