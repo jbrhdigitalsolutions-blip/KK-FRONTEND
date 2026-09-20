@@ -350,14 +350,28 @@ function invalidateProjectFit() {
   $("projectFitResult").hidden=true;
   updateAccurateAvailability();
 }
+function syncAccurateContentMode() {
+  const accurate=$("buildFidelity").value==="accurate";
+  const content=$("buildContent");
+  if(accurate){
+    content.value="reference-exact";
+    content.disabled=true;
+    content.title="Pixel Accurate mode preserves the captured reference content so pixel certification is meaningful.";
+  }else{
+    content.disabled=false;
+    if(content.value==="reference-exact")content.value="placeholders";
+    content.title="";
+  }
+}
 function updateAccurateAvailability() {
   const accurateOption=[...$("buildFidelity").options].find(x=>x.value==="accurate");
   const ready=Boolean(state.projectProfile?.readiness?.accurateReady);
   if (accurateOption) accurateOption.disabled=!ready;
   if (!ready && $("buildFidelity").value==="accurate") $("buildFidelity").value="balanced";
+  syncAccurateContentMode();
   $("projectFitHint").textContent=ready
-    ? "Accurate mode unlocked — required project evidence is ready."
-    : "Accurate mode stays locked until required project evidence is ready.";
+    ? "Pixel Accurate unlocked — reference hierarchy/content/assets are preserved for visual certification."
+    : "Pixel Accurate stays locked until required project evidence is ready.";
   $("projectFitHint").dataset.ready=ready ? "true" : "false";
 }
 function renderTargetMapping(profile) {
@@ -1078,6 +1092,9 @@ function renderBuildResult(data) {
   setBuildDevice("desktop");
   $("buildStage").scrollIntoView({ behavior: "smooth", block: "start" });
 }
+
+$("buildFidelity").addEventListener("change",syncAccurateContentMode);
+syncAccurateContentMode();
 
 $("buildPageButton").addEventListener("click", async () => {
   if (!state.evidenceJson || !state.markdown) {
