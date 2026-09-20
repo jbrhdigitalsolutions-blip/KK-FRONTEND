@@ -123,8 +123,19 @@ function fileExtension(name) {
   const i=base.lastIndexOf(".");
   return i>=0 ? base.slice(i) : "";
 }
+function projectFilePriority(file) {
+  const path=(file.webkitRelativePath || file.name || "").replaceAll("\\","/").toLowerCase();
+  let score=0;
+  if(/(^|\/)(package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock|bun\.lockb?|design[^/]*\.(?:md|json)|tailwind\.config|next\.config|vite\.config|tsconfig)/.test(path))score+=120;
+  if(/(^|\/)(app|pages|src|components|ui|views|screens|styles|public|assets)(\/|$)/.test(path))score+=45;
+  if(/\.(tsx|jsx|vue|svelte)$/.test(path))score+=45;
+  if(/\.(css|scss|sass|less)$/.test(path))score+=35;
+  if(/header|nav|sidebar|layout|home|hero|footer|form|card|theme|token|brand/.test(path))score+=25;
+  if(PROJECT_SECRET_PATH.test(path)||PROJECT_SKIP_PATH.test(path))score-=1000;
+  return score;
+}
 async function readProjectFiles(fileList) {
-  const input=[...fileList];
+  const input=[...fileList].sort((a,b)=>projectFilePriority(b)-projectFilePriority(a));
   const seen=new Set();
   const rows=[];
   let textBudget=0;
@@ -152,7 +163,7 @@ async function readProjectFiles(fileList) {
       } catch {}
     }
     rows.push(row);
-    if (rows.length >= 220) break;
+    if (rows.length >= 500) break;
   }
   return rows;
 }
