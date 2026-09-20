@@ -222,57 +222,198 @@ function inferIconLibrary(evidence) {
 
 function replaceUnknownUnits(markdown) {
   return markdown
-    .replaceAll(`${UNKNOWN}px`, UNKNOWN)
-    .replaceAll(`${UNKNOWN}ms`, UNKNOWN)
-    .replaceAll(`${UNKNOWN}%`, UNKNOWN)
-    .replaceAll(`${UNKNOWN}KB`, UNKNOWN)
-    .replaceAll(`${UNKNOWN}deg`, UNKNOWN)
-    .replaceAll(`${UNKNOWN}ch`, UNKNOWN);
+    .replaceAll(UNKNOWN + "px", UNKNOWN)
+    .replaceAll(UNKNOWN + "ms", UNKNOWN)
+    .replaceAll(UNKNOWN + "%", UNKNOWN)
+    .replaceAll(UNKNOWN + "KB", UNKNOWN)
+    .replaceAll(UNKNOWN + "deg", UNKNOWN)
+    .replaceAll(UNKNOWN + "ch", UNKNOWN);
 }
-function json(v) { return JSON.stringify(v, null, 2); }
-function evidenceAppendix(evidence) {
-  const lines = [];
-  lines.push("# Verified Reference Evidence", "");
-  lines.push("> This appendix is generated from rendered browser evidence. `VERIFIED` means directly observed. `DERIVED` means calculated from observed values. `UNKNOWN — DO NOT INVENT` means the reference did not expose enough evidence.", "");
-  lines.push("## Capture", "");
-  lines.push(`- Reference URL: \`${text(evidence?.url)}\``);
-  lines.push(`- Final URL after navigation: \`${text(evidence?.finalUrl)}\``);
-  lines.push(`- Page title: ${text(evidence?.title)}`);
-  lines.push(`- Selected scope: **${selectedLabel(evidence)}**`);
-  lines.push(`- Captured at: ${text(evidence?.capturedAt)}`);
-  lines.push(`- Browser: ${text(evidence?.browser)}`);
-  lines.push(`- Evidence confidence: ${text(evidence?.confidence)}%`, "");
-  lines.push("## Selected Scope Locators", "", "```json", json(evidence?.selection || [{ label: "Whole Page", selector: "body" }]), "```", "");
-  lines.push("## Responsive Measurements", "");
-  for (const vp of arr(evidence?.viewports)) {
-    lines.push(`### ${vp.name} — ${vp.viewport?.width}×${vp.viewport?.height}`, "", "```json", json({
-      document: vp.document,
-      scopes: vp.scopes,
-      representativeElements: vp.elements,
-    }), "```", "");
+function mdCell(value) {
+  return String(value ?? UNKNOWN).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+}
+function cleanLabel(value) {
+  const v = String(value || "").replace(/\s+/g, " ").trim();
+  if (!v || /requestAnimationFrame|function\s*\(/i.test(v)) return "";
+  return v.slice(0, 80);
+}
+function compactStateDiff(diff) {
+  const entries = Object.entries(diff || {});
+  if (!entries.length) return "—";
+  return entries.slice(0, 5).map(([key, value]) =>
+    key + ": " + (value?.before ?? "?") + " → " + (value?.after ?? "?")
+  ).join("; ");
+}
+function observedTokens(evidence) {
+  const take = (key, limit = 10) => dominantStyle(evidence, key, limit).map(x => ({ value: x.value, count: x.count }));
+  return {
+    colors: take("color", 12),
+    backgrounds: take("backgroundColor", 12).filter(x => !/rgba?\(0,\s*0,\s*0,\s*0\)/.test(x.value)),
+    fonts: take("fontFamily", 8),
+    fontSizes: take("fontSize", 12),
+    fontWeights: take("fontWeight", 10),
+    lineHeights: take("lineHeight", 10),
+    radii: take("borderRadius", 10),
+    gaps: take("gap", 10),
+    shadows: take("boxShadow", 8),
+  };
+}
+function compactRegionRows(evidence) {
+  const desktop = firstViewport(evidence, "desktop");
+  const tablet = firstViewport(evidence, "tablet");
+  const mobile = firstViewport(evidence, "mobile");
+  const usefulTags = new Set(["header","nav","main","aside","footer","section","form","dialog","button","input","textarea","select","img","video"]);
+  const useful = e => e && (e.interactive || /^h[1-6]$/.test(e.tag || "") || usefulTags.has(e.tag) || ["fixed","sticky"].includes(e.style?.position));
+  const rows = [];
+  const seen = new Set();
+  for (const e of [...arr(desktop.scopes), ...arr(desktop.elements)]) {
+    if (!useful(e) || !e.selector || seen.has(e.selector)) continue;
+    seen.add(e.selector);
+    const find = vp => [...arr(vp.scopes), ...arr(vp.elements)].find(x => x.selector === e.selector);
+    const format = x => x
+      ? Math.round(x.rect?.width || 0) + "×" + Math.round(x.rect?.height || 0) + "; " + (x.style?.display || "?") + "; " + (x.style?.position || "?")
+      : "not observed";
+    rows.push({
+      kind: classifyCandidate({ tag: e.tag, role: e.role, className: e.className, animation: e.style?.animationName && e.style.animationName !== "none" }),
+      selector: e.selector,
+      label: cleanLabel(e.label) || e.tag || e.selector,
+      desktop: format(e),
+      tablet: format(find(tablet)),
+      mobile: format(find(mobile)),
+    });
+    if (rows.length >= 48) break;
   }
-  lines.push("## Interaction State Measurements", "", "```json", json(evidence?.interactions || []), "```", "");
-  lines.push("## Animation / Transition Evidence", "", "```json", json(evidence?.animations || []), "```", "");
-  lines.push("## Responsive CSS Evidence", "", "```json", json({ mediaQueries: evidence?.mediaQueries || [], containerQueries: evidence?.containerQueries || [] }), "```", "");
-  lines.push("## Font Evidence", "", "```json", json(evidence?.fonts || []), "```", "");
-  lines.push("## Asset / SVG / Media Evidence", "", "```json", json(evidence?.assets || {}), "```", "");
-  lines.push("## Scroll / Sticky Evidence", "", "```json", json(evidence?.scroll || {}), "```", "");
-  lines.push("## Known Restrictions", "");
-  for (const item of arr(evidence?.restrictions)) lines.push(`- ${item}`);
-  if (!arr(evidence?.restrictions).length) lines.push("- No extractor restriction was reported for the captured scope.");
+  return rows;
+}
+function evidenceSummary(evidence) {
+  const lines = [];
+  const bt = String.fromCharCode(96);
+  const tokens = observedTokens(evidence);
+  const regionRows = compactRegionRows(evidence);
+  const meaningful = arr(evidence?.interactions).filter(row => Object.keys(row.hover || {}).length || Object.keys(row.focus || {}).length);
+
+  lines.push("## Verified Evidence Summary", "");
+  lines.push("> Machine rule: use only verified/derived evidence below or explicit values in this specification. Any " + bt + UNKNOWN + bt + " value must remain unresolved until new evidence is captured.", "");
+
+  lines.push("### Capture provenance", "");
+  lines.push("| Field | Value |", "|---|---|");
+  lines.push("| Reference | " + bt + mdCell(evidence?.url) + bt + " |");
+  lines.push("| Final URL | " + bt + mdCell(evidence?.finalUrl) + bt + " |");
+  lines.push("| Page | " + mdCell(evidence?.title) + " |");
+  lines.push("| Scope | " + mdCell(selectedLabel(evidence)) + " |");
+  lines.push("| Captured | " + mdCell(evidence?.capturedAt) + " |");
+  lines.push("| Browser | " + mdCell(evidence?.browser) + " |");
+  lines.push("| Evidence confidence | " + mdCell(evidence?.confidence) + "% |");
+  lines.push("| Component coverage | " + mdCell(evidence?.coverage?.componentCoverageClaim || UNKNOWN) + " |", "");
+
+  lines.push("### Viewport verification", "");
+  lines.push("| Mode | Requested | Browser-reported | Document | Horizontal overflow | Status |", "|---|---:|---:|---:|---|---|");
+  for (const vp of arr(evidence?.viewports)) {
+    const target = vp.targetViewport || vp.viewport || {};
+    const actual = vp.viewport || {};
+    const match = target.width === actual.width && target.height === actual.height;
+    lines.push("| " + mdCell(vp.name) + " | " + target.width + "×" + target.height + " | " + actual.width + "×" + actual.height + " | " +
+      (vp.document?.width ?? "?") + "×" + (vp.document?.height ?? "?") + " | " + (vp.document?.horizontalOverflow ? "yes" : "no") + " | " + (match ? "VERIFIED" : "MISMATCH") + " |");
+  }
+  lines.push("");
+
+  lines.push("### Exact responsive CSS conditions", "");
+  if (arr(evidence?.mediaQueries).length) {
+    for (const q of arr(evidence.mediaQueries)) lines.push("- Media: " + bt + String(q).replace(/\x60/g, "\\x60") + bt);
+  } else lines.push("- Media queries: " + bt + UNKNOWN + bt);
+  if (arr(evidence?.containerQueries).length) {
+    for (const q of arr(evidence.containerQueries)) lines.push("- Container: " + bt + String(q).replace(/\x60/g, "\\x60") + bt);
+  } else lines.push("- Container queries: none directly observed/readable");
+  lines.push("", "> Breakpoint names such as XS/SM/MD/LG are not inferred. Preserve source query conditions exactly.", "");
+
+  lines.push("### Responsive region matrix", "");
+  lines.push("| Kind | Region | Selector | Desktop | Tablet | Mobile |", "|---|---|---|---|---|---|");
+  if (regionRows.length) {
+    for (const r of regionRows) {
+      lines.push("| " + mdCell(r.kind) + " | " + mdCell(r.label) + " | " + bt + mdCell(r.selector) + bt + " | " + mdCell(r.desktop) + " | " + mdCell(r.tablet) + " | " + mdCell(r.mobile) + " |");
+    }
+  } else lines.push("| — | No semantic region rows captured | — | — | — | — |");
+  lines.push("");
+
+  lines.push("### Observed design tokens", "");
+  lines.push("> Frequency-ranked observed values only. They are not automatically assigned brand semantics.", "");
+  for (const [name, values] of Object.entries(tokens)) {
+    const rendered = values.length ? values.map(x => bt + x.value + bt + " ×" + x.count).join(", ") : UNKNOWN;
+    lines.push("- **" + name + ":** " + rendered);
+  }
+  lines.push("");
+
+  lines.push("### Interaction states", "");
+  lines.push("- Captured desktop interaction samples: **" + arr(evidence?.interactions).length + "**");
+  lines.push("- Samples with observable hover/focus changes: **" + meaningful.length + "**");
+  if (evidence?.coverage?.interactionCoveragePercent != null) lines.push("- Sampling coverage of captured desktop interactive elements: **" + evidence.coverage.interactionCoveragePercent + "%**");
+  if (meaningful.length) {
+    lines.push("", "| Selector | Hover change | Focus change |", "|---|---|---|");
+    for (const row of meaningful.slice(0, 24)) {
+      lines.push("| " + bt + mdCell(row.selector) + bt + " | " + mdCell(compactStateDiff(row.hover)) + " | " + mdCell(compactStateDiff(row.focus)) + " |");
+    }
+  }
+  lines.push("");
+
+  lines.push("### Motion evidence", "");
+  if (arr(evidence?.animations).length) {
+    lines.push("| Selector | Duration | Easing | Iterations | Keyframes |", "|---|---:|---|---:|---:|");
+    for (const a of arr(evidence.animations).slice(0, 30)) {
+      lines.push("| " + bt + mdCell(a.selector || "unknown") + bt + " | " + mdCell(a.timing?.duration) + "ms | " + mdCell(a.timing?.easing) + " | " + mdCell(a.timing?.iterations) + " | " + arr(a.keyframes).length + " |");
+    }
+  } else lines.push("- No runtime Web Animations API records were observed in the selected scope.");
+  lines.push("", "> A captured animation duration/easing is not promoted to a global design-system default unless repeated evidence proves consistency.", "");
+
+  lines.push("### Assets and browser evidence", "");
+  lines.push("- Fonts observed: **" + arr(evidence?.fonts).length + "**");
+  lines.push("- SVGs observed: **" + arr(evidence?.assets?.svgs).length + "**");
+  lines.push("- Images observed: **" + arr(evidence?.assets?.images).length + "**");
+  lines.push("- Videos observed: **" + arr(evidence?.assets?.videos).length + "**");
+  lines.push("- Canvas elements: **" + (evidence?.assets?.canvasCount ?? 0) + "**");
+  lines.push("- Stylesheets readable/total: **" + (evidence?.styleSheets?.readable ?? "?") + "/" + (evidence?.styleSheets?.total ?? "?") + "**");
+  lines.push("- Fixed/sticky elements observed: **" + arr(evidence?.scroll?.sticky).length + "**", "");
+
+  lines.push("### Confidence and restrictions", "");
+  for (const reason of arr(evidence?.confidenceReasons)) lines.push("- Confidence: " + reason);
+  for (const item of arr(evidence?.restrictions)) lines.push("- Restriction: " + item);
+
+  lines.push("", "### Machine implementation contract", "");
+  lines.push("1. Trust viewport dimensions only when Viewport verification is VERIFIED.");
+  lines.push("2. Use exact media/container query conditions; do not rename breakpoints by convention.");
+  lines.push("3. Use observed design tokens as raw evidence; assign semantic token names only when the reference exposes that semantic meaning.");
+  lines.push("4. Never convert evidence confidence into a visual-match score; visual similarity requires an independent screenshot-diff loop.");
+  lines.push("5. " + bt + "DESIGN-EVIDENCE.json" + bt + " is the detailed evidence companion; " + bt + "DESIGN.md" + bt + " is the concise implementation contract.");
   return lines.join("\n");
+}
+function yaml(value) {
+  return JSON.stringify(String(value ?? ""));
 }
 
 export function renderDesignMd({ template, evidence }) {
   if (!template || typeof template !== "string") throw new Error("DESIGN.md template is required.");
   if (!evidence?.url) throw new Error("Reference evidence is required.");
   const values = commonValues(evidence);
-  let rendered = template.replace(/\{\{([A-Z0-9_]+)\}\}/g, (_, key) => {
+  let rendered = template.replace(/^#\s+DEISGN\.md\s*$/m, "# DESIGN.md");
+  rendered = rendered.replace(/\{\{([A-Z0-9_]+)\}\}/g, (_, key) => {
     const value = values[key];
     return value == null || value === "" || (typeof value === "number" && !Number.isFinite(value)) ? UNKNOWN : String(value);
   });
   rendered = replaceUnknownUnits(rendered);
-  return `${evidenceAppendix(evidence)}\n\n---\n\n${rendered}`;
+  const withoutHeading = rendered.replace(/^#\s+DESIGN\.md\s*\n+/, "");
+  const frontmatter = [
+    "---",
+    "schema: kk-reference-design-md/v2",
+    "reference_url: " + yaml(evidence.url),
+    "final_url: " + yaml(evidence.finalUrl),
+    "page_title: " + yaml(evidence.title),
+    "scope: " + yaml(selectedLabel(evidence)),
+    "captured_at: " + yaml(evidence.capturedAt),
+    "browser: " + yaml(evidence.browser),
+    "evidence_confidence_percent: " + (Number(evidence.confidence) || 0),
+    "measurement_policy: \"VERIFIED | DERIVED | UNKNOWN — DO NOT INVENT\"",
+    "---",
+  ].join("\n");
+  return frontmatter + "\n\n# DESIGN.md\n\n" + evidenceSummary(evidence) + "\n\n---\n\n" + withoutHeading;
 }
 
 export { UNKNOWN };
