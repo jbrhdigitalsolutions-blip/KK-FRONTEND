@@ -11,4 +11,8 @@
 - This phase does not automatically mutate target source.
 - Unmapped actions are marked `requiresMapping=true` and must stop instead of guessing.
 - Plans preserve APIs, auth, routes, forms, state, business logic, analytics and accessibility behavior.
-- Existing execution/workspace behavior remains unchanged in this foundation branch.
+- Execution artifacts are isolated under `.kk-frontend/` and excluded from project apply-back.
+- Agent changes are rejected if they escape the approved `allowedFiles` scope.
+- Safe-copy apply now verifies original baseline hashes, backup hashes, every applied file hash, and rollback hashes.
+- Verification is change-aware: CSS-only work avoids unnecessary generic tests, while runtime-source changes retain lint/typecheck/test/build checks when available.
+- Apply-back is gated until post-change visual verification passes.

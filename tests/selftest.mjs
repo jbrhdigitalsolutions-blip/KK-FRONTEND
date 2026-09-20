@@ -38,6 +38,8 @@ assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","intelligence","sourc
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","target","source-intelligence.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","intelligence","design-contract.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","intelligence","component-map.mjs")));
+assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","execution","migration-guard.mjs")));
+assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","execution","visual-verify.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","reference-design","design-md.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","reference-design","browserless.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","reference-design","DESIGN-TEMPLATE.md")));

@@ -21,6 +21,7 @@ import { buildComponentMap } from "./intelligence/component-map.mjs";
 import { prepareExecutionWorkspace, compareTrees, applySafeCopyToOriginal, rollbackSafeCopyApply } from "./execution/workspace.mjs";
 import { runConfiguredAgent } from "./execution/agent-runner.mjs";
 import { verifyProject } from "./execution/verify.mjs";
+import { verifyPlanBaseline, validateChangedFileScope } from "./execution/migration-guard.mjs";
 import { generateReferenceDesignMd, inspectReferenceDesign, referenceDesignStatus } from "./reference-design/browserless.mjs";
 
 const app=express();
@@ -358,19 +359,25 @@ app.post("/api/execute",async(req,res)=>{
   jobs.run(job,async()=>{
     const progress=progressFor(job);
     const checkpoint=await prepareExecutionWorkspace(s.target.acquired.root,sessionDir(sessionId),{progress});
+    const plan=await readJson(sessionFile(sessionId,"implementation-plan.json"));
+    if(!plan)throw new Error("Implementation plan artifact is missing.");
+    const systemDir=path.join(checkpoint.worktree,".kk-frontend");
+    await ensureDir(systemDir);
     const taskFile=path.join(sessionDir(sessionId),"AGENT-TASK.md");
-    const workTask=path.join(checkpoint.worktree,"AGENT-TASK.md");
+    const workTask=path.join(systemDir,"AGENT-TASK.md");
     await fs.copyFile(taskFile,workTask);
     const designPack=path.join(sessionDir(sessionId),"DESIGN-PACK");
-    if(await exists(designPack))await fs.cp(designPack,path.join(checkpoint.worktree,"DESIGN-PACK"),{recursive:true,force:true});
+    if(await exists(designPack))await fs.cp(designPack,path.join(systemDir,"DESIGN-PACK"),{recursive:true,force:true});
     for(const name of ["design-contract.json","component-map.json","implementation-plan.json"]){
       const src=sessionFile(sessionId,name);
-      if(await exists(src))await fs.copyFile(src,path.join(checkpoint.worktree,name));
+      if(await exists(src))await fs.copyFile(src,path.join(systemDir,name));
     }
+    await verifyPlanBaseline(checkpoint.worktree,plan,{progress});
 
     const agent=await runConfiguredAgent({worktree:checkpoint.worktree,taskFile:workTask,runDir:sessionDir(sessionId),progress});
+    const scope=await validateChangedFileScope(checkpoint,plan,{progress});
     const sourceAudit=await scanSourceProject(checkpoint.worktree,path.join(sessionDir(sessionId),"target-after-source-audit.json"),{progress});
-    const verification=await verifyProject({root:checkpoint.worktree,sourceAudit,runDir:sessionDir(sessionId),progress});
+    const verification=await verifyProject({root:checkpoint.worktree,sourceAudit,runDir:sessionDir(sessionId),progress,migrationPlan:plan,changedFiles:scope.changedFiles});
 
     let changedText="";
     if(checkpoint.mode==="git-worktree"){
@@ -397,7 +404,7 @@ ${changedText}
 `;
     await fs.writeFile(sessionFile(sessionId,"CHANGELOG.md"),changelog,"utf8");
     if(!verification.passed)throw new Error("Verification failed. Isolated workspace retained; original project remains unchanged.");
-    s.execution={checkpoint,agent,verificationPassed:true,applied:false,completedAt:new Date().toISOString()};
+    s.execution={checkpoint,agent,scope,verificationPassed:true,visualVerificationPassed:false,visualVerificationStatus:"pending-runtime",applied:false,completedAt:new Date().toISOString()};
     await saveSession(s);
     return s.execution;
   }).catch(()=>{});
@@ -408,6 +415,7 @@ app.post("/api/apply-local",async(req,res)=>{
   const s=await ensureSession(sessionId);
   if(approved!==true)return res.status(400).json({error:"Explicit apply-back approval is required."});
   if(!s.execution?.verificationPassed)return res.status(400).json({error:"No verified execution workspace is ready to apply."});
+  if(s.execution?.visualVerificationPassed!==true)return res.status(400).json({error:"Post-change visual verification must PASS before apply-back."});
   if(s.execution?.checkpoint?.mode!=="safe-copy")return res.status(400).json({error:"Apply-back is only used for Local/non-Git safe-copy execution. Git worktrees remain isolated for normal Git review/merge."});
   if(s.execution?.applied)return res.status(400).json({error:"Verified changes were already applied."});
 
@@ -418,10 +426,12 @@ app.post("/api/apply-local",async(req,res)=>{
     const checkpoint=s.execution.checkpoint;
     const applyResult=await applySafeCopyToOriginal(checkpoint,sessionDir(sessionId),{progress});
     const after=await scanSourceProject(checkpoint.originalRoot,path.join(sessionDir(sessionId),"target-applied-source-audit.json"),{progress});
-    const verification=await verifyProject({root:checkpoint.originalRoot,sourceAudit:after,runDir:path.join(sessionDir(sessionId),"apply-verification"),progress});
+    const plan=await readJson(sessionFile(sessionId,"implementation-plan.json"));
+    const verification=await verifyProject({root:checkpoint.originalRoot,sourceAudit:after,runDir:path.join(sessionDir(sessionId),"apply-verification"),progress,migrationPlan:plan,changedFiles:s.execution?.scope?.changedFiles||[]});
     if(!verification.passed){
-      await rollbackSafeCopyApply(applyResult,checkpoint,{progress});
-      throw new Error("Apply-back verification failed. Original source files were restored from backup.");
+      const rollback=await rollbackSafeCopyApply(applyResult,checkpoint,{progress});
+      if(!rollback.passed)throw new Error("CRITICAL: Apply-back verification failed and rollback verification FAILED. Inspect rollback-verification.json.");
+      throw new Error("Apply-back verification failed. Rollback restored and SHA256-verified the original files.");
     }
     s.execution.applied=true;
     s.execution.appliedAt=new Date().toISOString();

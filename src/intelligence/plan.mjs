@@ -94,10 +94,10 @@ export async function buildPlan({comparisonFile,selectedIds,outDir,targetSourceA
     "# KK-FRONTEND Source-Aware Upgrade Task","",
     "Operate only inside the KK-FRONTEND isolated execution workspace.","",
     "## Read first",
-    "1. DESIGN-PACK/DESIGN.md",
-    "2. design-contract.json",
-    "3. component-map.json",
-    "4. implementation-plan.json","",
+    "1. .kk-frontend/DESIGN-PACK/DESIGN.md",
+    "2. .kk-frontend/design-contract.json",
+    "3. .kk-frontend/component-map.json",
+    "4. .kk-frontend/implementation-plan.json","",
     "## Hard rules",
     "- Preserve backend/API behavior, routes, business logic, auth, permissions, forms, data/state, navigation, analytics, integrations and accessibility behavior.",
     "- allowedFiles is a hard boundary for each action. Do not edit unrelated files.",
@@ -109,7 +109,7 @@ export async function buildPlan({comparisonFile,selectedIds,outDir,targetSourceA
     "## Approved migration actions","",
     JSON.stringify(actions,null,2),"",
     "## Required result",
-    "Write KK-FRONTEND-AGENT-RESULT.json with changedFiles, actionsCompleted, commandsRun, tests, visualChecks, warnings, unresolved and rollbackNotes."
+    "Write .kk-frontend/AGENT-RESULT.json with changedFiles, actionsCompleted, commandsRun, tests, visualChecks, runtimeUrl (only if the changed workspace is actually running there), warnings, unresolved and rollbackNotes."
   ];
   await writeText(path.join(outDir,"AGENT-TASK.md"),lines.join("\n"));
   return plan;
