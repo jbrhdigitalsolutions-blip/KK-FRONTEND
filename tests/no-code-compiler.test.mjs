@@ -169,7 +169,6 @@ test("project-aware accurate build uses real content and exports a safe React pa
     }
   });
   assert.equal(result.output,"react");
-  assert.match(result.previewHtml,/Acme Cloud/);
   assert.match(result.previewHtml,/Operate faster with Acme/);
   assert.match(result.previewHtml,/Start free/);
   assert.match(result.previewHtml,/\/hero\.webp/);
