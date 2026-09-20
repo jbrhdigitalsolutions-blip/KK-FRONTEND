@@ -53,20 +53,32 @@ function relativeRect(child,parent){
     height:((num(c.height)||0)/ph)*100
   };
 }
-function contentFor(node,answers,index){
-  const k=kind(node),provided=answers?.content||{};
-  if(k==="Typography")return str(provided["text-"+(index+1)])||label(node.label)||"Project text";
-  if(k==="Button")return str(provided["action-"+(index+1)])||label(node.label)||"Action";
-  if(["Input","Search","Form"].includes(k))return str(provided["field-"+(index+1)])||label(node.label)||"Input";
-  if(["Image","Video","Logo","Icon","Avatar"].includes(k))return str(provided["asset-"+(index+1)])||label(node.label)||k;
+function contentFor(node,answers,intake,index){
+  const k=kind(node),provided=answers?.content||{},strategy=answers?.contentStrategy;
+  const snippets=arr(intake?.content?.snippets);
+  if(k==="Typography"){
+    if(strategy==="provided") return str(provided["text-"+(index+1)])||str(provided["text-1"])||"Project text";
+    if(strategy==="project") return snippets[index%Math.max(1,snippets.length)]?.text||label(node.label)||"Project text";
+    return label(node.label)||"Project text";
+  }
+  if(k==="Button"){
+    if(strategy==="provided") return str(provided["action-"+(index+1)])||str(provided["action-1"])||"Action";
+    if(strategy==="project") return snippets.find(x=>/start|join|create|book|contact|learn|buy|try|sign|login|log in/i.test(x.text))?.text||label(node.label)||"Action";
+    return label(node.label)||"Action";
+  }
+  if(["Input","Search","Form"].includes(k)) return str(provided["field-"+(index+1)])||label(node.label)||"Input";
+  if(["Image","Video","Logo","Icon","Avatar"].includes(k)){
+    const refs=answers?.assetStrategy==="project" ? arr(intake?.content?.assetRefs).map(x=>x.path) : str(answers?.assetMap).split(/[,\n]/).map(x=>x.trim()).filter(Boolean);
+    return refs[index%Math.max(1,refs.length)]||label(node.label)||k;
+  }
   return label(node.label)||k;
 }
-function makeLayer(node,parent,e,answers,index){
+function makeLayer(node,parent,e,answers,intake,index){
   const tablet=find(vp(e,"tablet"),node.selector),mobile=find(vp(e,"mobile"),node.selector);
   const pt=find(vp(e,"tablet"),parent.selector)||parent,pm=find(vp(e,"mobile"),parent.selector)||parent;
   return {
     id:"layer-"+(index+1),selector:node.selector,kind:kind(node),tag:node.tag||"div",
-    label:label(node.label)||kind(node),content:contentFor(node,answers,index),
+    label:label(node.label)||kind(node),content:contentFor(node,answers,intake,index),
     attrs:node.attrs||{},style:node.style||{},desktop:relativeRect(node,parent),
     tablet:tablet?relativeRect(tablet,pt):null,mobile:mobile?relativeRect(mobile,pm):null
   };
@@ -81,7 +93,7 @@ function buildModel(e,intake,answers){
       const inside=cx>=(num(rr.x)||0)&&cx<=((num(rr.x)||0)+(num(rr.width)||0))&&cy>=(num(rr.y)||0)&&cy<=((num(rr.y)||0)+(num(rr.height)||0));
       if(!inside)continue;
       used.add(node.selector);
-      layers.push(makeLayer(node,root,e,answers,used.size-1));
+      layers.push(makeLayer(node,root,e,answers,intake,used.size-1));
       if(layers.length>=72)break;
     }
     layers.sort((a,b)=>(a.desktop.top-b.desktop.top)||(a.desktop.left-b.desktop.left));
@@ -127,7 +139,11 @@ function layerMarkup(layer){
   const k=layer.kind,c=esc(layer.content),id=layer.id;
   if(k==="Button")return '<button class="kkx-layer kkx-button" data-layer="'+id+'">'+c+'</button>';
   if(["Input","Search","Form"].includes(k))return '<div class="kkx-layer kkx-field" data-layer="'+id+'"><span>'+c+'</span></div>';
-  if(["Image","Video","Logo","Icon","Avatar"].includes(k))return '<div class="kkx-layer kkx-media" data-layer="'+id+'" data-media="'+esc(k)+'"><span>'+c+'</span></div>';
+  if(["Image","Video","Logo","Icon","Avatar"].includes(k)){
+    const usableSrc=/^(https?:\/\/|\/|\.\.\/|\.\/)/.test(layer.content);
+    if(usableSrc && ["Image","Logo","Avatar"].includes(k)) return '<img class="kkx-layer kkx-media kkx-img" data-layer="'+id+'" alt="'+esc(layer.label)+'" src="'+esc(layer.content)+'"/>';
+    return '<div class="kkx-layer kkx-media" data-layer="'+id+'" data-media="'+esc(k)+'"><span>'+c+'</span></div>';
+  }
   if(k==="Navigation")return '<nav class="kkx-layer kkx-text" data-layer="'+id+'">'+c+'</nav>';
   const tag=/^h[1-6]$|^p$|^span$|^label$|^a$/i.test(layer.tag)?layer.tag:"div";
   return '<'+tag+' class="kkx-layer kkx-text" data-layer="'+id+'">'+c+'</'+tag+'>';
@@ -158,7 +174,7 @@ function geometryCss(model){
 }
 function render(model){
   const first=model.regions[0]?.style||{},bg=first.backgroundColor||"#101012",color=first.color||"#f7f4ef";
-  const base='*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:'+css(bg)+';color:'+css(color)+'}body{overflow-x:hidden}.kkx-page{width:min(100%,1440px);margin:0 auto}.kkx-region{overflow:hidden}.kkx-layer{margin:0;box-sizing:border-box}.kkx-text{display:flex;align-items:center;overflow:hidden;white-space:pre-wrap}.kkx-button{display:flex;align-items:center;justify-content:center;padding:0 12px;cursor:pointer}.kkx-field{display:flex;align-items:center;padding:0 12px;border:1px solid rgba(127,127,127,.3)}.kkx-media{display:grid;place-items:center;overflow:hidden;background:linear-gradient(145deg,rgba(127,127,127,.18),rgba(127,127,127,.06));border:1px solid rgba(127,127,127,.16)}.kkx-media span{font:500 11px/1.2 system-ui;color:rgba(127,127,127,.9);text-align:center;padding:8px}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}';
+  const base='*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:'+css(bg)+';color:'+css(color)+'}body{overflow-x:hidden}.kkx-page{width:min(100%,1440px);margin:0 auto}.kkx-region{overflow:hidden}.kkx-layer{margin:0;box-sizing:border-box}.kkx-text{display:flex;align-items:center;overflow:hidden;white-space:pre-wrap}.kkx-button{display:flex;align-items:center;justify-content:center;padding:0 12px;cursor:pointer}.kkx-field{display:flex;align-items:center;padding:0 12px;border:1px solid rgba(127,127,127,.3)}.kkx-media{display:grid;place-items:center;overflow:hidden;background:linear-gradient(145deg,rgba(127,127,127,.18),rgba(127,127,127,.06));border:1px solid rgba(127,127,127,.16)}.kkx-media span{font:500 11px/1.2 system-ui;color:rgba(127,127,127,.9);text-align:center;padding:8px}.kkx-img{object-fit:cover}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}';
   const body=model.regions.map(r=>'<section class="kkx-region" data-region="'+r.id+'">'+r.layers.map(layerMarkup).join("")+'</section>').join("\n");
   const cssText=base+"\n"+geometryCss(model);
   const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(model.title)+'</title><style>'+cssText+'</style></head><body><main class="kkx-page">'+body+'</main></body></html>';
@@ -167,14 +183,21 @@ function render(model){
 function frameworkKey(v){const x=str(v).toLowerCase();return x.includes("next")?"next":x.includes("react")?"react":"html";}
 function sourceFiles(model,r){
   const fw=frameworkKey(model.framework),jsx=r.body.replaceAll("class=","className=");
-  if(fw==="next")return [
-    {path:"app/kk-generated/page.jsx",content:'import "./page.css";export default function GeneratedDesignPage(){return <main className="kkx-page">'+jsx+'</main>}'},
-    {path:"app/kk-generated/page.css",content:r.cssText}
-  ];
-  if(fw==="react")return [
-    {path:"src/kk-generated/ExactDesignPage.jsx",content:'import "./ExactDesignPage.css";export default function ExactDesignPage(){return <main className="kkx-page">'+jsx+'</main>}'},
-    {path:"src/kk-generated/ExactDesignPage.css",content:r.cssText}
-  ];
+  const routeRoot=str(model.projectProfile?.routeRoot);
+  if(fw==="next"){
+    const root=routeRoot&&/app$/.test(routeRoot)?routeRoot:"app";
+    return [
+      {path:root+"/kk-generated/page.jsx",content:'import "./page.css";export default function GeneratedDesignPage(){return <main className="kkx-page">'+jsx+'</main>}'},
+      {path:root+"/kk-generated/page.css",content:r.cssText}
+    ];
+  }
+  if(fw==="react"){
+    const root=str(model.projectProfile?.sourceRoot,"src");
+    return [
+      {path:root+"/kk-generated/ExactDesignPage.jsx",content:'import "./ExactDesignPage.css";export default function ExactDesignPage(){return <main className="kkx-page">'+jsx+'</main>}'},
+      {path:root+"/kk-generated/ExactDesignPage.css",content:r.cssText}
+    ];
+  }
   return [{path:"kk-generated/index.html",content:r.html}];
 }
 function commands(pm){return pm==="pnpm"?{i:"pnpm install",r:"pnpm dev"}:pm==="yarn"?{i:"yarn install",r:"yarn dev"}:pm==="bun"?{i:"bun install",r:"bun run dev"}:{i:"npm install",r:"npm run dev"};}
@@ -189,7 +212,9 @@ function supportFiles(a,generated){
     {path:"SETUP-WINDOWS.ps1",content:'$ErrorActionPreference="Stop"\nif(-not(Get-Command node -ErrorAction SilentlyContinue)){throw "Node.js 20+ is required."}\n$major=[int]((node -v).TrimStart("v").Split(".")[0]);if($major -lt 20){throw "Node.js 20+ is required."}\n'+c.i+'\nWrite-Host "Setup complete." -ForegroundColor Green\n'},
     {path:"RUN-WINDOWS.ps1",content:'$ErrorActionPreference="Stop"\n'+c.r+'\n'},
     {path:"setup-macos.sh",content:'#!/bin/zsh\nset -e\ncommand -v node >/dev/null || { echo "Node.js 20+ is required."; exit 1; }\n'+c.i+'\necho "Setup complete."\n'},
-    {path:"run-macos.sh",content:'#!/bin/zsh\nset -e\n'+c.r+'\n'}
+    {path:"run-macos.sh",content:'#!/bin/zsh\nset -e\n'+c.r+'\n'},
+    {path:"SETUP-AND-RUN-WINDOWS.ps1",content:'$ErrorActionPreference="Stop"\nif(-not(Get-Command node -ErrorAction SilentlyContinue)){throw "Node.js 20+ is required."}\n'+c.i+'\n'+c.r+'\n'},
+    {path:"setup-and-run-macos.sh",content:'#!/bin/zsh\nset -e\ncommand -v node >/dev/null || { echo "Node.js 20+ is required."; exit 1; }\n'+c.i+'\n'+c.r+'\n'}
   ];
 }
 function crc32(buf){let crc=0xffffffff;for(const b of buf){crc^=b;for(let k=0;k<8;k++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return(crc^0xffffffff)>>>0;}
