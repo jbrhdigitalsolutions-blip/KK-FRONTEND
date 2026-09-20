@@ -1,4 +1,39 @@
-# KK-FRONTEND v0.4.0 — WEB-ONLY REFERENCE → DESIGN.md
+# KK-FRONTEND v0.4.1 — VERIFIED REFERENCE → DESIGN.md
+
+v0.4.1 hardens the web-only Reference → DESIGN.md workflow for **measurement truth, machine readability, professional output, and production safety**.
+
+## What changed in v0.4.1
+
+- Desktop, Tablet and Mobile captures are now **browser-verified** at exactly `1440×900`, `820×1180`, and `390×844`. Generation stops instead of publishing mislabeled viewport evidence.
+- Every viewport is freshly navigated after its exact metrics are applied, preventing responsive state from leaking between sizes.
+- Semantic region identity wins over motion: animated headers remain **Header**, navigation remains **Navigation**, etc.; motion is a separate badge.
+- `DESIGN.md` is now a concise implementation contract with YAML metadata, a verified evidence summary, exact viewport table, responsive region matrix, observed tokens, state changes, motion evidence, confidence reasons, and explicit machine rules.
+- Detailed evidence is available separately as `DESIGN-EVIDENCE.json`, compacted to semantic/interactive evidence instead of dumping the full raw DOM into Markdown.
+- CSS media/container conditions are preserved exactly. The extractor does **not** invent XS/SM/MD/LG names.
+- One observed animation is no longer promoted to a global duration/easing. Global values remain `UNKNOWN — DO NOT INVENT` unless repeated evidence establishes them.
+- Evidence confidence is no longer presented as visual-match percentage. Pixel similarity requires a separate screenshot-diff verification.
+- Component coverage is no longer falsely claimed as 100%; representative capture is identified explicitly.
+- Inline data-URL assets are omitted from generated evidence payloads to avoid multi-megabyte output.
+- Generated response size is guarded below the Vercel function response ceiling.
+- Browser navigation and subresources are guarded against localhost/private/link-local/CGNAT/benchmark/multicast destinations, and the final redirect URL is revalidated.
+- The template heading is corrected to `DESIGN.md`.
+- Region list overflow is removed; long selectors wrap cleanly and animated regions receive a separate Motion badge.
+
+### Output contract
+
+```text
+Reference URL
+→ exact remote Chromium viewport verification
+→ semantic region selection
+→ measured responsive/state/motion evidence
+→ DESIGN.md                    concise implementation contract
+→ DESIGN-EVIDENCE.json         compact detailed machine evidence
+```
+
+A coding agent should treat `UNKNOWN — DO NOT INVENT` literally. Missing evidence is not permission to guess.
+
+---
+
 
 v0.4.0 adds a dedicated **Reference → DESIGN.md** workspace at `/reference-design.html`.
 
