@@ -61,7 +61,7 @@ function detectStack(files,pkgInfo,requested="auto"){
   if(requested && requested!=="auto") return requested;
   const deps=pkgInfo.deps||{};
   const paths=files.map(x=>x.path.toLowerCase());
-  if(deps.next || paths.some(x=>/^app\/.+page\.(jsx?|tsx?)$/.test(x) || /^pages\/.+\.(jsx?|tsx?)$/.test(x))) return "next";
+  if(deps.next || paths.some(x=>/(^|\/)app\/.+page\.(jsx?|tsx?)$/.test(x) || /(^|\/)pages\/.+\.(jsx?|tsx?)$/.test(x))) return "next";
   if(deps.react || deps.vite || paths.some(x=>/\.(jsx|tsx)$/.test(x))) return "react";
   if(deps.vue || paths.some(x=>x.endsWith(".vue"))) return "vue";
   if(deps.svelte || deps["@sveltejs/kit"] || paths.some(x=>x.endsWith(".svelte"))) return "svelte";
@@ -97,18 +97,23 @@ function detectTypeScript(files,pkgInfo){
   return Boolean(pkgInfo.deps?.typescript || files.some(x=>/\.(ts|tsx)$/.test(x.path)));
 }
 
-function detectRoutes(files,stack){
-  const paths=files.map(x=>x.path);
+function stripRoot(filePath,root){
+  const p=pathNorm(filePath),r=pathNorm(root);
+  return r&&p.startsWith(r+"/")?p.slice(r.length+1):p;
+}
+function detectRoutes(files,stack,packageRoot=""){
+  const paths=files.map(x=>stripRoot(x.path,packageRoot));
   const routes=[];
   if(stack==="next"){
     for(const p of paths){
       let m=p.match(/^app\/(.*)\/page\.(?:js|jsx|ts|tsx)$/);
       if(m) routes.push("/"+m[1].replace(/\([^/]+\)\//g,"").replace(/\[([^\]]+)\]/g,":$1"));
+      if(/^app\/page\.(?:js|jsx|ts|tsx)$/.test(p))routes.push("/");
       m=p.match(/^pages\/(.*)\.(?:js|jsx|ts|tsx)$/);
       if(m && !m[1].startsWith("_")) routes.push("/"+m[1].replace(/\/index$/,"").replace(/\[([^\]]+)\]/g,":$1"));
     }
   }
-  return unique(routes).slice(0,40);
+  return unique(routes).slice(0,80);
 }
 
 function designDocs(files){
