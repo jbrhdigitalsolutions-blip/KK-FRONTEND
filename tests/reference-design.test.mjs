@@ -198,7 +198,7 @@ test("Design Explorer exposes filters, presets and explicit custom-selection lim
     fs.readFile(path.join(root, "src", "web", "reference-design.js"), "utf8"),
     fs.readFile(path.join(root, "src", "reference-design", "browserless.mjs"), "utf8"),
   ]);
-  for (const marker of ["familyFilters", "selectFiltered", "Essential design", "Custom design", "Build the page yourself.", "buildPageButton", "downloadProjectButton", "authToggle", "authMode", "Session cookie", "HTTP Basic", "projectFitTitle", "projectFiles", "projectFolder", "GitHub repository", "Current website", "scanGithubButton", "scanWebsiteButton", "Analyze Project Fit", "Auto — match project", "certifyBuildButton", "Overlay", "Diff"]) {
+  for (const marker of ["familyFilters", "selectFiltered", "Essential design", "Custom design", "Build the page yourself.", "buildPageButton", "downloadProjectButton", "authToggle", "authMode", "Session cookie", "HTTP Basic", "referenceIntentPanel", "Use entire collection page", "projectFitTitle", "projectFiles", "projectFolder", "GitHub repository", "Current website", "scanGithubButton", "scanWebsiteButton", "fitTargetMapping", "Analyze Project Fit", "Auto — match project", "certifyBuildButton", "Overlay", "Diff"]) {
     assert.ok(html.includes(marker), "missing Design Explorer marker: " + marker);
   }
   assert.ok(js.includes("MAX_CUSTOM_SELECTION = 30"));
@@ -213,6 +213,10 @@ test("Design Explorer exposes filters, presets and explicit custom-selection lim
   assert.ok(browserless.includes("assertCredentialOrigin"));
   assert.ok(browserless.includes("credentials were not entered"));
   assert.ok(browserless.includes("captureReferencePreview"));
+  assert.ok(browserless.includes("detectReferenceIntent"));
+  assert.ok(browserless.includes("requiresChoice:collection"));
+  assert.ok(browserless.includes("URL path looks like a collection"));
+
   assert.ok(browserless.includes("inspectProjectWebsite"));
   assert.ok(browserless.includes("certifyGeneratedPreview"));
   assert.ok(browserless.includes("rawPixelSimilarityPct"));
@@ -226,6 +230,10 @@ test("Design Explorer exposes filters, presets and explicit custom-selection lim
   assert.ok(js.includes("certifyCurrentBuild"));
   assert.ok(js.includes("projectFitScore"));
   assert.ok(js.includes("Accurate build is locked"));
+  assert.ok(js.includes("renderReferenceIntent"));
+  assert.ok(js.includes("whole-collection"));
+  assert.ok(js.includes("renderTargetMapping"));
+  assert.ok(js.includes("standalone-replacement"));
 });
 
 test("local and Vercel static copies stay byte-identical", async () => {
