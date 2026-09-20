@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildEvidenceCompanion, classifyCandidate, normalizeReferenceUrl, renderDesignMd, UNKNOWN } from "../src/reference-design/design-md.mjs";
+import { buildEvidenceCompanion, candidateFamily, classifyCandidate, normalizeReferenceUrl, renderDesignMd, UNKNOWN } from "../src/reference-design/design-md.mjs";
 import { isPrivateOrRestrictedAddress } from "../src/reference-design/browserless.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -90,11 +90,21 @@ test("network safety recognizes private, mapped and public addresses", () => {
   assert.equal(isPrivateOrRestrictedAddress("2606:4700:4700::1111"), false);
 });
 
-test("semantic candidate identity wins over a generic motion label", () => {
+test("design taxonomy detects meaningful regions before generic motion", () => {
   assert.equal(classifyCandidate({ tag: "header", animation: true }), "Header");
   assert.equal(classifyCandidate({ tag: "aside", className: "app-sidebar", animation: true }), "Sidebar");
-  assert.equal(classifyCandidate({ tag: "main", className: "workspace" }), "Workspace");
+  assert.equal(classifyCandidate({ tag: "section", className: "hero-section" }), "Hero");
+  assert.equal(classifyCandidate({ tag: "article", className: "pricing-card" }), "Section");
+  assert.equal(classifyCandidate({ tag: "button", className: "primary-cta", interactive: true }), "Button");
+  assert.equal(classifyCandidate({ tag: "input", className: "search-box" }), "Search");
+  assert.equal(classifyCandidate({ tag: "img", className: "cover-image" }), "Image");
+  assert.equal(classifyCandidate({ tag: "h2", className: "section-title" }), "Section");
   assert.equal(classifyCandidate({ tag: "div", animation: true }), "Animation");
+  assert.equal(candidateFamily("Hero"), "Structure");
+  assert.equal(candidateFamily("Button"), "Controls");
+  assert.equal(candidateFamily("Typography"), "Content");
+  assert.equal(candidateFamily("Image"), "Media");
+  assert.equal(candidateFamily("Animation"), "Motion");
 });
 
 test("DESIGN.md is concise, professional and does not invent semantic measurements", async () => {
@@ -139,6 +149,23 @@ test("compact evidence companion preserves machine evidence without raw DOM bloa
   assert.ok(json.includes("(max-width: 768px)"));
   assert.ok(json.includes("header button"));
   assert.ok(Buffer.byteLength(json, "utf8") < 1_000_000);
+});
+
+test("Design Explorer exposes filters, presets and explicit custom-selection limits", async () => {
+  const [html, js, browserless] = await Promise.all([
+    fs.readFile(path.join(root, "src", "web", "reference-design.html"), "utf8"),
+    fs.readFile(path.join(root, "src", "web", "reference-design.js"), "utf8"),
+    fs.readFile(path.join(root, "src", "reference-design", "browserless.mjs"), "utf8"),
+  ]);
+  for (const marker of ["familyFilters", "selectFiltered", "Essential design", "Custom design", "No coding agent required"]) {
+    assert.ok(html.includes(marker), "missing Design Explorer marker: " + marker);
+  }
+  assert.ok(js.includes("MAX_CUSTOM_SELECTION = 30"));
+  assert.ok(js.includes("pickBalancedEssential"));
+  assert.ok(browserless.includes('schema: "kk-reference-design-inspection/v2"'));
+  assert.ok(browserless.includes("familyCounts"));
+  assert.ok(browserless.includes("selection = []"));
+  assert.ok(browserless.includes("supports up to 30 regions"));
 });
 
 test("local and Vercel static copies stay byte-identical", async () => {
