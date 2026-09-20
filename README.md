@@ -2,7 +2,7 @@
 
 v0.9.4 upgrades **Accurate** into an explicit reference-preserving visual mode. It uses measured hierarchy, reference text/media, inline SVG evidence, pseudo-elements, responsive computed styles, font-face evidence and sampled interaction/motion states so visual certification compares like-for-like pixels. Balanced and Inspired remain the target-content adaptation paths.
 
-This release builds on v0.9.3 large-build gzip/R2 transport.
+Repeated computed styles are interned in DESIGN-EVIDENCE so Pixel Accurate can retain more hierarchy evidence without wasting the Vercel payload budget. This release builds on v0.9.3 large-build gzip/R2 transport.
 
 ---
 
