@@ -262,3 +262,45 @@ a{color:inherit}
   .rdProjectBar{align-items:stretch;flex-direction:column}
   .rdBuildFrameViewport{padding:6px}
 }
+
+
+/* v0.7.0 Authenticated Reference Capture */
+.rdAuthShell{grid-column:1/-1;border-top:1px solid var(--line);padding-top:9px}
+.rdAuthToggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 9px;border:0;border-radius:10px;background:transparent;color:var(--text);cursor:pointer;text-align:left}
+.rdAuthToggle:hover{background:rgba(255,255,255,.026)}
+.rdAuthToggle>span:first-child{display:grid;gap:1px}
+.rdAuthToggle b{font-size:9px}
+.rdAuthToggle small{font-size:8px;color:var(--muted)}
+.rdAuthMode{flex:0 0 auto;padding:4px 7px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.025);color:#93a1b4;font-size:8px}
+.rdAuthPanel{margin-top:7px;padding:10px;border:1px solid var(--line);border-radius:11px;background:rgba(4,7,11,.42)}
+.rdAuthPanel.hasAuth{border-color:rgba(126,151,255,.2);background:linear-gradient(180deg,rgba(126,151,255,.035),rgba(4,7,11,.5))}
+.rdAuthIntro{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.rdAuthIntro>div{display:grid;gap:2px;min-width:0}
+.rdAuthIntro b{font-size:9px}
+.rdAuthIntro span{font-size:8px;line-height:1.45;color:var(--muted)}
+.rdAuthIntro select,.rdAuthFields input,.rdAuthFields textarea{border:1px solid var(--line-strong);background:#070a0f;color:var(--text);outline:none}
+.rdAuthIntro select{height:34px;min-width:190px;border-radius:9px;padding:0 9px;font-size:9px}
+.rdAuthFields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.rdAuthFields label{display:grid;gap:5px;min-width:0}
+.rdAuthFields label.wide,.rdAuthAdvanced.wide{grid-column:1/-1}
+.rdAuthFields label>span{font-size:8px;color:#a7b3c3}
+.rdAuthFields label>span small{font-size:7px;color:var(--muted-2);font-weight:400}
+.rdAuthFields input{height:36px;border-radius:9px;padding:0 10px;font-size:10px}
+.rdAuthFields textarea{min-height:76px;resize:vertical;border-radius:9px;padding:9px 10px;font:9px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}
+.rdAuthFields input:focus,.rdAuthFields textarea:focus,.rdAuthIntro select:focus{border-color:rgba(126,151,255,.62);box-shadow:0 0 0 3px rgba(126,151,255,.07)}
+.rdAuthAdvanced{border-top:1px solid var(--line);padding-top:8px}
+.rdAuthAdvanced summary{cursor:pointer;font-size:8px;color:#a8b5c7}
+.rdAuthAdvanced summary small{color:var(--muted-2);margin-left:5px}
+.rdAuthSelectorGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}
+.rdAuthSecurity{display:flex;align-items:flex-start;gap:8px;margin-top:10px;padding:8px 9px;border-radius:9px;border:1px solid rgba(120,215,170,.13);background:rgba(120,215,170,.035)}
+.rdLock{display:grid;place-items:center;width:20px;height:20px;border-radius:6px;background:rgba(120,215,170,.07);color:#87d9ad;font-size:11px}
+.rdAuthSecurity>div{display:grid;gap:1px}
+.rdAuthSecurity b{font-size:8px;color:#a8dfc0}
+.rdAuthSecurity small{font-size:7px;line-height:1.45;color:#728394}
+
+@media(max-width:700px){
+  .rdAuthIntro{align-items:stretch;flex-direction:column}
+  .rdAuthIntro select{width:100%}
+  .rdAuthFields,.rdAuthSelectorGrid{grid-template-columns:1fr}
+  .rdAuthFields label.wide,.rdAuthAdvanced.wide{grid-column:auto}
+}
