@@ -14,7 +14,7 @@
       <span><b>KK-FRONTEND</b><small>Design Explorer</small></span>
     </a>
     <div class="rdTopActions">
-      <span class="rdVersion">v0.8.0</span>
+      <span class="rdVersion">v0.9.0</span>
       <a class="rdBack" href="/index.html">Main workspace</a>
     </div>
   </header>
@@ -215,16 +215,39 @@
             <label><input type="radio" name="projectMode" value="new"/><span><b>New project</b><small>Create a complete standalone frontend</small></span></label>
           </div>
 
-          <div id="existingProjectUpload" class="rdProjectUpload">
-            <div class="rdUploadCopy">
-              <b>Project evidence</b>
-              <span>Recommended: <code>package.json</code>, lockfile, current <code>DESIGN.md</code>, relevant page/components, CSS/theme/tokens and asset filenames.</span>
+          <div id="existingProjectUpload" class="rdSourceDeck">
+            <div class="rdSourceIntro">
+              <div><b>Project sources</b><span>Use one source or combine all three. Combined evidence gives the strongest source/content/asset match.</span></div>
+              <div id="sourceEvidenceScore" class="rdSourceCount">0 sources</div>
             </div>
-            <div class="rdUploadActions">
-              <label class="rdFileButton">Choose files<input id="projectFiles" type="file" multiple accept=".json,.md,.txt,.html,.htm,.css,.scss,.sass,.less,.js,.jsx,.mjs,.cjs,.ts,.tsx,.vue,.svelte,.yaml,.yml,.toml,.png,.jpg,.jpeg,.webp,.avif,.gif,.svg,.ico,.mp4,.webm,.woff,.woff2,.ttf,.otf"/></label>
-              <label class="rdFileButton">Choose project folder<input id="projectFolder" type="file" webkitdirectory directory multiple/></label>
+
+            <div class="rdSourceGrid">
+              <section class="rdSourceCard">
+                <div class="rdSourceCardHead"><span>01</span><div><b>Local project</b><small>Best for complete source and private files you choose to share.</small></div></div>
+                <div class="rdUploadActions">
+                  <label class="rdFileButton">Choose files<input id="projectFiles" type="file" multiple accept=".json,.md,.txt,.html,.htm,.css,.scss,.sass,.less,.js,.jsx,.mjs,.cjs,.ts,.tsx,.vue,.svelte,.yaml,.yml,.toml,.png,.jpg,.jpeg,.webp,.avif,.gif,.svg,.ico,.mp4,.webm,.woff,.woff2,.ttf,.otf"/></label>
+                  <label class="rdFileButton">Choose project folder<input id="projectFolder" type="file" webkitdirectory directory multiple/></label>
+                </div>
+                <div id="projectFileSummary" class="rdFileSummary">No local project files selected.</div>
+              </section>
+
+              <section class="rdSourceCard">
+                <div class="rdSourceCardHead"><span>02</span><div><b>GitHub repository</b><small>Deep source scan. Public or private with an optional ephemeral token.</small></div></div>
+                <label class="rdSourceField"><span>Repository URL</span><input id="githubRepoUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://github.com/owner/repo"/></label>
+                <div class="rdSourcePair">
+                  <label class="rdSourceField"><span>Branch / ref <small>Optional</small></span><input id="githubRepoRef" autocomplete="off" placeholder="main"/></label>
+                  <label class="rdSourceField"><span>GitHub token <small>Private/rate limit only</small></span><input id="githubRepoToken" type="password" autocomplete="off" placeholder="Ephemeral token"/></label>
+                </div>
+                <div class="rdSourceActionRow"><button id="scanGithubButton" class="rdSecondary" type="button">Scan repository</button><span id="githubRepoStatus">Not scanned</span></div>
+              </section>
+
+              <section class="rdSourceCard">
+                <div class="rdSourceCardHead"><span>03</span><div><b>Current website</b><small>Captures the project's live content, assets and runtime UI evidence.</small></div></div>
+                <label class="rdSourceField"><span>Website URL</span><input id="projectWebsiteUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://your-project.com"/></label>
+                <div class="rdSourceActionRow"><button id="scanWebsiteButton" class="rdSecondary" type="button">Scan website</button><span id="projectWebsiteStatus">Not scanned</span></div>
+                <small class="rdSourceFoot">Public website by default. Reference authentication is never reused automatically.</small>
+              </section>
             </div>
-            <div id="projectFileSummary" class="rdFileSummary">No project files selected.</div>
           </div>
 
           <div class="rdProjectFields">
@@ -315,11 +338,18 @@
               <button class="active" type="button" data-build-view="build">Build</button>
               <button type="button" data-build-view="reference">Reference</button>
               <button type="button" data-build-view="split">Split</button>
+              <button type="button" data-build-view="overlay">Overlay</button>
+              <button type="button" data-build-view="diff">Diff</button>
             </div>
+            <button id="certifyBuildButton" class="rdSecondary rdCertifyButton" type="button">Analyze visual match</button>
             <div class="rdSegment" aria-label="Preview device">
               <button class="active" type="button" data-device="desktop">Desktop</button>
               <button type="button" data-device="tablet">Tablet</button>
               <button type="button" data-device="mobile">Mobile</button>
+            </div>
+            <div class="rdSegment" aria-label="Preview scale">
+              <button class="active" type="button" data-preview-scale="fit">Fit</button>
+              <button type="button" data-preview-scale="actual">100%</button>
             </div>
           </div>
         </div>
@@ -332,11 +362,31 @@
           <div class="rdBuildPane">
             <div class="rdPaneLabel">Generated page</div>
             <div id="buildFrameViewport" class="rdBuildFrameViewport">
-              <div id="buildFrameShell" class="rdBuildFrameShell" data-device="desktop">
-                <iframe id="buildFrame" title="Generated page preview" sandbox="allow-scripts"></iframe>
+              <div id="buildScaleStage" class="rdBuildScaleStage">
+                <div id="buildFrameShell" class="rdBuildFrameShell" data-device="desktop">
+                  <iframe id="buildFrame" title="Generated page preview" sandbox="allow-scripts"></iframe>
+                </div>
               </div>
             </div>
           </div>
+          <div class="rdOverlayPane">
+            <div class="rdPaneLabel">Overlay comparison <span id="overlayValue">50%</span></div>
+            <div class="rdOverlayStage">
+              <img id="overlayReferenceImage" alt="Reference overlay"/>
+              <img id="overlayBuildImage" alt="Generated overlay"/>
+            </div>
+            <input id="overlayOpacity" type="range" min="0" max="100" value="50" aria-label="Generated overlay opacity"/>
+          </div>
+          <div class="rdDiffPane">
+            <div class="rdPaneLabel">Visual difference</div>
+            <img id="buildDiffImage" alt="Visual difference heatmap"/>
+          </div>
+        </div>
+        <div id="visualCertification" class="rdCertification" hidden>
+          <div><span>Raw pixel similarity</span><b id="pixelSimilarity">—</b></div>
+          <div><span>Structural similarity</span><b id="structuralSimilarity">—</b></div>
+          <div><span>Viewport</span><b id="certifiedViewport">—</b></div>
+          <p id="certificationNote">Run visual analysis after each meaningful build change.</p>
         </div>
 
         <div id="buildFacts" class="rdFacts rdBuildFacts"></div>
