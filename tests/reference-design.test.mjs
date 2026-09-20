@@ -234,6 +234,9 @@ test("Design Explorer exposes filters, presets and explicit custom-selection lim
   assert.ok(js.includes("whole-collection"));
   assert.ok(js.includes("renderTargetMapping"));
   assert.ok(js.includes("standalone-replacement"));
+  assert.ok(js.includes("BUILD_REQUEST_MAX_BYTES = 4_000_000"));
+  assert.ok(js.includes("collectBuildProjectContext"));
+  assert.ok(js.includes("projectProfile:profile"));
 });
 
 test("local and Vercel static copies stay byte-identical", async () => {
