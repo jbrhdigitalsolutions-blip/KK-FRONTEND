@@ -119,6 +119,23 @@ async function requireOk(response,operation){
 export function newTransportSession(){
   return crypto.randomUUID();
 }
+export function createTransportTicket(sessionId,{ttlSeconds=900,now=Date.now()}={}){
+  const c=assertReady();
+  if(!/^[0-9a-f-]{36}$/i.test(String(sessionId||"")))throw new Error("Invalid large-build session id.");
+  const expiresAt=Math.floor(Number(now)/1000)+Math.max(60,Math.min(1800,Number(ttlSeconds)||900));
+  const payload=`${sessionId}.${expiresAt}`;
+  const signature=crypto.createHmac("sha256",c.secretAccessKey).update(payload).digest("hex");
+  return {ticket:`${expiresAt}.${signature}`,expiresAt};
+}
+export function verifyTransportTicket(sessionId,ticket,{now=Date.now()}={}){
+  const c=assertReady();
+  const [rawExpiry,provided=""]=String(ticket||"").split(".",2);
+  const expiresAt=Number(rawExpiry);
+  if(!Number.isInteger(expiresAt) || expiresAt<Math.floor(Number(now)/1000))return false;
+  const expected=crypto.createHmac("sha256",c.secretAccessKey).update(`${sessionId}.${expiresAt}`).digest("hex");
+  const a=Buffer.from(provided,"hex"),b=Buffer.from(expected,"hex");
+  return a.length===b.length && a.length>0 && crypto.timingSafeEqual(a,b);
+}
 export function inputChunkKey(sessionId,index){
   if(!/^[0-9a-f-]{36}$/i.test(String(sessionId||"")))throw new Error("Invalid large-build session id.");
   const n=Number(index);
