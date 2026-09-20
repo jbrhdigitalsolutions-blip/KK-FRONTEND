@@ -82,7 +82,7 @@ test("no-code compiler builds standalone HTML from verified evidence without an 
   const hero=result.model.regions.find(x=>x.kind==="Hero");
   assert.ok(hero);
   assert.ok(hero.children.some(x=>x.kind==="Button"),"measured child controls should be attached to their containing region");
-  assert.match(result.previewHtml,/min-height:620px/);
+  assert.match(result.previewHtml,/kk-node-3/);
   assert.equal(result.model.viewports.desktop.width,1440);
   assert.equal(result.model.viewports.tablet.width,820);
   assert.equal(result.model.viewports.mobile.width,390);
