@@ -271,3 +271,36 @@ test("Accurate renderer preserves measured hierarchy while substituting target-o
   assert.equal(result.previewHtml.includes("Launch your idea"),false,"reference literal copy must not become target content");
   assert.equal(result.previewHtml.includes("Evidence-led content placeholder"),false);
 });
+
+
+test("website-only target exports standalone replacement instead of unsafe project patch",()=>{
+  const result=compileNoCodeDesign({
+    evidence:evidence(),
+    markdown:"# DESIGN.md",
+    options:{output:"auto",contentMode:"placeholders",fidelity:"accurate"},
+    projectContext:{
+      mode:"existing",
+      stack:"auto",
+      websiteEvidence:{
+        schema:"kk-project-website-scan/v1",
+        url:"https://example.com/index.html",
+        title:"Existing Site",
+        description:"Current site content.",
+        headings:["Current headline"],
+        buttons:["Start"],
+        navItems:["Home","Pricing"],
+        paragraphs:["Current website body."],
+        images:[{src:"https://example.com/hero.webp"}],
+        signals:{next:false,react:false}
+      }
+    }
+  });
+  assert.equal(result.output,"html");
+  assert.equal(result.summary.deliveryMode,"standalone-replacement");
+  assert.equal(result.files.some(x=>x.path.startsWith("project-patch/")),false);
+  assert.ok(result.files.some(x=>x.path==="index.html"));
+  assert.ok(result.files.some(x=>x.path==="START-WINDOWS.ps1"));
+  assert.ok(result.files.some(x=>x.path==="START-MAC.command"));
+  assert.equal(result.files.some(x=>x.path==="APPLY-WINDOWS.ps1"),false);
+  assert.match(result.files.find(x=>x.path==="README.md").content,/standalone replacement/i);
+});
