@@ -274,10 +274,10 @@ async function performFormLogin(page, auth, targetUrl) {
   }
 
   const visiblePasswords = await page.locator('input[type="password"]:visible').count().catch(() => 0);
-  const loginUrl = new URL(auth.loginUrl || targetUrl);
   const currentUrl = new URL(page.url());
-  const stillOnLoginPath = currentUrl.origin === loginUrl.origin && currentUrl.pathname === loginUrl.pathname && currentUrl.href !== new URL(targetUrl).href;
-  if (visiblePasswords > 0 && stillOnLoginPath) {
+  const target = new URL(targetUrl);
+  const returnedToTarget = currentUrl.origin === target.origin && currentUrl.pathname === target.pathname;
+  if (visiblePasswords > 0 && !returnedToTarget) {
     throw new Error("Login did not complete. Check credentials/selectors, or use Session Cookie mode for MFA/SSO.");
   }
 }
