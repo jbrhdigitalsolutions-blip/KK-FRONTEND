@@ -1,4 +1,4 @@
-import { analyzeProjectIntake, normalizeProjectFiles } from "./project-intake.mjs";
+import { analyzeProjectIntake, normalizeProjectAssets, normalizeProjectFiles } from "./project-intake.mjs";
 import { classifyCandidate } from "../reference-design/design-md.mjs";
 
 const arr=v=>Array.isArray(v)?v:[];
@@ -53,7 +53,7 @@ function relativeRect(child,parent){
     height:((num(c.height)||0)/ph)*100
   };
 }
-function contentFor(node,answers,intake,index){
+function contentFor(node,answers,intake,assets,index){
   const k=kind(node),provided=answers?.content||{},strategy=answers?.contentStrategy;
   const snippets=arr(intake?.content?.snippets);
   if(k==="Typography"){
@@ -68,22 +68,30 @@ function contentFor(node,answers,intake,index){
   }
   if(["Input","Search","Form"].includes(k)) return str(provided["field-"+(index+1)])||label(node.label)||"Input";
   if(["Image","Video","Logo","Icon","Avatar"].includes(k)){
-    const refs=answers?.assetStrategy==="project" ? arr(intake?.content?.assetRefs).map(x=>x.path) : str(answers?.assetMap).split(/[,\n]/).map(x=>x.trim()).filter(Boolean);
+    if(answers?.assetStrategy==="provided" && assets.length){
+      return "/kk-assets/"+assets[index%assets.length].name;
+    }
+    const refs=answers?.assetStrategy==="project"
+      ? arr(intake?.content?.assetRefs).map(x=>x.path)
+      : str(answers?.assetMap).split(/[,\n]/).map(x=>x.trim()).filter(Boolean);
     return refs[index%Math.max(1,refs.length)]||label(node.label)||k;
   }
   return label(node.label)||k;
 }
-function makeLayer(node,parent,e,answers,intake,index){
+function makeLayer(node,parent,e,answers,intake,assets,index){
   const tablet=find(vp(e,"tablet"),node.selector),mobile=find(vp(e,"mobile"),node.selector);
   const pt=find(vp(e,"tablet"),parent.selector)||parent,pm=find(vp(e,"mobile"),parent.selector)||parent;
   return {
     id:"layer-"+(index+1),selector:node.selector,kind:kind(node),tag:node.tag||"div",
-    label:label(node.label)||kind(node),content:contentFor(node,answers,intake,index),
+    label:label(node.label)||kind(node),content:contentFor(node,answers,intake,assets,index),
+    previewContent:(["Image","Logo","Avatar"].includes(kind(node)) && answers?.assetStrategy==="provided" && assets.length)
+      ? "data:"+assets[index%assets.length].mime+";base64,"+assets[index%assets.length].base64
+      : null,
     attrs:node.attrs||{},style:node.style||{},desktop:relativeRect(node,parent),
     tablet:tablet?relativeRect(tablet,pt):null,mobile:mobile?relativeRect(mobile,pm):null
   };
 }
-function buildModel(e,intake,answers){
+function buildModel(e,intake,answers,assets){
   const d=vp(e,"desktop"),all=nodes(d),roots=selectedRoots(e),regions=[],used=new Set();
   roots.forEach((root,ri)=>{
     const rr=root.rect||{},layers=[];
@@ -93,7 +101,7 @@ function buildModel(e,intake,answers){
       const inside=cx>=(num(rr.x)||0)&&cx<=((num(rr.x)||0)+(num(rr.width)||0))&&cy>=(num(rr.y)||0)&&cy<=((num(rr.y)||0)+(num(rr.height)||0));
       if(!inside)continue;
       used.add(node.selector);
-      layers.push(makeLayer(node,root,e,answers,intake,used.size-1));
+      layers.push(makeLayer(node,root,e,answers,intake,assets,used.size-1));
       if(layers.length>=72)break;
     }
     layers.sort((a,b)=>(a.desktop.top-b.desktop.top)||(a.desktop.left-b.desktop.left));
@@ -135,13 +143,14 @@ function styleDecl(s={}){
   add("border",s.border);add("border-radius",s.borderRadius);add("box-shadow",s.boxShadow);add("opacity",s.opacity);
   return out.join(";");
 }
-function layerMarkup(layer){
+function layerMarkup(layer,{preview=false}={}){
   const k=layer.kind,c=esc(layer.content),id=layer.id;
   if(k==="Button")return '<button class="kkx-layer kkx-button" data-layer="'+id+'">'+c+'</button>';
   if(["Input","Search","Form"].includes(k))return '<div class="kkx-layer kkx-field" data-layer="'+id+'"><span>'+c+'</span></div>';
   if(["Image","Video","Logo","Icon","Avatar"].includes(k)){
-    const usableSrc=/^(https?:\/\/|\/|\.\.\/|\.\/)/.test(layer.content);
-    if(usableSrc && ["Image","Logo","Avatar"].includes(k)) return '<img class="kkx-layer kkx-media kkx-img" data-layer="'+id+'" alt="'+esc(layer.label)+'" src="'+esc(layer.content)+'"/>';
+    const src=preview&&layer.previewContent?layer.previewContent:layer.content;
+    const usableSrc=/^(data:|https?:\/\/|\/|\.\.\/|\.\/)/.test(src);
+    if(usableSrc && ["Image","Logo","Avatar"].includes(k)) return '<img class="kkx-layer kkx-media kkx-img" data-layer="'+id+'" alt="'+esc(layer.label)+'" src="'+esc(src)+'"/>';
     return '<div class="kkx-layer kkx-media" data-layer="'+id+'" data-media="'+esc(k)+'"><span>'+c+'</span></div>';
   }
   if(k==="Navigation")return '<nav class="kkx-layer kkx-text" data-layer="'+id+'">'+c+'</nav>';
@@ -172,10 +181,10 @@ function geometryCss(model){
   }
   return rules.join("\n");
 }
-function render(model){
+function render(model,{preview=false}={}){
   const first=model.regions[0]?.style||{},bg=first.backgroundColor||"#101012",color=first.color||"#f7f4ef";
   const base='*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:'+css(bg)+';color:'+css(color)+'}body{overflow-x:hidden}.kkx-page{width:min(100%,1440px);margin:0 auto}.kkx-region{overflow:hidden}.kkx-layer{margin:0;box-sizing:border-box}.kkx-text{display:flex;align-items:center;overflow:hidden;white-space:pre-wrap}.kkx-button{display:flex;align-items:center;justify-content:center;padding:0 12px;cursor:pointer}.kkx-field{display:flex;align-items:center;padding:0 12px;border:1px solid rgba(127,127,127,.3)}.kkx-media{display:grid;place-items:center;overflow:hidden;background:linear-gradient(145deg,rgba(127,127,127,.18),rgba(127,127,127,.06));border:1px solid rgba(127,127,127,.16)}.kkx-media span{font:500 11px/1.2 system-ui;color:rgba(127,127,127,.9);text-align:center;padding:8px}.kkx-img{object-fit:cover}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}';
-  const body=model.regions.map(r=>'<section class="kkx-region" data-region="'+r.id+'">'+r.layers.map(layerMarkup).join("")+'</section>').join("\n");
+  const body=model.regions.map(r=>'<section class="kkx-region" data-region="'+r.id+'">'+r.layers.map(layer=>layerMarkup(layer,{preview})).join("")+'</section>').join("\n");
   const cssText=base+"\n"+geometryCss(model);
   const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(model.title)+'</title><style>'+cssText+'</style></head><body><main class="kkx-page">'+body+'</main></body></html>';
   return {body,cssText,html};
@@ -295,32 +304,37 @@ function crc32(buf){let crc=0xffffffff;for(const b of buf){crc^=b;for(let k=0;k<
 function zipStore(files){
   const locals=[],centrals=[];let offset=0;
   for(const file of files){
-    const name=Buffer.from(file.path.replaceAll("\\","/")),data=Buffer.from(file.content,"utf8"),crc=crc32(data);
+    const name=Buffer.from(file.path.replaceAll("\\","/")),data=file.base64?Buffer.from(file.base64,"base64"):Buffer.from(file.content||"","utf8"),crc=crc32(data);
     const local=Buffer.alloc(30+name.length);local.writeUInt32LE(0x04034b50,0);local.writeUInt16LE(20,4);local.writeUInt32LE(crc,14);local.writeUInt32LE(data.length,18);local.writeUInt32LE(data.length,22);local.writeUInt16LE(name.length,26);name.copy(local,30);locals.push(local,data);
     const central=Buffer.alloc(46+name.length);central.writeUInt32LE(0x02014b50,0);central.writeUInt16LE(20,4);central.writeUInt16LE(20,6);central.writeUInt32LE(crc,16);central.writeUInt32LE(data.length,20);central.writeUInt32LE(data.length,24);central.writeUInt16LE(name.length,28);central.writeUInt32LE(offset,42);name.copy(central,46);centrals.push(central);offset+=local.length+data.length;
   }
   const cs=centrals.reduce((n,b)=>n+b.length,0),end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50,0);end.writeUInt16LE(files.length,8);end.writeUInt16LE(files.length,10);end.writeUInt32LE(cs,12);end.writeUInt32LE(offset,16);return Buffer.concat([...locals,...centrals,end]);
 }
 
-export function compileProjectAwareDesign({evidence:inputEvidence,markdown="",files=[],answers={},options={}}={}){
-  const evidence=parseEvidence(inputEvidence),normalized=normalizeProjectFiles(files);
-  const intake=analyzeProjectIntake({evidence,files:normalized,answers});
+export function compileProjectAwareDesign({evidence:inputEvidence,markdown="",files=[],assets=[],answers={},options={}}={}){
+  const evidence=parseEvidence(inputEvidence),normalized=normalizeProjectFiles(files),normalizedAssets=normalizeProjectAssets(assets);
+  const intake=analyzeProjectIntake({evidence,files:normalized,assets:normalizedAssets,answers});
   if(!intake.exactReady&&!options.allowPrototype){
     const error=new Error("Project information is not ready for an exact build. Resolve required Project Fit items and replace placeholder-only content/assets.");
     error.code="PROJECT_INTAKE_INCOMPLETE";error.intake=intake;throw error;
   }
-  const model=buildModel(evidence,intake,answers),rendered=render(model),generated=sourceFiles(model,rendered);
-  const out=[...generated,
+  const model=buildModel(evidence,intake,answers,normalizedAssets);
+  const preview=render(model,{preview:true});
+  const rendered=render(model,{preview:false});
+  const generated=sourceFiles(model,rendered);
+  const assetFiles=normalizedAssets.map(asset=>({path:"public/kk-assets/"+asset.name,base64:asset.base64,binary:true,size:asset.size,mime:asset.mime}));
+  const out=[...generated,...assetFiles,
     {path:"REFERENCE-DESIGN.md",content:String(markdown||"# DESIGN.md\n")},
     {path:"PROJECT-FIT.json",content:JSON.stringify(intake,null,2)},
     {path:"DESIGN-BUILD.json",content:JSON.stringify(model,null,2)},
     ...supportFiles(intake,generated)
   ];
   const zip=zipStore(out);
+  const responseFiles=out.map(file=>file.base64?{path:file.path,binary:true,size:file.size,mime:file.mime}:file);
   return {
     schema:"kk-project-aware-design-build/v1",
     filename:slug(intake.projectName||model.title)+"-project-fit.zip",
-    previewHtml:rendered.html,files:out,zipBase64:zip.toString("base64"),model,intake,
+    previewHtml:preview.html,files:responseFiles,zipBase64:zip.toString("base64"),model,intake,
     summary:{
       projectReadiness:intake.readinessPercent,framework:intake.effectiveFramework,packageManager:intake.packageManager,
       regions:model.regions.length,measuredLayers:model.coverage.desktopLayers,responsiveMatchPercent:model.coverage.responsiveMatchPercent,
