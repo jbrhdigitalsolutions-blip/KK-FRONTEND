@@ -2,6 +2,8 @@ import dns from "node:dns/promises";
 import net from "node:net";
 import fs from "node:fs/promises";
 import { chromium } from "playwright";
+import { PNG } from "pngjs";
+import pixelmatch from "pixelmatch";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { buildEvidenceCompanion, candidateFamily, classifyCandidate, normalizeReferenceUrl, renderDesignMd } from "./design-md.mjs";
@@ -401,6 +403,85 @@ export async function inspectProjectWebsite({ url, auth = {} }) {
     };
     if (containsReferenceAuthSecret(result, normalizedAuth)) throw new Error("Authentication secret safety check failed.");
     return result;
+  } finally {
+    await browser.close().catch(()=>{});
+  }
+}
+
+function edgeMismatchPercent(a,b){
+  const width=a.width,height=a.height,step=3,threshold=34;
+  let diff=0,total=0;
+  const lum=(png,x,y)=>{
+    const i=(y*width+x)*4;
+    return png.data[i]*0.2126+png.data[i+1]*0.7152+png.data[i+2]*0.0722;
+  };
+  for(let y=0;y<height-step;y+=step){
+    for(let x=0;x<width-step;x+=step){
+      const ea=Math.abs(lum(a,x+step,y)-lum(a,x,y))+Math.abs(lum(a,x,y+step)-lum(a,x,y));
+      const eb=Math.abs(lum(b,x+step,y)-lum(b,x,y))+Math.abs(lum(b,x,y+step)-lum(b,x,y));
+      const aa=ea>threshold,bb=eb>threshold;
+      if(aa!==bb)diff++;
+      total++;
+    }
+  }
+  return total?Math.round((diff/total)*10000)/100:0;
+}
+
+export async function certifyGeneratedPreview({ url, html, viewport = "desktop", auth = {}, baseUrl = "" }) {
+  const safeUrl = await assertPublicReferenceUrl(url);
+  const requested = VIEWPORTS.find(x => x.name === String(viewport || "desktop").toLowerCase());
+  if (!requested) throw new Error("Certification viewport must be desktop, tablet, or mobile.");
+  const sourceHtml=String(html||"");
+  if(!sourceHtml.trim() || sourceHtml.length>1_500_000) throw new Error("Generated preview HTML is missing or too large for visual certification.");
+  const normalizedAuth = normalizeReferenceAuth(auth, safeUrl);
+  const browser=await connectBrowser();
+  try{
+    const refPage=await pageForBrowser(browser,normalizedAuth,safeUrl);
+    await setExactViewport(refPage,requested);
+    await establishReferenceSession(refPage,safeUrl,normalizedAuth);
+    await setExactViewport(refPage,requested);
+    await refPage.evaluate(()=>window.scrollTo(0,0));
+    const referencePng=await refPage.screenshot({type:"png",clip:{x:0,y:0,width:requested.width,height:requested.height}});
+
+    const context=refPage.context();
+    const buildPage=await context.newPage();
+    buildPage.setDefaultTimeout(12_000);
+    await installNetworkGuard(buildPage);
+    await setExactViewport(buildPage,requested);
+    let htmlWithBase=sourceHtml;
+    if(baseUrl){
+      const safeBase=await assertPublicReferenceUrl(baseUrl);
+      htmlWithBase=sourceHtml.replace(/<head([^>]*)>/i,`<head$1><base href="${safeBase.replace(/"/g,"&quot;")}">`);
+    }
+    await buildPage.setContent(htmlWithBase,{waitUntil:"domcontentloaded",timeout:30_000});
+    await buildPage.waitForLoadState("networkidle",{timeout:3_000}).catch(()=>{});
+    await setExactViewport(buildPage,requested);
+    await buildPage.evaluate(()=>window.scrollTo(0,0));
+    const buildPng=await buildPage.screenshot({type:"png",clip:{x:0,y:0,width:requested.width,height:requested.height}});
+
+    const a=PNG.sync.read(referencePng),b=PNG.sync.read(buildPng);
+    const diff=new PNG({width:a.width,height:a.height});
+    const mismatched=pixelmatch(a.data,b.data,diff.data,a.width,a.height,{threshold:0.12,includeAA:false});
+    const total=a.width*a.height;
+    const rawPixelMismatchPct=Math.round((mismatched/total)*10000)/100;
+    const edgeMismatchPct=edgeMismatchPercent(a,b);
+    const diffPng=PNG.sync.write(diff,{colorType:6});
+    const buildJpeg=await buildPage.screenshot({type:"jpeg",quality:64,clip:{x:0,y:0,width:requested.width,height:requested.height}});
+    return{
+      schema:"kk-visual-certification/v1",
+      viewport:requested.name,
+      width:requested.width,
+      height:requested.height,
+      metrics:{
+        rawPixelMismatchPct,
+        rawPixelSimilarityPct:Math.round((100-rawPixelMismatchPct)*100)/100,
+        edgeMismatchPct,
+        structuralSimilarityPct:Math.round((100-edgeMismatchPct)*100)/100,
+        note:"Raw pixel similarity is content-sensitive. Structural similarity compares edge placement and is less sensitive to color/content changes."
+      },
+      buildScreenshot:`data:image/jpeg;base64,${buildJpeg.toString("base64")}`,
+      diffScreenshot:`data:image/png;base64,${diffPng.toString("base64")}`,
+    };
   } finally {
     await browser.close().catch(()=>{});
   }
