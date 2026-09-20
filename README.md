@@ -1,3 +1,128 @@
+# KK-FRONTEND v0.8.0 — PROJECT-AWARE DESIGN BUILDER
+
+v0.8.0 changes **Build Page** from a generic reference reconstruction into a project-aware workflow.
+
+The key rule is simple: **Accurate mode is not unlocked until KK-FRONTEND has enough target-project evidence and real page content to make a defensible build.**
+
+## Why this version exists
+
+A reference screenshot alone is not enough to produce source that fits an existing application. The same visual design must still match the user's:
+
+- frontend framework and version family;
+- package manager and dependencies;
+- current routes and target source file;
+- TypeScript/JavaScript choice;
+- CSS/Tailwind/CSS Modules/styling conventions;
+- existing DESIGN.md/theme/token files;
+- real brand, headline, body text, CTA labels and navigation labels;
+- logo, hero and other relevant project assets.
+
+v0.8.0 gathers that information before an Accurate build instead of hiding missing information behind generic placeholders.
+
+## Project Fit Intake
+
+After DESIGN.md generation the user chooses **Existing project** or **New project**.
+
+For an existing project, users can upload selected files or a project folder. Recommended evidence includes:
+
+```text
+package.json
+lockfile
+DESIGN.md / design tokens / theme files
+target page and relevant components
+CSS / SCSS / Tailwind configuration
+logo / hero / UI asset filenames
+```
+
+The browser excludes common generated/vendor folders and secret/private files such as `.env`, private keys, credential files and secret files. The server repeats those exclusions.
+
+KK-FRONTEND detects:
+
+- Next.js / React / HTML, plus Vue/Svelte identification;
+- npm / pnpm / yarn / bun;
+- TypeScript;
+- Tailwind, CSS Modules, SCSS, styled-components, Emotion and plain CSS signals;
+- Next.js routes;
+- likely target page/source file;
+- design documents;
+- relevant public assets.
+
+It then creates a **Project Fit score**, blockers and only the missing questions that materially affect the build.
+
+## Accuracy gate
+
+**Accurate** fidelity is disabled until required Project Fit evidence is ready. Missing project context cannot silently become invented source.
+
+Balanced and Inspired modes remain available for exploratory work.
+
+Project Fit readiness is not a pixel-similarity score. Reference evidence confidence and target-project readiness are shown separately.
+
+## Same-viewport comparison
+
+Build Preview now requests a fresh reference screenshot for the exact selected viewport:
+
+- Desktop — 1440×900
+- Tablet — 820×1180
+- Mobile — 390×844
+
+This corrects the earlier misleading comparison where a desktop reference screenshot could be shown beside a mobile generated preview.
+
+## Existing-project ZIP
+
+When an existing React, Next.js or HTML project is supplied, the export is a **project patch**, not an unrelated starter project.
+
+The ZIP contains:
+
+```text
+project-patch/...
+PROJECT-FIT.json
+PATCH-MANIFEST.json
+APPLY-WINDOWS.ps1
+APPLY-MAC.command
+INTEGRATION.md
+DESIGN-BUILD.json
+README.md
+```
+
+The apply scripts back up every replaced file before copying the patch and use the detected package manager when dependency installation is required.
+
+## New-project ZIP
+
+New HTML projects receive browser-ready source plus Windows/macOS start instructions.
+
+New React/Next.js projects receive the generated source plus:
+
+```text
+PROJECT-FIT.json
+SETUP-WINDOWS.ps1
+SETUP-MAC.command
+RUN.md
+```
+
+Small uploaded portable assets can be included in the ZIP. The web payload is intentionally bounded; large media should remain in the user's project/CDN and be referenced by project path.
+
+## Platform requirements
+
+**Windows**
+- Windows 10/11
+- Node.js 22+ for React/Next.js
+- detected package manager
+- PowerShell 7 recommended
+
+**macOS**
+- macOS 12+
+- Node.js 22+ for React/Next.js
+- detected package manager
+- Terminal (zsh/bash)
+
+Standalone HTML output requires only a modern browser.
+
+## Accuracy boundary
+
+v0.8.0 materially improves content, asset, stack, route and installation fit. It does **not** claim pixel-perfect certification merely because Project Fit reaches 100%. Pixel similarity requires an independent rendered screenshot-diff verification step.
+
+---
+
 # KK-FRONTEND v0.7.0 — AUTHENTICATED REFERENCE CAPTURE
 
 v0.7.0 extends the no-code Design Explorer to reference pages that legitimately require authentication.

@@ -194,7 +194,7 @@ test("Design Explorer exposes filters, presets and explicit custom-selection lim
     fs.readFile(path.join(root, "src", "web", "reference-design.js"), "utf8"),
     fs.readFile(path.join(root, "src", "reference-design", "browserless.mjs"), "utf8"),
   ]);
-  for (const marker of ["familyFilters", "selectFiltered", "Essential design", "Custom design", "Build the page yourself.", "buildPageButton", "downloadProjectButton", "authToggle", "authMode", "Session cookie", "HTTP Basic"]) {
+  for (const marker of ["familyFilters", "selectFiltered", "Essential design", "Custom design", "Build the page yourself.", "buildPageButton", "downloadProjectButton", "authToggle", "authMode", "Session cookie", "HTTP Basic", "projectFitTitle", "projectFiles", "projectFolder", "Analyze Project Fit", "Auto — match project"]) {
     assert.ok(html.includes(marker), "missing Design Explorer marker: " + marker);
   }
   assert.ok(js.includes("MAX_CUSTOM_SELECTION = 30"));
@@ -208,6 +208,11 @@ test("Design Explorer exposes filters, presets and explicit custom-selection lim
   assert.ok(browserless.includes("Authentication secret safety check failed"));
   assert.ok(browserless.includes("assertCredentialOrigin"));
   assert.ok(browserless.includes("credentials were not entered"));
+  assert.ok(browserless.includes("captureReferencePreview"));
+  assert.ok(js.includes("/api/reference-design/project-fit"));
+  assert.ok(js.includes("/api/reference-design/preview"));
+  assert.ok(js.includes("projectFitScore"));
+  assert.ok(js.includes("Accurate build is locked"));
 });
 
 test("local and Vercel static copies stay byte-identical", async () => {

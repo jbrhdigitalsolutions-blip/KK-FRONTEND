@@ -1,4 +1,5 @@
 import { candidateFamily, classifyCandidate } from "../reference-design/design-md.mjs";
+import { analyzeProjectContext, integrationSupportFiles, newProjectSupportFiles } from "./project-fit.mjs";
 
 const ALLOWED_OUTPUTS = new Set(["html","react","next"]);
 const ALLOWED_CONTENT = new Set(["placeholders","reference-labels"]);
@@ -192,6 +193,7 @@ function mobileHeight(region){
 function layoutModel(evidence,options){
   const tokens=deriveTokens(evidence);
   const regions=buildRegions(evidence,options.contentMode);
+  const project=options.projectProfile || null;
   const desktop=viewport(evidence,"desktop");
   const tablet=viewport(evidence,"tablet");
   const mobile=viewport(evidence,"mobile");
@@ -211,6 +213,7 @@ function layoutModel(evidence,options){
       mediaQueries:arr(evidence.responsiveCss?.mediaQueries),
       containerQueries:arr(evidence.responsiveCss?.containerQueries),
     },
+    project,
     evidence:{
       confidence:num(evidence.confidence),
       interactionCount:arr(evidence.interactions).length,
@@ -232,19 +235,32 @@ function childMarkup(children=[]){
     media:media.length ? `<div class="kk-media-grid">${media.map(x=>`<div class="kk-media-tile"><span>${esc(x.displayLabel)}</span></div>`).join("")}</div>` : "",
   };
 }
-function regionMarkup(region,index){
+function regionMarkup(region,index,model){
   const id=`section-${index+1}`;
   const label=esc(region.displayLabel);
   const kind=region.kind;
   const child=childMarkup(region.children);
+  const hasProject=Boolean(model?.project);
+  const project=model?.project || {};
+  const content=project.content || {};
+  const brand=esc(content.brand || project.projectName || "Brand");
+  const nav=arr(content.navItems).length ? arr(content.navItems).slice(0,6) : ["Explore","Features"];
+  const primary=esc(content.primaryCta || "Get started");
+  const secondary=esc(content.secondaryCta || "Learn more");
+  const heroTitle=esc(content.heroTitle || child.heading || label);
+  const heroBody=esc(content.heroBody || "Layout, typography and responsive anchors are compiled from verified reference evidence.");
+  const logoAsset=project.assetMap?.logoAsset || "";
+  const heroAsset=project.assetMap?.heroAsset || "";
   if(kind==="Header" || kind==="Navigation"){
-    return `<header id="${id}" class="kk-region kk-header" data-kind="${esc(kind)}"><a class="kk-logo" href="#">Brand</a><nav><a href="#section-1">Explore</a><a href="#section-2">Features</a><button type="button">Get started</button></nav></header>`;
+    const logo=logoAsset ? `<img class="kk-logo-image" src="${esc(logoAsset)}" alt="${brand}"/>` : brand;
+    return `<header id="${id}" class="kk-region kk-header" data-kind="${esc(kind)}"><a class="kk-logo" href="#">${logo}</a><nav>${nav.map((item,i)=>`<a href="#section-${i+1}">${esc(item)}</a>`).join("")}<button type="button">${primary}</button></nav></header>`;
   }
   if(kind==="Footer"){
-    return `<footer id="${id}" class="kk-region kk-footer" data-kind="Footer"><strong>Brand</strong><span>${label}</span></footer>`;
+    return `<footer id="${id}" class="kk-region kk-footer" data-kind="Footer"><strong>${brand}</strong><span>${esc(content.footerText || region.displayLabel || "")}</span></footer>`;
   }
   if(kind==="Hero"){
-    return `<section id="${id}" class="kk-region kk-hero" data-kind="Hero"><div class="kk-copy"><span class="kk-eyebrow">VERIFIED DESIGN</span><h1>${child.heading||label}</h1><p>Replace this placeholder with your own content. Layout, typography and responsive anchors are compiled from the selected reference evidence.</p><div class="kk-actions">${child.actions||'<button type="button">Primary action</button><button class="secondary" type="button">Secondary</button>'}</div>${child.input}</div>${child.media||'<div class="kk-media"><span>Media</span></div>'}</section>`;
+    const media=heroAsset ? `<div class="kk-media"><img src="${esc(heroAsset)}" alt=""/></div>` : (child.media || '<div class="kk-media"><span>Media</span></div>');
+    return `<section id="${id}" class="kk-region kk-hero" data-kind="Hero"><div class="kk-copy"><span class="kk-eyebrow">${hasProject?brand:"VERIFIED DESIGN"}</span><h1>${heroTitle}</h1><p>${heroBody}</p><div class="kk-actions"><button type="button">${primary}</button>${content.secondaryCta ? `<button class="secondary" type="button">${secondary}</button>` : ""}</div>${child.input}</div>${media}</section>`;
   }
   if(kind==="Card" || kind==="Grid" || kind==="List"){
     return `<section id="${id}" class="kk-region kk-section" data-kind="${esc(kind)}"><div class="kk-section-head"><span>SECTION ${index+1}</span><h2>${child.heading||label}</h2></div>${child.media}<div class="kk-grid"><article><b>01</b><h3>Component</h3><p>Evidence-led content placeholder.</p></article><article><b>02</b><h3>Responsive</h3><p>Adapts across verified viewport anchors.</p></article><article><b>03</b><h3>Reusable</h3><p>Generated without a coding agent.</p></article></div>${child.input}<div class="kk-actions">${child.actions}</div></section>`;
@@ -308,13 +324,13 @@ button.secondary{background:transparent;color:var(--kk-text);border:1px solid co
 a{color:inherit;text-decoration:none}
 .kk-region{width:min(100%,1440px);margin:0 auto}
 .kk-header{min-height:72px;padding:14px clamp(18px,4vw,64px);display:flex;align-items:center;justify-content:space-between;gap:24px;position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--kk-bg) 82%,transparent);backdrop-filter:blur(18px);border-bottom:1px solid color-mix(in srgb,var(--kk-text) 10%,transparent)}
-.kk-logo{font-size:18px;font-weight:800}.kk-header nav{display:flex;align-items:center;gap:22px;font-size:14px}
+.kk-logo{font-size:18px;font-weight:800;display:flex;align-items:center}.kk-logo-image{display:block;max-width:140px;max-height:36px;object-fit:contain}.kk-header nav{display:flex;align-items:center;gap:22px;font-size:14px}
 .kk-hero{padding:clamp(64px,8vw,128px) clamp(18px,5vw,80px);display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);align-items:center;gap:clamp(28px,6vw,92px)}
 .kk-copy{max-width:760px}.kk-eyebrow,.kk-section-head span{display:block;font-size:11px;letter-spacing:.14em;font-weight:800;color:var(--kk-accent);margin-bottom:12px}
 h1{font-size:clamp(48px,7vw,92px);line-height:.98;letter-spacing:-.045em;margin:0 0 22px;font-weight:500}
 h2{font-size:clamp(34px,5vw,64px);line-height:1.02;letter-spacing:-.035em;margin:0;font-weight:500}
 h3{margin:10px 0 4px;font-size:20px}.kk-copy p,.kk-lede{max-width:680px;color:var(--kk-muted);font-size:clamp(16px,1.5vw,20px)}
-.kk-actions{display:flex;gap:10px;margin-top:28px}.kk-media{aspect-ratio:4/5;border-radius:calc(var(--kk-radius)*1.5);display:grid;place-items:center;background:linear-gradient(145deg,color-mix(in srgb,var(--kk-accent) 30%,var(--kk-surface)),var(--kk-surface));border:1px solid color-mix(in srgb,var(--kk-text) 12%,transparent);color:var(--kk-muted)}
+.kk-actions{display:flex;gap:10px;margin-top:28px}.kk-media{aspect-ratio:4/5;border-radius:calc(var(--kk-radius)*1.5);display:grid;place-items:center;overflow:hidden;background:linear-gradient(145deg,color-mix(in srgb,var(--kk-accent) 30%,var(--kk-surface)),var(--kk-surface));border:1px solid color-mix(in srgb,var(--kk-text) 12%,transparent);color:var(--kk-muted)}.kk-media>img{width:100%;height:100%;object-fit:cover;display:block}
 .kk-media-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:var(--kk-gap);margin-top:28px}.kk-media-tile{min-height:180px;display:grid;place-items:center;border-radius:var(--kk-radius);background:linear-gradient(145deg,color-mix(in srgb,var(--kk-accent) 18%,var(--kk-surface)),var(--kk-surface));border:1px solid color-mix(in srgb,var(--kk-text) 10%,transparent);color:var(--kk-muted)}.kk-input{max-width:720px;margin-top:22px;padding:8px 8px 8px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid color-mix(in srgb,var(--kk-text) 14%,transparent);border-radius:var(--kk-radius);background:var(--kk-surface);color:var(--kk-muted)}.kk-control-region{display:flex;align-items:center;justify-content:center}
 .kk-section{padding:clamp(56px,8vw,120px) clamp(18px,5vw,80px);border-top:1px solid color-mix(in srgb,var(--kk-text) 8%,transparent)}
 .kk-section-head{max-width:900px}.kk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--kk-gap);margin-top:42px}
@@ -334,13 +350,13 @@ h3{margin:10px 0 4px;font-size:20px}.kk-copy p,.kk-lede{max-width:680px;color:va
 ${regionRules}`;
 }
 function standaloneHtml(model,css){
-  const body=model.regions.map(regionMarkup).join("\n");
+  const body=model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n");
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(model.title)}</title><style>${css}</style></head>
 <body>${body}<script>document.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>b.animate([{transform:'scale(1)'},{transform:'scale(.97)'},{transform:'scale(1)'}],{duration:160})));<\/script></body></html>`;
 }
 function reactFiles(model,css){
-  const body=model.regions.map(regionMarkup).join("\n");
+  const body=model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n");
   const jsx=body.replaceAll("class=","className=").replace(/<script[\s\S]*?<\/script>/g,"");
   return [
     {path:"package.json",content:JSON.stringify({name:slug(model.title),private:true,scripts:{dev:"vite",build:"vite build"},dependencies:{"@vitejs/plugin-react":"latest","vite":"latest","react":"latest","react-dom":"latest"},devDependencies:{}},null,2)},
@@ -351,7 +367,7 @@ function reactFiles(model,css){
   ];
 }
 function nextFiles(model,css){
-  const body=model.regions.map(regionMarkup).join("\n").replaceAll("class=","className=");
+  const body=model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n").replaceAll("class=","className=");
   return [
     {path:"package.json",content:JSON.stringify({name:slug(model.title),private:true,scripts:{dev:"next dev",build:"next build",start:"next start"},dependencies:{next:"latest",react:"latest","react-dom":"latest"}},null,2)},
     {path:"app/layout.jsx",content:'import "./globals.css";export const metadata={title:"Generated Design"};export default function RootLayout({children}){return <html lang="en"><body>{children}</body></html>}'},
@@ -363,6 +379,48 @@ function outputFiles(model,css,output,html){
   if(output==="react") return reactFiles(model,css);
   if(output==="next") return nextFiles(model,css);
   return [{path:"index.html",content:html}];
+}
+
+function portableProjectAssets(projectContext, profile){
+  if(profile?.mode!=="new") return [];
+  const rows=arr(projectContext?.files);
+  const out=[];
+  const seen=new Set();
+  for(const file of rows){
+    if(!file?.base64 || !/\.(png|jpe?g|webp|avif|gif|svg|ico|mp4|webm|woff2?|ttf|otf)$/i.test(file?.name||file?.path||"")) continue;
+    const normalized=String(file.path||file.name||"").replaceAll("\\","/");
+    const base=normalized.split("/").pop();
+    let target=/^public\//i.test(normalized) ? normalized : "public/assets/"+base;
+    target=target.replace(/^\/+|\.\.\//g,"");
+    if(seen.has(target)) continue;
+    seen.add(target);
+    out.push({path:target,content:String(file.base64),encoding:"base64"});
+    if(out.length>=30) break;
+  }
+  return out;
+}
+
+function stylePathFor(profile){
+  const target=String(profile?.targetPath||"").replaceAll("\\","/");
+  const dir=target.includes("/") ? target.slice(0,target.lastIndexOf("/")+1) : "";
+  if(profile?.stack==="next") return dir+"reference-design.css";
+  if(profile?.stack==="react") return dir+"ReferenceDesign.css";
+  return "";
+}
+
+function projectPatchFiles(model,css,profile,output,html){
+  if(profile?.mode!=="existing") return outputFiles(model,css,output,html);
+  const target=profile.targetPath || (output==="html" ? "reference-design.html" : output==="next" ? "app/page.jsx" : "src/components/ReferenceDesign.jsx");
+  if(output==="html") return [{path:target,content:html}];
+  const source=output==="next" ? nextFiles(model,css).find(x=>x.path==="app/page.jsx") : reactFiles(model,css).find(x=>x.path==="src/App.jsx");
+  const stylePath=stylePathFor(profile);
+  let sourceText=source?.content || "";
+  if(output==="next") sourceText='import "./reference-design.css";\n'+sourceText;
+  else sourceText='import "./ReferenceDesign.css";\n'+sourceText;
+  return [
+    {path:target,content:sourceText},
+    {path:stylePath,content:css},
+  ];
 }
 
 function crc32(buf){
@@ -378,7 +436,7 @@ function zipStore(files){
   let offset=0;
   for(const file of files){
     const name=Buffer.from(file.path.replaceAll("\\","/"));
-    const data=Buffer.from(file.content,"utf8");
+    const data=file.encoding==="base64" ? Buffer.from(file.content,"base64") : Buffer.from(file.content,"utf8");
     const crc=crc32(data);
     const local=Buffer.alloc(30+name.length);
     local.writeUInt32LE(0x04034b50,0);local.writeUInt16LE(20,4);local.writeUInt16LE(0,6);local.writeUInt16LE(0,8);
@@ -398,15 +456,31 @@ function zipStore(files){
   return Buffer.concat([...locals,...centrals,end]);
 }
 
-export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options={}}={}){
+export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options={},projectContext=null}={}){
   const evidence=parseEvidence(inputEvidence);
-  const output=ALLOWED_OUTPUTS.has(options.output) ? options.output : "html";
+  const projectProfile=projectContext ? analyzeProjectContext(projectContext) : null;
+  const requestedOutput=options.output==="auto" && projectProfile ? projectProfile.supportedOutput : options.output;
+  const output=ALLOWED_OUTPUTS.has(requestedOutput) ? requestedOutput : "html";
   const contentMode=ALLOWED_CONTENT.has(options.contentMode) ? options.contentMode : "placeholders";
   const fidelity=ALLOWED_FIDELITY.has(options.fidelity) ? options.fidelity : "accurate";
-  const model=layoutModel(evidence,{contentMode,fidelity,markdown});
+  if(fidelity==="accurate" && projectProfile && !projectProfile.readiness.accurateReady){
+    const needed=projectProfile.readiness.questions.filter(q=>q.required).map(q=>q.label).join("; ");
+    throw new Error("Accurate mode needs more project information before build: "+(needed || projectProfile.readiness.blockers.join("; ")));
+  }
+  const model=layoutModel(evidence,{contentMode,fidelity,markdown,projectProfile});
   const css=generatedCss(model,{fidelity});
   const previewHtml=standaloneHtml(model,css);
-  const files=outputFiles(model,css,output,previewHtml);
+  const patchFiles=projectPatchFiles(model,css,projectProfile,output,previewHtml);
+  const files=projectProfile?.mode==="existing"
+    ? [
+        ...patchFiles.map(file=>({path:"project-patch/"+file.path,content:file.content})),
+        ...integrationSupportFiles(projectProfile,patchFiles),
+      ]
+    : [
+        ...patchFiles,
+        ...portableProjectAssets(projectContext,projectProfile),
+        ...newProjectSupportFiles(projectProfile),
+      ];
   files.push({path:"DESIGN-BUILD.json",content:JSON.stringify(model,null,2)});
   const readme=[
     "# Generated with KK-FRONTEND No-Code Design Compiler",
@@ -417,7 +491,10 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
     "Evidence confidence: "+(model.evidence.confidence ?? "unknown")+"%",
     "Unresolved DESIGN.md fields: "+model.evidence.unknownCount,
     "",
-    "This project is deterministic output from verified browser evidence. Replace placeholder content as needed.",
+    projectProfile ? "Project-fit readiness: "+projectProfile.readiness.score+"%" : "Project-fit context: not supplied",
+    projectProfile?.mode==="existing" ? "Use APPLY-WINDOWS.ps1 or APPLY-MAC.command to back up and integrate the project patch." : "This is a standalone generated project.",
+    "",
+    "This project is deterministic output from verified browser evidence plus supplied project context.",
   ].join("\n");
   files.push({path:"README.md",content:readme});
   const zip=zipStore(files);
@@ -439,6 +516,9 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
       animationEvidence:model.evidence.animationCount,
       projectFiles:files.length,
       zipBytes:zip.length,
+      projectFitScore:projectProfile?.readiness?.score ?? null,
+      projectStack:projectProfile?.stack ?? null,
+      accurateReady:projectProfile?.readiness?.accurateReady ?? null,
     }
   };
 }

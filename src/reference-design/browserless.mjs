@@ -312,6 +312,42 @@ async function establishReferenceSession(page, targetUrl, auth) {
   }
 }
 
+export async function captureReferencePreview({ url, viewport = "desktop", auth = {} }) {
+  const safeUrl = await assertPublicReferenceUrl(url);
+  const requested = VIEWPORTS.find(x => x.name === String(viewport || "desktop").toLowerCase());
+  if (!requested) throw new Error("Preview viewport must be desktop, tablet, or mobile.");
+  const normalizedAuth = normalizeReferenceAuth(auth, safeUrl);
+  const authSummary = referenceAuthSummary(normalizedAuth);
+  const browser = await connectBrowser();
+  try {
+    const page = await pageForBrowser(browser, normalizedAuth, safeUrl);
+    await setExactViewport(page, requested);
+    await establishReferenceSession(page, safeUrl, normalizedAuth);
+    const observed = await setExactViewport(page, requested);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(150);
+    const shot = await page.screenshot({
+      type: "jpeg",
+      quality: 68,
+      clip: { x:0, y:0, width:requested.width, height:requested.height },
+    });
+    const result = {
+      schema: "kk-reference-preview/v1",
+      url: safeUrl,
+      finalUrl: page.url(),
+      viewport: requested.name,
+      width: observed.width,
+      height: observed.height,
+      screenshot: `data:image/jpeg;base64,${shot.toString("base64")}`,
+      authentication: authSummary,
+    };
+    if (containsReferenceAuthSecret(result, normalizedAuth)) throw new Error("Authentication secret safety check failed.");
+    return result;
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
 const candidateScript = () => {
   function selectorFor(el) {
     if (!el || el.nodeType !== 1) return null;

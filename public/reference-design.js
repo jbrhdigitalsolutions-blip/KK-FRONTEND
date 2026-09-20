@@ -10,6 +10,9 @@ const state = {
   evidenceJson: "",
   evidenceFilename: "DESIGN-EVIDENCE.json",
   build: null,
+  projectFiles: [],
+  projectProfile: null,
+  referencePreviews: {},
 };
 
 function notice(message, kind = "error") {
@@ -103,6 +106,150 @@ function clearAuthSecrets() {
   $("authMode").value="public";
   updateAuthUi();
   setAuthPanel(false);
+}
+
+const PROJECT_TEXT_EXTENSIONS = new Set([
+  ".json",".md",".txt",".html",".htm",".css",".scss",".sass",".less",
+  ".js",".jsx",".mjs",".cjs",".ts",".tsx",".vue",".svelte",".yaml",".yml",".toml"
+]);
+const PROJECT_SKIP_PATH = /(^|\/)(node_modules|\.git|\.next|dist|build|coverage|\.cache|vendor)(\/|$)/i;
+const PROJECT_SECRET_PATH = /(^|\/)(\.env(?:\.|$)|id_rsa|id_ed25519|.*\.(?:pem|key|p12|pfx)|credentials?(?:\.|$)|secrets?(?:\.|$))/i;
+function fileExtension(name) {
+  const base=String(name||"").toLowerCase();
+  const i=base.lastIndexOf(".");
+  return i>=0 ? base.slice(i) : "";
+}
+async function readProjectFiles(fileList) {
+  const input=[...fileList];
+  const seen=new Set();
+  const rows=[];
+  let textBudget=0;
+  let binaryBudget=0;
+  const isPortableAsset=name=>/\.(png|jpe?g|webp|avif|gif|svg|ico|mp4|webm|woff2?|ttf|otf)$/i.test(name);
+  for (const file of input) {
+    const path=(file.webkitRelativePath || file.name || "").replaceAll("\\","/");
+    if (!path || seen.has(path) || PROJECT_SKIP_PATH.test(path) || PROJECT_SECRET_PATH.test(path)) continue;
+    seen.add(path);
+    const row={path,name:file.name,size:file.size,type:file.type||"",text:"",base64:""};
+    const extension=fileExtension(file.name);
+    if (PROJECT_TEXT_EXTENSIONS.has(extension) && file.size <= 300_000 && textBudget + file.size <= 1_500_000) {
+      try {
+        row.text=await file.text();
+        textBudget += file.size;
+      } catch {}
+    } else if (isPortableAsset(file.name) && file.size <= 1_000_000 && binaryBudget + file.size <= 1_500_000) {
+      try {
+        const bytes=new Uint8Array(await file.arrayBuffer());
+        let binary="";
+        const chunk=0x8000;
+        for(let i=0;i<bytes.length;i+=chunk) binary+=String.fromCharCode(...bytes.subarray(i,i+chunk));
+        row.base64=btoa(binary);
+        binaryBudget += file.size;
+      } catch {}
+    }
+    rows.push(row);
+    if (rows.length >= 220) break;
+  }
+  return rows;
+}
+function projectMode() {
+  return document.querySelector("input[name='projectMode']:checked")?.value || "existing";
+}
+function collectProjectContext() {
+  return {
+    mode: projectMode(),
+    projectName: $("fitProjectName").value.trim(),
+    stack: $("fitStack").value,
+    targetRoute: $("fitTargetRoute").value.trim(),
+    targetPath: $("fitTargetPath").value.trim(),
+    brand: $("fitBrand").value.trim(),
+    navItems: $("fitNav").value.trim(),
+    heroTitle: $("fitHeroTitle").value.trim(),
+    heroBody: $("fitHeroBody").value.trim(),
+    primaryCta: $("fitPrimaryCta").value.trim(),
+    secondaryCta: $("fitSecondaryCta").value.trim(),
+    logoAsset: $("fitLogoAsset").value.trim(),
+    heroAsset: $("fitHeroAsset").value.trim(),
+    files: projectMode()==="existing" ? state.projectFiles : [],
+  };
+}
+function invalidateProjectFit() {
+  state.projectProfile=null;
+  $("projectFitScore").dataset.state="empty";
+  $("projectFitScore").innerHTML="<b>—</b><span>Project fit</span>";
+  $("projectFitResult").hidden=true;
+  updateAccurateAvailability();
+}
+function updateAccurateAvailability() {
+  const accurateOption=[...$("buildFidelity").options].find(x=>x.value==="accurate");
+  const ready=Boolean(state.projectProfile?.readiness?.accurateReady);
+  if (accurateOption) accurateOption.disabled=!ready;
+  if (!ready && $("buildFidelity").value==="accurate") $("buildFidelity").value="balanced";
+  $("projectFitHint").textContent=ready
+    ? "Accurate mode unlocked — required project evidence is ready."
+    : "Accurate mode stays locked until required project evidence is ready.";
+  $("projectFitHint").dataset.ready=ready ? "true" : "false";
+}
+function renderProjectFit(profile) {
+  state.projectProfile=profile;
+  const score=Number(profile.readiness?.score||0);
+  const scoreBox=$("projectFitScore");
+  scoreBox.dataset.state=profile.readiness?.accurateReady ? "ready" : score>=50 ? "partial" : "low";
+  scoreBox.innerHTML=`<b>${score}%</b><span>Project fit</span>`;
+  $("projectFitResult").hidden=false;
+  $("fitDetectedStack").textContent=profile.stack || "Unknown";
+  $("fitDetectedPm").textContent=profile.packageManager || "—";
+  $("fitDetectedStyling").textContent=(profile.styling||[]).join(", ") || "—";
+  $("fitDetectedTarget").textContent=profile.targetPath || "—";
+  if (!$("fitProjectName").value.trim() && profile.projectName) $("fitProjectName").value=profile.projectName;
+  if (!$("fitTargetRoute").value.trim() && profile.targetRoute) $("fitTargetRoute").value=profile.targetRoute;
+  if (!$("fitTargetPath").value.trim() && profile.targetPath) $("fitTargetPath").value=profile.targetPath;
+  if ($("fitStack").value==="auto" && profile.stack && profile.stack!=="unknown") {
+    const option=[...$("fitStack").options].find(x=>x.value===profile.stack);
+    if (option) option.selected=true;
+  }
+
+  const blockers=profile.readiness?.blockers||[];
+  $("fitBlockers").innerHTML=blockers.length
+    ? blockers.map(x=>`<div class="rdFitBlocker"><b>Blocking Accurate build</b><span>${escapeHtml(x)}</span></div>`).join("")
+    : '<div class="rdFitPass"><b>Target compatibility ready</b><span>No stack/integration blocker detected.</span></div>';
+
+  const questions=profile.readiness?.questions||[];
+  $("fitQuestions").innerHTML=questions.length
+    ? '<b>Still needed for higher accuracy</b>'+questions.map(q=>`<div><span>${escapeHtml(q.label)}</span><small>${escapeHtml(q.reason)}</small>${q.required?'<em>Required</em>':'<em class="optional">Helpful</em>'}</div>`).join("")
+    : '<b>Required project information complete.</b>';
+
+  const req=profile.requirements||{};
+  $("fitRequirements").textContent=[req.node, req.packageManager && req.packageManager!=="none" ? req.packageManager : "", req.windows, req.mac].filter(Boolean).join(" · ");
+  if (profile.supportedOutput) $("buildOutput").value="auto";
+  updateAccurateAvailability();
+}
+async function analyzeProjectFit({quiet=false}={}) {
+  if (!quiet) busy($("analyzeProjectButton"),true,"Analyzing…");
+  try {
+    const profile=await api("/api/reference-design/project-fit",{
+      method:"POST",
+      body:JSON.stringify(collectProjectContext()),
+    });
+    renderProjectFit(profile);
+    return profile;
+  } catch(error) {
+    notice(error.message);
+    return null;
+  } finally {
+    if (!quiet) busy($("analyzeProjectButton"),false);
+  }
+}
+function renderProjectFileSummary() {
+  const rows=state.projectFiles;
+  if (!rows.length) {
+    $("projectFileSummary").textContent="No project files selected.";
+    return;
+  }
+  const withText=rows.filter(x=>x.text).length;
+  const assets=rows.filter(x=>/\.(png|jpe?g|webp|avif|gif|svg|mp4|webm|woff2?|ttf|otf)$/i.test(x.path)).length;
+  const portable=rows.filter(x=>x.base64).length;
+  $("projectFileSummary").textContent=`${rows.length} files · ${withText} readable source/design files · ${assets} asset filenames · ${portable} portable assets included · secret/config-private files excluded`;
 }
 
 function scopeMode() {
@@ -308,6 +455,24 @@ async function checkProvider() {
   }
 }
 
+async function handleProjectFiles(files) {
+  state.projectFiles=await readProjectFiles(files);
+  renderProjectFileSummary();
+  invalidateProjectFit();
+}
+$("projectFiles").addEventListener("change", event => handleProjectFiles(event.target.files));
+$("projectFolder").addEventListener("change", event => handleProjectFiles(event.target.files));
+document.querySelectorAll("input[name='projectMode']").forEach(input => input.addEventListener("change",()=>{
+  $("existingProjectUpload").hidden=projectMode()!=="existing";
+  invalidateProjectFit();
+}));
+for (const id of ["fitProjectName","fitStack","fitTargetRoute","fitTargetPath","fitBrand","fitNav","fitHeroTitle","fitHeroBody","fitPrimaryCta","fitSecondaryCta","fitLogoAsset","fitHeroAsset"]) {
+  $(id).addEventListener("input", invalidateProjectFit);
+  $(id).addEventListener("change", invalidateProjectFit);
+}
+$("analyzeProjectButton").addEventListener("click",()=>analyzeProjectFit());
+updateAccurateAvailability();
+
 $("inspectForm").addEventListener("submit", async event => {
   event.preventDefault();
   notice("");
@@ -434,7 +599,37 @@ function buildDeviceSize(device) {
   };
   return evidence[device] || fallback[device] || fallback.desktop;
 }
-function setBuildDevice(device) {
+async function loadReferencePreview(device) {
+  if (!state.inspection?.finalUrl) return;
+  if (state.referencePreviews[device]) {
+    $("buildReferenceImage").src=state.referencePreviews[device];
+    return;
+  }
+  const label=$(".rdReferencePane .rdPaneLabel");
+  const old=label?.textContent || "Reference capture";
+  if(label) label.textContent=`Loading ${device} reference…`;
+  try {
+    const data=await api("/api/reference-design/preview",{
+      method:"POST",
+      body:JSON.stringify({
+        url:state.inspection.finalUrl,
+        viewport:device,
+        auth:currentAuth(),
+      }),
+    });
+    state.referencePreviews[device]=data.screenshot;
+    $("buildReferenceImage").src=data.screenshot;
+    if(label) label.textContent=`Reference · ${data.width}×${data.height}`;
+  } catch(error) {
+    if(label) label.textContent="Reference preview unavailable";
+    if (!state.referencePreviews.desktop && state.inspection?.screenshot) {
+      $("buildReferenceImage").src=state.inspection.screenshot;
+    }
+  } finally {
+    if(label && label.textContent.startsWith("Loading ")) label.textContent=old;
+  }
+}
+async function setBuildDevice(device) {
   const shell = $("buildFrameShell");
   if (!shell) return;
   const size = buildDeviceSize(device);
@@ -444,6 +639,7 @@ function setBuildDevice(device) {
   document.querySelectorAll("[data-device]").forEach(btn =>
     btn.classList.toggle("active", btn.dataset.device === device)
   );
+  await loadReferencePreview(device);
 }
 function setBuildView(view) {
   $("buildCompare").dataset.view = view;
@@ -468,7 +664,7 @@ function downloadBase64(base64, filename, type = "application/zip") {
 }
 function renderBuildResult(data) {
   state.build = data;
-  $("buildReferenceImage").src = state.inspection?.screenshot || "";
+  $("buildReferenceImage").src = state.referencePreviews.desktop || state.inspection?.screenshot || "";
   $("buildFrame").srcdoc = data.previewHtml;
   $("buildSummary").textContent = `${data.output.toUpperCase()} · ${data.summary.regions} compiled regions · ${data.summary.projectFiles} project files`;
   $("projectName").textContent = data.filename;
@@ -476,9 +672,11 @@ function renderBuildResult(data) {
 
   const facts = [
     [data.summary.regions, "Compiled regions"],
-    [`${data.summary.evidenceConfidence ?? "—"}%`, "Evidence confidence"],
+    [`${data.summary.evidenceConfidence ?? "—"}%`, "Reference evidence"],
+    [data.summary.projectFitScore == null ? "—" : `${data.summary.projectFitScore}%`, "Project fit"],
+    [data.summary.projectStack || data.output, "Target stack"],
     [data.summary.unknownCount, "Unresolved fields"],
-    [data.summary.projectFiles, "Project files"],
+    [data.summary.projectFiles, "ZIP files"],
   ];
   $("buildFacts").innerHTML = facts.map(([value,label]) =>
     `<div class="rdFact"><b>${escapeHtml(value)}</b><span>${escapeHtml(label)}</span></div>`
@@ -495,8 +693,16 @@ $("buildPageButton").addEventListener("click", async () => {
     notice("Generate DESIGN.md first, then build the page.");
     return;
   }
+  let profile=state.projectProfile;
+  if (!profile) profile=await analyzeProjectFit({quiet:true});
+  if (!profile) return;
+  if ($("buildFidelity").value==="accurate" && !profile.readiness?.accurateReady) {
+    const required=(profile.readiness?.questions||[]).filter(q=>q.required).map(q=>q.label).join(", ");
+    notice("Accurate build is locked until required project information is complete"+(required ? ": "+required : "."));
+    return;
+  }
   notice("");
-  busy($("buildPageButton"), true, "Compiling page…");
+  busy($("buildPageButton"), true, "Compiling project-fit source…");
   try {
     const data = await api("/api/reference-design/build", {
       method: "POST",
@@ -508,6 +714,7 @@ $("buildPageButton").addEventListener("click", async () => {
           contentMode: $("buildContent").value,
           fidelity: $("buildFidelity").value,
         },
+        projectContext: collectProjectContext(),
       }),
     });
     renderBuildResult(data);
@@ -565,6 +772,10 @@ $("newButton").addEventListener("click", () => {
   state.markdown = "";
   state.evidenceJson = "";
   state.build = null;
+  state.referencePreviews = {};
+  state.projectProfile = null;
+  state.projectFiles = [];
+  renderProjectFileSummary();
   $("selectionStage").hidden = true;
   $("resultStage").hidden = true;
   $("buildStage").hidden = true;
