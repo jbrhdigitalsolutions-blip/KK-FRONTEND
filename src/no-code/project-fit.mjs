@@ -42,14 +42,19 @@ function normalizeFiles(input=[]){
 }
 
 function packageInfo(files){
-  const pkgFile=fileBy(files,x=>/(^|\/)package\.json$/i.test(x.path));
-  const pkg=parseJson(pkgFile?.text);
-  if(!pkg) return {file:null,pkg:null,deps:{}};
-  return {
-    file:pkgFile.path,
-    pkg,
-    deps:{...(pkg.dependencies||{}),...(pkg.devDependencies||{})},
-  };
+  const rows=files.filter(x=>/(^|\/)package\.json$/i.test(x.path)).map(file=>{
+    const pkg=parseJson(file.text); if(!pkg)return null;
+    const deps={...(pkg.dependencies||{}),...(pkg.devDependencies||{})};
+    let score=0;
+    if(deps.next)score+=100;
+    if(deps.react)score+=70;
+    if(deps.vue||deps.nuxt||deps.svelte||deps["@sveltejs/kit"])score+=65;
+    if(deps.vite)score+=35;
+    if(/(?:^|\/)(web|frontend|client|app)(?:\/|$)/i.test(file.path))score+=25;
+    score-=file.path.split("/").length;
+    return{file:file.path,root:file.path.includes("/")?file.path.slice(0,file.path.lastIndexOf("/")):"",pkg,deps,score};
+  }).filter(Boolean).sort((a,b)=>b.score-a.score||a.file.localeCompare(b.file));
+  return rows[0]||{file:null,root:"",pkg:null,deps:{},score:0};
 }
 
 function detectStack(files,pkgInfo,requested="auto"){
