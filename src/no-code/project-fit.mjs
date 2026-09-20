@@ -349,6 +349,42 @@ ${profile.packageManager!=="none" ? `if [ -f "$PROJECT_ROOT/package.json" ]; the
 
 export function newProjectSupportFiles(profile){
   if(profile?.mode!=="new") return [];
+  if(profile.supportedOutput==="html"){
+    const windows=[
+      '$ErrorActionPreference="Stop"',
+      '$Index=Join-Path $PSScriptRoot "index.html"',
+      'if(-not (Test-Path -LiteralPath $Index)){throw "index.html not found"}',
+      'Start-Process $Index',
+    ].join("\n");
+    const mac=[
+      '#!/usr/bin/env bash',
+      'set -euo pipefail',
+      'cd "$(dirname "$0")"',
+      '[ -f index.html ] || { echo "index.html not found"; exit 1; }',
+      'open index.html',
+    ].join("\n");
+    const run=[
+      '# Run the generated frontend',
+      '',
+      'Stack: HTML/CSS/JS',
+      '',
+      '## PC requirements',
+      '- Windows 10/11: a modern browser. PowerShell is included with Windows; PowerShell 7 is recommended.',
+      '- macOS 12+: a modern browser and Terminal.',
+      '',
+      '## Windows',
+      'Run: pwsh -File .\\START-WINDOWS.ps1',
+      '',
+      '## macOS',
+      'Run: chmod +x START-MAC.command && ./START-MAC.command',
+    ].join("\n");
+    return [
+      {path:"PROJECT-FIT.json",content:JSON.stringify(profile,null,2)},
+      {path:"START-WINDOWS.ps1",content:windows},
+      {path:"START-MAC.command",content:mac},
+      {path:"RUN.md",content:run},
+    ];
+  }
   const pm=profile.packageManager==="none" ? "pnpm" : profile.packageManager;
   const windows=[
     '$ErrorActionPreference="Stop"',
