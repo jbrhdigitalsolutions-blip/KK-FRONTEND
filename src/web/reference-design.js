@@ -54,6 +54,28 @@ async function api(path, options = {}) {
   if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
   return body;
 }
+
+async function decodeGeneratedEvidence(data = {}) {
+  if (data.evidenceJson) return data.evidenceJson;
+  if (data.evidenceEncoding !== "gzip-base64" || !data.evidenceGzipBase64) return "";
+  if (typeof DecompressionStream === "undefined") {
+    throw new Error("This browser cannot decode the losslessly compressed design evidence. Use a current Chrome or Edge build.");
+  }
+  let binary;
+  try {
+    binary = atob(data.evidenceGzipBase64);
+  } catch {
+    throw new Error("Generated design evidence transport was not valid base64.");
+  }
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  try {
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return await new Response(stream).text();
+  } catch {
+    throw new Error("Generated design evidence could not be decompressed. Retry the reference capture.");
+  }
+}
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>'"]/g, x => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[x]));
 }
@@ -900,7 +922,7 @@ $("generateButton").addEventListener("click", async () => {
 
     state.markdown = data.markdown;
     state.filename = data.filename || "DESIGN.md";
-    state.evidenceJson = data.evidenceJson || "";
+    state.evidenceJson = await decodeGeneratedEvidence(data);
     state.evidenceFilename = data.evidenceFilename || "DESIGN-EVIDENCE.json";
 
     $("confidencePill").textContent = `${data.summary.confidence}% evidence confidence · ${data.summary.viewportVerified ? "3 viewports verified" : "viewport warning"}`;
