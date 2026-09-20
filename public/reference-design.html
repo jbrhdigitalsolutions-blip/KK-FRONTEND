@@ -14,7 +14,7 @@
       <span><b>KK-FRONTEND</b><small>Design Explorer</small></span>
     </a>
     <div class="rdTopActions">
-      <span class="rdVersion">v0.7.0</span>
+      <span class="rdVersion">v0.8.0</span>
       <a class="rdBack" href="/index.html">Main workspace</a>
     </div>
   </header>
@@ -22,7 +22,7 @@
   <main class="rdMain">
     <section class="rdHero">
       <div>
-        <div class="rdEyebrow">REFERENCE → SELECT → BUILD → PREVIEW</div>
+        <div class="rdEyebrow">REFERENCE → PROJECT FIT → EXACT BUILD → PREVIEW</div>
         <h1>Choose the design you want. <span>Build the page yourself.</span></h1>
         <p>Open a public reference, choose the exact visual regions, generate verified evidence, then compile a real page with live preview and project export — no coding agent required.</p>
       </div>
@@ -191,44 +191,143 @@
           <div class="rdStageTitle">
             <span class="rdStep">4</span>
             <div>
-              <h2 id="buildTitle">Build this design</h2>
-              <p>Compile the verified design evidence into a working frontend. No coding agent, prompt, or source editing required.</p>
+              <h2 id="buildTitle">Fit this design to your project</h2>
+              <p>Accurate source needs both sides: the reference design evidence and enough information about the project that will receive it.</p>
             </div>
           </div>
-          <span class="rdCompilerBadge">Deterministic compiler</span>
+          <span class="rdCompilerBadge">Project-aware builder</span>
         </div>
 
-        <div class="rdBuildControls">
+        <div class="rdProjectIntake">
+          <div class="rdIntakeGrid">
+            <label>
+              <span>Project type</span>
+              <select id="projectMode">
+                <option value="existing">Existing project</option>
+                <option value="new">New project</option>
+              </select>
+            </label>
+            <label>
+              <span>Project name</span>
+              <input id="projectNameInput" autocomplete="off" placeholder="My product"/>
+            </label>
+            <label id="targetPageField">
+              <span>Target page / route</span>
+              <input id="targetPageInput" autocomplete="off" placeholder="/landing or src/pages/Home.tsx"/>
+            </label>
+            <label id="frameworkField">
+              <span id="frameworkLabel">Framework / stack override</span>
+              <select id="frameworkPreference">
+                <option value="">Auto-detect / choose…</option>
+                <option value="Next.js">Next.js</option>
+                <option value="React + Vite">React + Vite</option>
+                <option value="React">React</option>
+                <option value="Vue">Vue</option>
+                <option value="Svelte">Svelte</option>
+                <option value="HTML/CSS/JS">HTML/CSS/JS</option>
+              </select>
+            </label>
+            <label>
+              <span>Package manager</span>
+              <select id="packageManagerPreference">
+                <option value="">Auto-detect / choose…</option>
+                <option value="pnpm">pnpm</option>
+                <option value="npm">npm</option>
+                <option value="yarn">Yarn</option>
+                <option value="bun">Bun</option>
+              </select>
+            </label>
+            <label>
+              <span>Text/content source</span>
+              <select id="contentStrategy">
+                <option value="">Choose…</option>
+                <option value="project">Reuse current project content</option>
+                <option value="provided">I will provide final text</option>
+                <option value="reference-labels">Use reference labels as drafting cues</option>
+                <option value="placeholders">Use placeholders</option>
+              </select>
+            </label>
+            <label>
+              <span>Images / video</span>
+              <select id="assetStrategy">
+                <option value="">Choose…</option>
+                <option value="project">Use existing project assets</option>
+                <option value="provided">I will map/provide assets</option>
+                <option value="placeholders">Use asset slots</option>
+              </select>
+            </label>
+            <label class="rdAssetMapField" id="assetMapField" hidden>
+              <span>Asset paths / URLs</span>
+              <input id="assetMapInput" autocomplete="off" placeholder="/images/hero.webp, /logo.svg"/>
+            </label>
+          </div>
+
+          <div class="rdPlatformRow">
+            <span>Target PC</span>
+            <label><input id="platformWindows" type="checkbox" value="windows" checked/> Windows</label>
+            <label><input id="platformMacos" type="checkbox" value="macos" checked/> macOS</label>
+          </div>
+
+          <div id="providedContentFields" class="rdProvidedContent" hidden>
+            <label><span>Main headline</span><input id="contentHeadline" autocomplete="off" placeholder="Your actual page headline"/></label>
+            <label><span>Primary action</span><input id="contentPrimaryAction" autocomplete="off" placeholder="Get started"/></label>
+            <label class="wide"><span>Page copy / important text</span><textarea id="contentBody" placeholder="Paste the important text that must appear in this design."></textarea></label>
+          </div>
+
+          <div class="rdUploadGrid">
+            <label class="rdUploadCard">
+              <span class="rdUploadTitle">Upload project folder</span>
+              <small>Recommended for an existing project. Text/source/config files are analyzed locally before upload.</small>
+              <input id="projectFolderInput" type="file" webkitdirectory directory multiple/>
+              <b id="projectFolderStatus">No folder selected</b>
+            </label>
+            <label class="rdUploadCard">
+              <span class="rdUploadTitle">Upload key design/project files</span>
+              <small>DESIGN.md, package.json, route/component files, CSS/Tailwind/theme/token files.</small>
+              <input id="projectFilesInput" type="file" multiple accept=".md,.mdx,.json,.js,.mjs,.cjs,.jsx,.ts,.tsx,.css,.scss,.sass,.less,.html,.vue,.svelte,.astro,.yaml,.yml,.toml,.txt"/>
+              <b id="projectFilesStatus">No files selected</b>
+            </label>
+          </div>
+
+          <div class="rdUploadSafety">Do not upload <b>.env</b>, private keys, certificates, API tokens, passwords, database dumps, or other secrets. Project analysis is text-only and size-limited.</div>
+
+          <label class="rdProjectNotes">
+            <span>Project details / constraints <small>Optional but useful</small></span>
+            <textarea id="projectNotes" placeholder="Describe the page purpose, backend/data behavior to preserve, design-system rules, routes, must-keep interactions, or any project constraints."></textarea>
+          </label>
+
+          <div class="rdIntakeActions">
+            <button id="analyzeProjectButton" class="rdSecondary" type="button">Analyze Project Fit</button>
+            <div id="intakeReadiness" class="rdReadiness">
+              <div><b>Project fit not analyzed</b><span>Complete the fields and upload the relevant project/design files.</span></div>
+              <div class="rdReadinessTrack"><i style="width:0%"></i></div>
+            </div>
+          </div>
+
+          <div id="intakeDetails" class="rdIntakeDetails" hidden></div>
+        </div>
+
+        <div class="rdBuildControls rdExactControls">
+          <label>
+            <span>Build mode</span>
+            <select id="buildFidelity">
+              <option value="accurate">Project-fit accurate</option>
+              <option value="prototype">Prototype only</option>
+            </select>
+          </label>
           <label>
             <span>Output</span>
-            <select id="buildOutput">
-              <option value="html">Standalone HTML</option>
-              <option value="react">React + Vite</option>
-              <option value="next">Next.js</option>
+            <select id="buildOutput" disabled>
+              <option value="auto">Auto-match analyzed project</option>
             </select>
           </label>
-          <label>
-            <span>Content</span>
-            <select id="buildContent">
-              <option value="placeholders">Safe placeholders</option>
-              <option value="reference-labels">Reference labels</option>
-            </select>
-          </label>
-          <label>
-            <span>Fidelity</span>
-            <select id="buildFidelity">
-              <option value="accurate">Accurate</option>
-              <option value="balanced">Balanced</option>
-              <option value="inspired">Inspired</option>
-            </select>
-          </label>
-          <button id="buildPageButton" class="rdPrimary rdBuildButton" type="button">Build Page</button>
+          <button id="buildPageButton" class="rdPrimary rdBuildButton" type="button" disabled>Build Exact Project</button>
         </div>
 
         <div class="rdBuildRule">
-          <span>Verified measurements are compiled directly.</span>
-          <span>Unknown values stay unresolved instead of being invented.</span>
-          <span>Generated source is isolated from your existing project.</span>
+          <span>Reference geometry is reconstructed from measured child elements.</span>
+          <span>Project stack and file conventions are detected before source generation.</span>
+          <span>ZIP includes Windows + macOS setup/run instructions.</span>
         </div>
       </section>
 
