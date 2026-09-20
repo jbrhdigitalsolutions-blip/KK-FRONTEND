@@ -469,11 +469,12 @@ function slimEvidenceStyle(style = {}) {
   const keys = [
     "display","position","top","right","bottom","left","width","height","minWidth","maxWidth","minHeight","maxHeight",
     "marginTop","marginRight","marginBottom","marginLeft","paddingTop","paddingRight","paddingBottom","paddingLeft",
-    "gap","rowGap","columnGap","gridTemplateColumns","gridTemplateRows","gridAutoFlow","justifyContent","alignItems",
-    "flexDirection","flexWrap","color","backgroundColor","backgroundImage","opacity","border","borderRadius","boxShadow",
+    "gap","rowGap","columnGap","gridTemplateColumns","gridTemplateRows","gridAutoFlow","justifyContent","alignItems","alignContent","placeItems",
+    "flexDirection","flexWrap","flexGrow","flexShrink","order","color","backgroundColor","backgroundImage","opacity",
+    "border","borderTop","borderRight","borderBottom","borderLeft","borderRadius","boxShadow",
     "outline","outlineOffset","fontFamily","fontSize","fontWeight","fontStyle","lineHeight","letterSpacing","textAlign",
-    "textTransform","whiteSpace","transform","transformOrigin","transitionProperty","transitionDuration",
-    "transitionTimingFunction","animationName","animationDuration","animationTimingFunction","animationIterationCount",
+    "textTransform","textDecorationLine","whiteSpace","wordBreak","textOverflow","transform","transformOrigin",
+    "transitionProperty","transitionDuration","transitionTimingFunction","animationName","animationDuration","animationTimingFunction","animationIterationCount",
     "overflow","overflowX","overflowY","scrollSnapType","scrollBehavior","zIndex","cursor","pointerEvents","filter",
     "backdropFilter","objectFit","objectPosition","aspectRatio"
   ];
@@ -508,7 +509,14 @@ function slimEvidenceNode(node = {}) {
 
 export function buildEvidenceCompanion(evidence) {
   const viewports = arr(evidence?.viewports).map(vp => {
-    const semantic = arr(vp.elements).filter(evidenceNodeUseful).slice(0, 300);
+    const raw=arr(vp.elements);
+    const useful=raw.filter(evidenceNodeUseful);
+    const required=new Set();
+    for(const node of useful){
+      if(node?.selector)required.add(node.selector);
+      for(const ancestor of arr(node?.ancestorSelectors))if(ancestor)required.add(ancestor);
+    }
+    const hierarchy=raw.filter(node=>node?.selector && required.has(node.selector)).slice(0,360);
     return {
       name: vp.name,
       targetViewport: vp.targetViewport || vp.viewport || null,
@@ -516,8 +524,8 @@ export function buildEvidenceCompanion(evidence) {
       runtimeViewport: vp.runtimeViewport || null,
       document: vp.document || null,
       scopes: arr(vp.scopes).map(slimEvidenceNode),
-      representativeElements: semantic.slice(0,300).map(slimEvidenceNode),
-      representativeElementPolicy: "Semantic, layout-container, styled, interactive, media, fixed/sticky, and animated elements; capped at 300 per viewport with hierarchy links.",
+      representativeElements: hierarchy.map(slimEvidenceNode),
+      representativeElementPolicy: "Fidelity-critical semantic/layout nodes plus required DOM ancestors; capped at 360 per viewport with hierarchy links.",
     };
   });
 
@@ -545,6 +553,7 @@ export function buildEvidenceCompanion(evidence) {
     interactions: arr(evidence?.interactions).slice(0, 36),
     animations: arr(evidence?.animations).slice(0, 80),
     fonts: arr(evidence?.fonts).slice(0, 80),
+    fontFaces: arr(evidence?.fontFaces).slice(0, 80),
     assets: {
       svgCount: arr(evidence?.assets?.svgs).length,
       imageCount: arr(evidence?.assets?.images).length,
