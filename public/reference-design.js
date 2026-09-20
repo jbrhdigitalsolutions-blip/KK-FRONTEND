@@ -11,6 +11,7 @@ const state = {
   evidenceFilename: "DESIGN-EVIDENCE.json",
   build: null,
   projectFiles: [],
+  projectAssets: [],
   projectIntake: null,
 };
 
@@ -172,7 +173,7 @@ async function readProjectFiles(fileList) {
     if (!lockfile && file.size > 600000) { skipped++; continue; }
     const content = lockfile && file.size > 600000 ? "" : await file.text();
     const size = new Blob([content]).size;
-    if (total + size > 2500000) { skipped++; continue; }
+    if (total + size > 1500000) { skipped++; continue; }
     total += size;
     current.set(path, { path, content });
   }
@@ -182,6 +183,42 @@ async function readProjectFiles(fileList) {
   $("projectFolderStatus").textContent = summary;
   $("projectFilesStatus").textContent = summary;
 }
+function fileToBase64(file) {
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(String(reader.result||"").split(",").pop()||"");
+    reader.onerror=()=>reject(reader.error||new Error("Could not read asset."));
+    reader.readAsDataURL(file);
+  });
+}
+async function readProjectAssets(fileList) {
+  const accepted=[];
+  let total=0;
+  for (const file of [...fileList].slice(0,12)) {
+    if (!/^image\/(png|jpeg|webp|gif|avif|svg\+xml)$/i.test(file.type)) continue;
+    if (file.size > 500000) {
+      notice(`${file.name} is larger than 500 KB. Use an existing project path or public URL for larger media.`);
+      continue;
+    }
+    if (total + file.size > 1000000) {
+      notice("Image asset upload limit is 1 MB total. Use project paths/URLs for the remaining media.");
+      break;
+    }
+    total += file.size;
+    accepted.push({
+      name:file.name,
+      mime:file.type,
+      size:file.size,
+      base64:await fileToBase64(file),
+    });
+  }
+  state.projectAssets=accepted;
+  invalidateProjectFit();
+  $("projectAssetFilesStatus").textContent=accepted.length
+    ? `${accepted.length} asset(s) · ${Math.round(total/1024)} KB`
+    : "No image assets selected";
+}
+
 function renderProjectIntake(data) {
   state.projectIntake = data;
   const readiness = $("intakeReadiness");
@@ -209,6 +246,7 @@ function renderProjectIntake(data) {
       <span><b>Language</b>${escapeHtml(data.language)}</span>
       <span><b>Styling</b>${escapeHtml((data.styling || []).join(", ") || "Not detected")}</span>
       <span><b>Current DESIGN.md</b>${escapeHtml(data.designContext?.designMd || "Not supplied")}</span>
+      <span><b>Uploaded assets</b>${escapeHtml(String(data.assetCount || 0))}</span>
     </div>
     <div class="rdRequirementGrid">${requirements}</div>
     ${recommendations ? `<div class="rdRecommendations"><b>For higher project fit</b><ul>${recommendations}</ul></div>` : ""}
@@ -233,6 +271,7 @@ async function analyzeProjectFit() {
       body: JSON.stringify({
         evidenceJson: state.evidenceJson,
         files: state.projectFiles,
+        assets: state.projectAssets,
         answers: projectAnswers(),
       }),
     });
@@ -664,6 +703,7 @@ $("buildPageButton").addEventListener("click", async () => {
         project: {
           enabled: true,
           files: state.projectFiles,
+          assets: state.projectAssets,
           answers: projectAnswers(),
         },
       }),
@@ -685,6 +725,7 @@ for (const id of ["projectNameInput","targetPageInput","frameworkPreference","pa
 }
 $("projectFolderInput").addEventListener("change", event => readProjectFiles(event.target.files));
 $("projectFilesInput").addEventListener("change", event => readProjectFiles(event.target.files));
+$("projectAssetFilesInput").addEventListener("change", event => readProjectAssets(event.target.files));
 $("analyzeProjectButton").addEventListener("click", analyzeProjectFit);
 $("buildFidelity").addEventListener("change", () => {
   const prototype = $("buildFidelity").value === "prototype";
@@ -740,6 +781,7 @@ $("newButton").addEventListener("click", () => {
   state.evidenceJson = "";
   state.build = null;
   state.projectFiles = [];
+  state.projectAssets = [];
   state.projectIntake = null;
   $("selectionStage").hidden = true;
   $("resultStage").hidden = true;
@@ -756,6 +798,8 @@ $("newButton").addEventListener("click", () => {
   $("projectNotes").value = "";
   $("projectFolderInput").value = "";
   $("projectFilesInput").value = "";
+  $("projectAssetFilesInput").value = "";
+  $("projectAssetFilesStatus").textContent = "No image assets selected";
   $("intakeDetails").hidden = true;
   updateProjectModeUi();
   updateProvidedContentUi();
