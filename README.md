@@ -1,3 +1,40 @@
+# KK-FRONTEND v0.9.1 — URL→SOURCE MAPPING + REFERENCE INTENT GUARD
+
+v0.9.1 fixes two workflow gaps found in production v0.9.0.
+
+## Website-only targets no longer require a source-file path
+
+A live Target URL can now be used without GitHub/local source. KK-FRONTEND scans the live website, uses its content/assets/runtime evidence, and generates a **standalone replacement package**. It does not pretend to patch an unknown source file.
+
+When GitHub or local source is also connected, the live URL is mapped against the source tree. For example:
+
+```text
+Live target: /index.html
+Source candidates:
+  src/web/index.html   ← authored source / recommended
+  public/index.html    ← deployment/static mirror
+```
+
+The Project Fit UI shows the mapping and lets the user choose another detected candidate if needed.
+
+## Collection/gallery references require an explicit choice
+
+Reference inspection now detects collection/search/tag/gallery pages. If a URL contains multiple design items, KK-FRONTEND does not silently treat one card as the intended design.
+
+The user can:
+
+```text
+Use entire collection page
+or
+Choose one detected design item
+or
+Paste a direct design URL
+```
+
+This specifically prevents URLs such as tag/search galleries from being mistaken for one individual design.
+
+---
+
 # KK-FRONTEND v0.9.0 — MULTI-SOURCE PROJECT INTELLIGENCE + VISUAL CERTIFICATION
 
 v0.9.0 addresses the main limitation found by comparing a real `https://v0.app/` reference against a v0.8 generated Next.js ZIP: a flat semantic region list is not enough to reconstruct a page accurately.

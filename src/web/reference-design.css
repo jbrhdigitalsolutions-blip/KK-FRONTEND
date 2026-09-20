@@ -399,3 +399,34 @@ a{color:inherit}
   .rdCertification p{grid-column:auto}
   .rdCertifyButton{width:100%}
 }
+
+
+/* v0.9.1 URL -> source mapping + collection intent */
+.rdIntentPanel{margin:0 0 12px;padding:10px;border:1px solid rgba(255,195,95,.18);border-radius:11px;background:linear-gradient(180deg,rgba(255,195,95,.055),rgba(8,10,14,.48))}
+.rdIntentPanel.accepted{border-color:rgba(120,215,170,.2);background:linear-gradient(180deg,rgba(120,215,170,.045),rgba(8,10,14,.48))}
+.rdIntentHead{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.rdIntentHead>div{display:grid;gap:2px;min-width:0}.rdIntentHead b{font-size:10px}.rdIntentHead small{font-size:7px;line-height:1.45;color:var(--muted)}
+.rdIntentBadge{width:max-content;padding:3px 6px;border-radius:999px;border:1px solid rgba(255,195,95,.18);background:rgba(255,195,95,.05);color:#ddbd84;font-size:6px;text-transform:uppercase;letter-spacing:.08em}
+.rdIntentItems{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:9px}
+.rdIntentItem{min-width:0;padding:6px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.018);color:var(--text);display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:7px;text-align:left;cursor:pointer}
+.rdIntentItem:hover{border-color:rgba(126,151,255,.35);background:rgba(126,151,255,.045)}
+.rdIntentItem img{width:42px;height:34px;border-radius:6px;object-fit:cover;background:#090c11}.rdIntentItem>span{display:grid;gap:1px;min-width:0}.rdIntentItem small{font-size:5.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.rdIntentItem b{font-size:7.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rdIntentItem em{font-style:normal;font-size:6px;color:#9eb0e6;white-space:nowrap}
+.rdIntentFoot,.rdIntentEmpty{margin-top:7px;color:#708096;font-size:6.5px;line-height:1.45}.rdIntentEmpty{grid-column:1/-1;padding:7px;border:1px dashed var(--line);border-radius:8px}
+
+.rdTargetMapping{margin-top:7px}
+.rdTargetMode{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 9px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.015)}
+.rdTargetMode>div{display:grid;gap:1px;min-width:0}.rdTargetMode span{font-size:6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.rdTargetMode b{font-size:8px}.rdTargetMode small{font-size:6.5px;color:#79879a;line-height:1.4}
+.rdTargetMode em{font-style:normal;flex:0 0 auto;padding:3px 6px;border:1px solid var(--line);border-radius:999px;font-size:6px;color:#a7b3c5}
+.rdTargetMode.resolved{border-color:rgba(120,215,170,.16);background:rgba(120,215,170,.025)}.rdTargetMode.resolved b{color:#a0ddb9}
+.rdTargetMode.standalone{border-color:rgba(126,151,255,.2);background:rgba(126,151,255,.035)}.rdTargetMode.standalone b{color:#b8c5f4}
+.rdTargetMode.needs-choice{border-color:rgba(255,195,95,.18);background:rgba(255,195,95,.025)}
+.rdTargetCandidates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin-top:6px}
+.rdTargetCandidate{min-width:0;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.012);color:var(--text);display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:7px;row-gap:1px;text-align:left;cursor:pointer}
+.rdTargetCandidate:hover{border-color:rgba(126,151,255,.3)}.rdTargetCandidate.selected{border-color:rgba(120,215,170,.25);background:rgba(120,215,170,.035)}
+.rdTargetCandidate>span{grid-row:1/3;align-self:center;padding:3px 5px;border-radius:999px;background:rgba(126,151,255,.045);color:#9caee2;font-size:5.5px}.rdTargetCandidate>b{font-size:7.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rdTargetCandidate>small{font-size:6px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+@media(max-width:1100px){.rdIntentItems{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){
+  .rdIntentHead,.rdTargetMode{align-items:stretch;flex-direction:column}
+  .rdIntentItems,.rdTargetCandidates{grid-template-columns:1fr}
+}

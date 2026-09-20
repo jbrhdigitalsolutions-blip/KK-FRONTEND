@@ -177,3 +177,70 @@ test("live website and GitHub evidence contribute separately to project readines
   assert.equal(profile.content.primaryCta,"Start free");
   assert.ok(profile.readiness.score>=90);
 });
+
+
+test("website-only existing target becomes a standalone replacement without source-file confirmation",()=>{
+  const profile=analyzeProjectContext({
+    mode:"existing",
+    stack:"auto",
+    websiteEvidence:{
+      schema:"kk-project-website-scan/v1",
+      url:"https://example.com/index.html",
+      title:"Example Product",
+      description:"A real live target website.",
+      headings:["Build better pages"],
+      buttons:["Get started"],
+      navItems:["Product","Pricing"],
+      paragraphs:["Live project content."],
+      images:[{src:"https://example.com/hero.webp",width:1200,height:800}],
+      signals:{next:false,react:false}
+    }
+  });
+  assert.equal(profile.deliveryMode,"standalone-replacement");
+  assert.equal(profile.supportedOutput,"html");
+  assert.equal(profile.targetRoute,"/");
+  assert.equal(profile.targetPath,"index.html");
+  assert.equal(profile.targetResolution.status,"website-only");
+  assert.equal(profile.readiness.questions.some(q=>q.id==="targetPath"),false);
+  assert.equal(profile.readiness.accurateReady,true);
+});
+
+test("live /index.html maps to authored src/web/index.html ahead of public mirror when source is connected",()=>{
+  const files=[
+    {path:"package.json",name:"package.json",text:JSON.stringify({name:"static-web"})},
+    {path:"src/web/index.html",name:"index.html",text:"<main>authored home</main>"},
+    {path:"public/index.html",name:"index.html",text:"<main>deployment mirror</main>"},
+    {path:"src/web/app.js",name:"app.js",text:"console.log('app')"},
+    {path:"src/web/nav.js",name:"nav.js",text:"export function nav(){return 'nav'}"},
+    {path:"src/web/hero.js",name:"hero.js",text:"export function hero(){return 'hero'}"},
+    {path:"src/web/cards.js",name:"cards.js",text:"export function cards(){return 'cards'}"},
+    {path:"src/web/footer.js",name:"footer.js",text:"export function footer(){return 'footer'}"},
+    {path:"src/web/forms.js",name:"forms.js",text:"export function forms(){return 'forms'}"},
+    {path:"src/web/styles.css",name:"styles.css",text:"body{margin:0}"},
+  ];
+  const profile=analyzeProjectContext({
+    mode:"existing",
+    stack:"auto",
+    files,
+    websiteEvidence:{
+      schema:"kk-project-website-scan/v1",
+      url:"https://kk-frontend-v0-2-5-flex-execution.vercel.app/index.html",
+      title:"KK-FRONTEND",
+      description:"Frontend Intelligence Studio",
+      headings:["Turn any reference frontend into a precise implementation blueprint."],
+      buttons:["New Workspace"],
+      navItems:["Workspace","Reference","Target"],
+      paragraphs:["Evidence-first frontend workflow."],
+      images:[{src:"/logo.svg"}],
+      signals:{next:false,react:false}
+    }
+  });
+  assert.equal(profile.stack,"html");
+  assert.equal(profile.targetRoute,"/");
+  assert.equal(profile.targetPath,"src/web/index.html");
+  assert.equal(profile.targetResolution.status,"resolved");
+  assert.equal(profile.targetResolution.selected,"src/web/index.html");
+  assert.equal(profile.targetCandidates[0].path,"src/web/index.html");
+  assert.equal(profile.targetCandidates.some(x=>x.path==="public/index.html"),true);
+  assert.equal(profile.readiness.questions.some(q=>q.id==="targetPath"),false);
+});

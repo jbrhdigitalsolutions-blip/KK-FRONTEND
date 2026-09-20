@@ -513,7 +513,7 @@ function outputFiles(model,css,output,html,bodyOverride=""){
 }
 
 function preservedOriginalSource(projectContext,profile){
-  if(profile?.mode!=="existing" || !profile.targetPath)return[];
+  if(profile?.mode!=="existing" || profile?.deliveryMode==="standalone-replacement" || !profile.targetPath)return[];
   const original=arr(projectContext?.files).find(file=>String(file?.path||"").replaceAll("\\","/")===profile.targetPath && typeof file?.text==="string" && file.text);
   if(!original)return[];
   return [{
@@ -523,7 +523,7 @@ function preservedOriginalSource(projectContext,profile){
 }
 
 function portableProjectAssets(projectContext, profile){
-  if(profile?.mode!=="new") return [];
+  if(profile?.mode!=="new" && profile?.deliveryMode!=="standalone-replacement") return [];
   const rows=arr(projectContext?.files);
   const out=[];
   const seen=new Set();
@@ -550,7 +550,7 @@ function stylePathFor(profile){
 }
 
 function projectPatchFiles(model,css,profile,output,html,bodyOverride=""){
-  if(profile?.mode!=="existing") return outputFiles(model,css,output,html,bodyOverride);
+  if(profile?.mode!=="existing" || profile?.deliveryMode==="standalone-replacement") return outputFiles(model,css,output,html,bodyOverride);
   const target=profile.targetPath || (output==="html" ? "reference-design.html" : output==="next" ? "app/page.jsx" : "src/components/ReferenceDesign.jsx");
   if(output==="html") return [{path:target,content:html}];
   const source=output==="next" ? nextFiles(model,css,bodyOverride).find(x=>x.path==="app/page.jsx") : reactFiles(model,css,bodyOverride).find(x=>x.path==="src/App.jsx");
@@ -614,7 +614,8 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
   const css=exactTree ? referenceTreeCss(model) : generatedCss(model,{fidelity});
   const previewHtml=standaloneHtml(model,css,bodyMarkup);
   const patchFiles=projectPatchFiles(model,css,projectProfile,output,previewHtml,bodyMarkup);
-  const files=projectProfile?.mode==="existing"
+  const isSourcePatch=projectProfile?.mode==="existing" && projectProfile?.deliveryMode!=="standalone-replacement";
+  const files=isSourcePatch
     ? [
         ...patchFiles.map(file=>({path:"project-patch/"+file.path,content:file.content})),
         ...preservedOriginalSource(projectContext,projectProfile),
@@ -636,7 +637,7 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
     "Unresolved DESIGN.md fields: "+model.evidence.unknownCount,
     "",
     projectProfile ? "Project-fit readiness: "+projectProfile.readiness.score+"%" : "Project-fit context: not supplied",
-    projectProfile?.mode==="existing" ? "Use APPLY-WINDOWS.ps1 or APPLY-MAC.command to back up and integrate the project patch." : "This is a standalone generated project.",
+    isSourcePatch ? "Use APPLY-WINDOWS.ps1 or APPLY-MAC.command to back up and integrate the project patch." : projectProfile?.deliveryMode==="standalone-replacement" ? "Website-only target: this ZIP is a standalone replacement package. Connect GitHub or local source for an in-place patch." : "This is a standalone generated project.",
     "",
     "This project is deterministic output from verified browser evidence plus supplied project context.",
   ].join("\n");
@@ -663,6 +664,8 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
       projectFitScore:projectProfile?.readiness?.score ?? null,
       projectStack:projectProfile?.stack ?? null,
       accurateReady:projectProfile?.readiness?.accurateReady ?? null,
+      deliveryMode:projectProfile?.deliveryMode ?? null,
+      targetResolution:projectProfile?.targetResolution ?? null,
       renderer:exactTree?"hierarchy-exact":"semantic-fallback",
       hierarchyNodes:model.referenceTree?.nodes?.length||0,
     }
