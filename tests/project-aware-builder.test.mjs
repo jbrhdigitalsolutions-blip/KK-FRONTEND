@@ -103,6 +103,7 @@ test("project-aware compiler reconstructs measured child geometry and project-fi
   assert.match(result.previewHtml,/left:/);
   assert.ok(result.files.some(x=>x.path==="src/pages/kk-generated/Home.generated.jsx"));
   assert.ok(result.files.some(x=>x.path==="SYSTEM-REQUIREMENTS.md"));
+  assert.ok(result.files.some(x=>x.path==="ASSET-MAP.md"));
   assert.equal(result.intake.designContext.designMd,"DESIGN.md");
   assert.ok(result.files.some(x=>x.path==="SETUP-WINDOWS.ps1"));
   assert.ok(result.files.some(x=>x.path==="setup-macos.sh"));
