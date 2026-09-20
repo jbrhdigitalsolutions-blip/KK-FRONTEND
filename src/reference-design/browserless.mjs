@@ -251,6 +251,7 @@ export async function inspectReferenceDesign({ url }) {
     const page = await pageForBrowser(browser);
     await setExactViewport(page, VIEWPORTS[0]);
     await gotoReference(page, safeUrl);
+    await setExactViewport(page, VIEWPORTS[0]);
     const info = await page.evaluate(candidateScript);
     const maxHeight = Math.min(Math.max(info.document.height, 900), 12_000);
     const shot = await page.screenshot({ type: "jpeg", quality: 58, clip: { x: 0, y: 0, width: 1440, height: maxHeight } });
@@ -494,8 +495,9 @@ export async function generateReferenceDesignMd({ url, scope = "whole", selector
     let pageEvidence = null;
 
     for (const viewport of VIEWPORTS) {
-      const observedViewport = await setExactViewport(page, viewport);
+      await setExactViewport(page, viewport);
       await gotoReference(page, safeUrl);
+      const observedViewport = await setExactViewport(page, viewport);
       if (viewport.name === "desktop") {
         title = await page.title();
         finalUrl = page.url();
@@ -512,6 +514,7 @@ export async function generateReferenceDesignMd({ url, scope = "whole", selector
 
     await setExactViewport(page, VIEWPORTS[0]);
     await gotoReference(page, safeUrl);
+    await setExactViewport(page, VIEWPORTS[0]);
     const interactions = await collectInteractions(page, chosen.selectors);
     const desktopInteractive = responsive[0]?.elements?.filter(e => e.interactive).length || 0;
     const interactionCoveragePercent = desktopInteractive
