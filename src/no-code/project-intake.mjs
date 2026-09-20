@@ -199,6 +199,10 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
   const required=requirements.filter(x=>x.required);
   const complete=required.length-missing.length;
   const readiness=Math.round((complete/Math.max(1,required.length))*100);
+  const exactBlockers=[];
+  if(contentStrategy==="placeholders" && needs.hasTypography) exactBlockers.push("Text is set to placeholders.");
+  if(assetStrategy==="placeholders" && (needs.hasImages||needs.hasVideo)) exactBlockers.push("Media is set to asset placeholders.");
+  const exactReady=missing.length===0 && exactBlockers.length===0;
 
   const recommendations=[];
   if(projectMode==="existing"&&!structure.designMd) recommendations.push("Upload your current DESIGN.md if one exists.");
@@ -210,6 +214,8 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
   return {
     schema:"kk-project-intake/v1",
     ready:missing.length===0,
+    exactReady,
+    exactBlockers,
     readinessPercent:readiness,
     projectMode,
     projectName:projectName||null,
