@@ -347,6 +347,10 @@
               <button type="button" data-device="tablet">Tablet</button>
               <button type="button" data-device="mobile">Mobile</button>
             </div>
+            <div class="rdSegment" aria-label="Preview scale">
+              <button class="active" type="button" data-preview-scale="fit">Fit</button>
+              <button type="button" data-preview-scale="actual">100%</button>
+            </div>
           </div>
         </div>
 
@@ -358,8 +362,10 @@
           <div class="rdBuildPane">
             <div class="rdPaneLabel">Generated page</div>
             <div id="buildFrameViewport" class="rdBuildFrameViewport">
-              <div id="buildFrameShell" class="rdBuildFrameShell" data-device="desktop">
-                <iframe id="buildFrame" title="Generated page preview" sandbox="allow-scripts"></iframe>
+              <div id="buildScaleStage" class="rdBuildScaleStage">
+                <div id="buildFrameShell" class="rdBuildFrameShell" data-device="desktop">
+                  <iframe id="buildFrame" title="Generated page preview" sandbox="allow-scripts"></iframe>
+                </div>
               </div>
             </div>
           </div>
