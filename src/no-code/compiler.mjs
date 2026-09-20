@@ -325,29 +325,94 @@ function referenceTreeMarkup(model){
 const EXACT_STYLE_KEYS=[
   "display","position","top","right","bottom","left","width","height","minWidth","maxWidth","minHeight","maxHeight",
   "marginTop","marginRight","marginBottom","marginLeft","paddingTop","paddingRight","paddingBottom","paddingLeft",
-  "gap","rowGap","columnGap","gridTemplateColumns","gridTemplateRows","gridAutoFlow","justifyContent","alignItems",
-  "alignContent","flexDirection","flexWrap","color","backgroundColor","backgroundImage","opacity","border","borderRadius",
-  "boxShadow","outline","outlineOffset","fontFamily","fontSize","fontWeight","fontStyle","lineHeight","letterSpacing",
-  "textAlign","textTransform","whiteSpace","transform","transformOrigin","overflow","overflowX","overflowY","zIndex",
-  "cursor","pointerEvents","filter","backdropFilter","objectFit","objectPosition","aspectRatio"
+  "gap","rowGap","columnGap","gridTemplateColumns","gridTemplateRows","gridAutoFlow","justifyContent","alignItems","alignContent","placeItems",
+  "flexDirection","flexWrap","flexGrow","flexShrink","order","color","backgroundColor","backgroundImage","opacity",
+  "border","borderTop","borderRight","borderBottom","borderLeft","borderRadius","boxShadow","outline","outlineOffset",
+  "fontFamily","fontSize","fontWeight","fontStyle","lineHeight","letterSpacing","textAlign","textTransform","textDecorationLine",
+  "whiteSpace","wordBreak","textOverflow","transform","transformOrigin","transitionProperty","transitionDuration","transitionTimingFunction",
+  "overflow","overflowX","overflowY","scrollSnapType","scrollBehavior","zIndex","cursor","pointerEvents","filter","backdropFilter",
+  "objectFit","objectPosition","aspectRatio"
 ];
 function cssName(key){return key.replace(/[A-Z]/g,m=>"-"+m.toLowerCase())}
+function safeCssValue(value){
+  const v=String(value??"").trim();
+  if(!v || /(?:javascript|vbscript):/i.test(v) || /data:\[inline-asset-omitted\]/i.test(v))return"";
+  return cssEsc(v);
+}
 function exactDeclarations(style={}){
-  return EXACT_STYLE_KEYS.map(key=>[key,style?.[key]]).filter(([,v])=>v!=null&&v!==""&&v!=="auto"&&v!=="normal")
-    .filter(([key,v])=>!(key==="backgroundImage"&&/url\s*\(/i.test(String(v))))
-    .map(([key,v])=>`${cssName(key)}:${cssEsc(v)}`).join(";");
+  return EXACT_STYLE_KEYS.map(key=>[key,style?.[key]])
+    .filter(([,v])=>v!=null&&v!==""&&v!=="auto"&&v!=="normal")
+    .map(([key,v])=>[key,safeCssValue(v)])
+    .filter(([,v])=>Boolean(v))
+    .map(([key,v])=>`${cssName(key)}:${v}`).join(";");
+}
+function pseudoDeclarations(pseudo={}){
+  const keys=["content","display","position","top","right","bottom","left","color","backgroundColor","backgroundImage","width","height","opacity","border","borderRadius","fontFamily","fontSize","fontWeight","lineHeight","transform","transformOrigin","zIndex","pointerEvents"];
+  return keys.map(key=>[key,pseudo?.[key]]).filter(([,v])=>v!=null&&v!=="")
+    .map(([key,v])=>[key,safeCssValue(v)]).filter(([,v])=>Boolean(v))
+    .map(([key,v])=>`${cssName(key)}:${v}`).join(";");
+}
+function interactionCss(model,nodeBySelector){
+  const rows=[];
+  for(const row of model.interactions||[]){
+    const node=nodeBySelector.get(row?.selector); if(!node)continue;
+    const cls=`.kk-node-${node.id.replace("node-","")}`;
+    for(const [state,data] of [["hover",row.hover],["focus",row.focus]]){
+      const declarations=Object.entries(data||{}).map(([key,value])=>[key,value?.after])
+        .map(([key,value])=>[key,safeCssValue(value)]).filter(([,value])=>Boolean(value))
+        .map(([key,value])=>`${cssName(key)}:${value}`).join(";");
+      if(declarations)rows.push(`${cls}:${state}{${declarations}}`);
+    }
+  }
+  return rows.join("\n");
+}
+function animationCss(model,nodeBySelector){
+  const rows=[];
+  let index=0;
+  for(const animation of model.animations||[]){
+    const node=nodeBySelector.get(animation?.selector);
+    const frames=arr(animation?.keyframes);
+    if(!node||frames.length<2)continue;
+    index++;
+    const name=`kk-ref-motion-${index}`;
+    const frameRows=[];
+    for(let i=0;i<frames.length;i++){
+      const frame=frames[i]||{};
+      const offset=Number.isFinite(Number(frame.offset))?clamp(Number(frame.offset),0,1):(i/Math.max(1,frames.length-1));
+      const declarations=Object.entries(frame)
+        .filter(([key])=>!["offset","computedOffset","easing","composite"].includes(key))
+        .map(([key,value])=>[key,safeCssValue(value)]).filter(([,value])=>Boolean(value))
+        .map(([key,value])=>`${cssName(key)}:${value}`).join(";");
+      if(declarations)frameRows.push(`${Math.round(offset*10000)/100}%{${declarations}}`);
+    }
+    if(!frameRows.length)continue;
+    rows.push(`@keyframes ${name}{${frameRows.join("")}}`);
+    const timing=animation.timing||{};
+    const duration=Number(timing.duration); const delay=Number(timing.delay||0);
+    const iterations=timing.iterations===Infinity?"infinite":(Number.isFinite(Number(timing.iterations))?String(timing.iterations):"1");
+    const easing=safeCssValue(timing.easing||"linear")||"linear";
+    rows.push(`.kk-node-${node.id.replace("node-","")}{animation:${name} ${Number.isFinite(duration)?Math.max(0,duration):0}ms ${easing} ${Number.isFinite(delay)?delay:0}ms ${iterations};}`);
+  }
+  return rows.join("\n");
 }
 function referenceTreeCss(model){
   const rows=[];
+  const nodeBySelector=new Map((model.referenceTree?.nodes||[]).map(node=>[node.selector,node]));
   for(const node of model.referenceTree?.nodes||[]){
     const n=node.id.replace("node-","");
     rows.push(`.kk-node-${n}{${exactDeclarations(node.style)}}`);
+    const before=pseudoDeclarations(node.pseudoBefore),after=pseudoDeclarations(node.pseudoAfter);
+    if(before)rows.push(`.kk-node-${n}::before{${before}}`);
+    if(after)rows.push(`.kk-node-${n}::after{${after}}`);
     const tablet=node.tablet?.style||{};
     const mobile=node.mobile?.style||{};
     if(Object.keys(tablet).length)rows.push(`@media(max-width:900px){.kk-node-${n}{${exactDeclarations(tablet)}}}`);
     if(Object.keys(mobile).length)rows.push(`@media(max-width:520px){.kk-node-${n}{${exactDeclarations(mobile)}}}`);
   }
-  return `*{box-sizing:border-box}html,body{margin:0;padding:0;min-height:100%;background:${cssEsc(model.tokens.background)};color:${cssEsc(model.tokens.text)};font-family:${cssEsc(model.tokens.font)}}a{color:inherit;text-decoration:none}img,video,svg{max-width:100%}button,input,textarea,select{font:inherit}body{overflow-x:hidden}${rows.join("\n")}`;
+  const fontCss=(model.fontFaces||[]).filter(x=>typeof x==="string"&&!/data:/i.test(x)).join("\n");
+  const interaction=interactionCss(model,nodeBySelector);
+  const animation=animationCss(model,nodeBySelector);
+  return `${fontCss}\n*{box-sizing:border-box}html,body{margin:0;padding:0;min-height:100%;background:${cssEsc(model.tokens.background)};color:${cssEsc(model.tokens.text)};font-family:${cssEsc(model.tokens.font)}}a{color:inherit;text-decoration:none}img,video,svg{max-width:100%}button,input,textarea,select{font:inherit}body{overflow-x:hidden}${rows.join("\n")}\n${interaction}\n${animation}`;
 }
 
 function placeholderFor(kind,index){
@@ -394,6 +459,9 @@ function layoutModel(evidence,options){
       mediaQueries:arr(evidence.responsiveCss?.mediaQueries),
       containerQueries:arr(evidence.responsiveCss?.containerQueries),
     },
+    interactions:arr(evidence.interactions),
+    animations:arr(evidence.animations),
+    fontFaces:arr(evidence.fontFaces),
     project,
     evidence:{
       confidence:num(evidence.confidence),
@@ -532,8 +600,9 @@ ${regionRules}`;
 }
 function standaloneHtml(model,css,bodyOverride=""){
   const body=bodyOverride || model.regions.map((region,index)=>regionMarkup(region,index,model)).join("\n");
+  const base=/^https?:\/\//i.test(model.referenceUrl||"")?`<base href="${esc(model.referenceUrl)}">`:"";
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(model.title)}</title><style>${css}</style></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${base}<title>${esc(model.title)}</title><style>${css}</style></head>
 <body>${body}<script>document.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>b.animate([{transform:'scale(1)'},{transform:'scale(.97)'},{transform:'scale(1)'}],{duration:160})));<\/script></body></html>`;
 }
 function reactFiles(model,css,bodyOverride=""){
@@ -655,14 +724,15 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
   const projectProfile=suppliedProjectProfile || (projectContext ? analyzeProjectContext(projectContext) : null);
   const requestedOutput=options.output==="auto" && projectProfile ? projectProfile.supportedOutput : options.output;
   const output=ALLOWED_OUTPUTS.has(requestedOutput) ? requestedOutput : "html";
-  const contentMode=ALLOWED_CONTENT.has(options.contentMode) ? options.contentMode : "placeholders";
   const fidelity=ALLOWED_FIDELITY.has(options.fidelity) ? options.fidelity : "accurate";
+  const requestedContent=ALLOWED_CONTENT.has(options.contentMode) ? options.contentMode : "placeholders";
+  const contentMode=fidelity==="accurate" ? "reference-exact" : requestedContent;
   if(fidelity==="accurate" && projectProfile && !projectProfile.readiness.accurateReady){
     const needed=projectProfile.readiness.questions.filter(q=>q.required).map(q=>q.label).join("; ");
     throw new Error("Accurate mode needs more project information before build: "+(needed || projectProfile.readiness.blockers.join("; ")));
   }
   const model=layoutModel(evidence,{contentMode,fidelity,markdown,projectProfile});
-  const exactTree=fidelity==="accurate" && Boolean(projectProfile) && (model.referenceTree?.nodes?.length||0)>=3;
+  const exactTree=fidelity==="accurate" && (model.referenceTree?.nodes?.length||0)>=3;
   const bodyMarkup=exactTree ? referenceTreeMarkup(model) : "";
   const css=exactTree ? referenceTreeCss(model) : generatedCss(model,{fidelity});
   const previewHtml=standaloneHtml(model,css,bodyMarkup);
@@ -719,7 +789,7 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
       accurateReady:projectProfile?.readiness?.accurateReady ?? null,
       deliveryMode:projectProfile?.deliveryMode ?? null,
       targetResolution:projectProfile?.targetResolution ?? null,
-      renderer:exactTree?"hierarchy-exact":"semantic-fallback",
+      renderer:exactTree?"pixel-reference":"semantic-fallback",
       hierarchyNodes:model.referenceTree?.nodes?.length||0,
     }
   };
