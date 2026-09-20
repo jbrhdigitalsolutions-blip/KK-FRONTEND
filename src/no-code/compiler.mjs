@@ -240,6 +240,7 @@ function regionMarkup(region,index,model){
   const label=esc(region.displayLabel);
   const kind=region.kind;
   const child=childMarkup(region.children);
+  const hasProject=Boolean(model?.project);
   const project=model?.project || {};
   const content=project.content || {};
   const brand=esc(content.brand || project.projectName || "Brand");
@@ -259,7 +260,7 @@ function regionMarkup(region,index,model){
   }
   if(kind==="Hero"){
     const media=heroAsset ? `<div class="kk-media"><img src="${esc(heroAsset)}" alt=""/></div>` : (child.media || '<div class="kk-media"><span>Media</span></div>');
-    return `<section id="${id}" class="kk-region kk-hero" data-kind="Hero"><div class="kk-copy"><span class="kk-eyebrow">${brand}</span><h1>${heroTitle}</h1><p>${heroBody}</p><div class="kk-actions"><button type="button">${primary}</button>${content.secondaryCta ? `<button class="secondary" type="button">${secondary}</button>` : ""}</div>${child.input}</div>${media}</section>`;
+    return `<section id="${id}" class="kk-region kk-hero" data-kind="Hero"><div class="kk-copy"><span class="kk-eyebrow">${hasProject?brand:"VERIFIED DESIGN"}</span><h1>${heroTitle}</h1><p>${heroBody}</p><div class="kk-actions"><button type="button">${primary}</button>${content.secondaryCta ? `<button class="secondary" type="button">${secondary}</button>` : ""}</div>${child.input}</div>${media}</section>`;
   }
   if(kind==="Card" || kind==="Grid" || kind==="List"){
     return `<section id="${id}" class="kk-region kk-section" data-kind="${esc(kind)}"><div class="kk-section-head"><span>SECTION ${index+1}</span><h2>${child.heading||label}</h2></div>${child.media}<div class="kk-grid"><article><b>01</b><h3>Component</h3><p>Evidence-led content placeholder.</p></article><article><b>02</b><h3>Responsive</h3><p>Adapts across verified viewport anchors.</p></article><article><b>03</b><h3>Reusable</h3><p>Generated without a coding agent.</p></article></div>${child.input}<div class="kk-actions">${child.actions}</div></section>`;
