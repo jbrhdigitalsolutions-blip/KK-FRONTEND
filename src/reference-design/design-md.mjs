@@ -416,4 +416,111 @@ export function renderDesignMd({ template, evidence }) {
   return frontmatter + "\n\n# DESIGN.md\n\n" + evidenceSummary(evidence) + "\n\n---\n\n" + withoutHeading;
 }
 
+
+function evidenceNodeUseful(e) {
+  if (!e) return false;
+  const usefulTags = new Set(["body","header","nav","main","aside","footer","section","form","dialog","button","input","textarea","select","img","svg","video"]);
+  return Boolean(
+    e.interactive ||
+    /^h[1-6]$/.test(e.tag || "") ||
+    usefulTags.has(e.tag) ||
+    ["fixed","sticky"].includes(e.style?.position) ||
+    (e.style?.animationName && e.style.animationName !== "none")
+  );
+}
+
+function slimEvidenceStyle(style = {}) {
+  const keys = [
+    "display","position","top","right","bottom","left","width","height","minWidth","maxWidth","minHeight","maxHeight",
+    "marginTop","marginRight","marginBottom","marginLeft","paddingTop","paddingRight","paddingBottom","paddingLeft",
+    "gap","rowGap","columnGap","gridTemplateColumns","gridTemplateRows","gridAutoFlow","justifyContent","alignItems",
+    "flexDirection","flexWrap","color","backgroundColor","backgroundImage","opacity","border","borderRadius","boxShadow",
+    "outline","outlineOffset","fontFamily","fontSize","fontWeight","fontStyle","lineHeight","letterSpacing","textAlign",
+    "textTransform","whiteSpace","transform","transformOrigin","transitionProperty","transitionDuration",
+    "transitionTimingFunction","animationName","animationDuration","animationTimingFunction","animationIterationCount",
+    "overflow","overflowX","overflowY","scrollSnapType","scrollBehavior","zIndex","cursor","pointerEvents","filter",
+    "backdropFilter","objectFit","objectPosition","aspectRatio"
+  ];
+  const out = {};
+  for (const key of keys) {
+    const value = style?.[key];
+    if (value != null && value !== "") out[key] = value;
+  }
+  return out;
+}
+
+function slimEvidenceNode(node = {}) {
+  return {
+    selector: node.selector || null,
+    tag: node.tag || null,
+    role: node.role || null,
+    className: node.className || "",
+    label: cleanLabel(node.label) || node.tag || "",
+    interactive: Boolean(node.interactive),
+    rect: node.rect || null,
+    style: slimEvidenceStyle(node.style),
+    attrs: node.attrs || undefined,
+    pseudoBefore: node.pseudoBefore || undefined,
+    pseudoAfter: node.pseudoAfter || undefined,
+  };
+}
+
+export function buildEvidenceCompanion(evidence) {
+  const viewports = arr(evidence?.viewports).map(vp => {
+    const semantic = arr(vp.elements).filter(evidenceNodeUseful).slice(0, 180);
+    return {
+      name: vp.name,
+      targetViewport: vp.targetViewport || vp.viewport || null,
+      viewport: vp.viewport || null,
+      runtimeViewport: vp.runtimeViewport || null,
+      document: vp.document || null,
+      scopes: arr(vp.scopes).map(slimEvidenceNode),
+      representativeElements: semantic.map(slimEvidenceNode),
+      representativeElementPolicy: "Semantic, interactive, media, fixed/sticky, and animated elements; capped at 180 per viewport.",
+    };
+  });
+
+  return {
+    schema: "kk-reference-design-evidence-compact/v2",
+    capture: {
+      referenceUrl: evidence?.url || null,
+      finalUrl: evidence?.finalUrl || null,
+      title: evidence?.title || null,
+      capturedAt: evidence?.capturedAt || null,
+      browser: evidence?.browser || null,
+      scope: evidence?.scope || null,
+      selection: evidence?.selection || [],
+    },
+    coverage: evidence?.coverage || {},
+    confidence: evidence?.confidence ?? null,
+    confidenceReasons: arr(evidence?.confidenceReasons),
+    viewports,
+    responsiveCss: {
+      mediaQueries: arr(evidence?.mediaQueries),
+      containerQueries: arr(evidence?.containerQueries),
+      stylesheetAccess: evidence?.styleSheets || null,
+    },
+    interactions: arr(evidence?.interactions).slice(0, 36),
+    animations: arr(evidence?.animations).slice(0, 80),
+    fonts: arr(evidence?.fonts).slice(0, 80),
+    assets: {
+      svgCount: arr(evidence?.assets?.svgs).length,
+      imageCount: arr(evidence?.assets?.images).length,
+      videoCount: arr(evidence?.assets?.videos).length,
+      canvasCount: evidence?.assets?.canvasCount ?? 0,
+      svgs: arr(evidence?.assets?.svgs).slice(0, 80),
+      images: arr(evidence?.assets?.images).slice(0, 100),
+      videos: arr(evidence?.assets?.videos).slice(0, 30),
+    },
+    scroll: evidence?.scroll || {},
+    restrictions: arr(evidence?.restrictions),
+    implementationPolicy: {
+      unknown: UNKNOWN,
+      breakpointRule: "Use exact media/container query conditions; do not infer semantic breakpoint names.",
+      semanticTokenRule: "Observed values are evidence; semantic brand roles require reference evidence.",
+      visualMatchRule: "Evidence confidence is not a screenshot-similarity score.",
+    },
+  };
+}
+
 export { UNKNOWN };
