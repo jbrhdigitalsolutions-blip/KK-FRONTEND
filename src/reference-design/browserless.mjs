@@ -559,16 +559,32 @@ async function collectInteractions(page, selectors) {
   return rows;
 }
 
-function normalizeSelection(scope, selectors) {
-  if (scope === "whole") return { scope: "whole", selectors: ["body"], selection: [{ label: "Whole Page", selector: "body", kind: "Page" }] };
-  const clean = [...new Set((selectors || []).map(String).map(x => x.trim()).filter(Boolean))].slice(0, 20);
-  if (!clean.length) throw new Error("Select at least one reference section or element.");
-  return { scope: "selected", selectors: clean, selection: clean.map(selector => ({ selector, label: selector, kind: "Selected" })) };
+function normalizeSelection(scope, selectors, selection = []) {
+  if (scope === "whole") {
+    return { scope: "whole", selectors: ["body"], selection: [{ label: "Whole Page", selector: "body", kind: "Page", family: "Structure" }] };
+  }
+  const clean = [...new Set((selectors || []).map(String).map(x => x.trim()).filter(Boolean))];
+  if (!clean.length) throw new Error("Select at least one reference design region.");
+  if (clean.length > 30) throw new Error("Custom design selection supports up to 30 regions. Refine the selection or use Whole page.");
+  const metadata = new Map((selection || []).filter(x => x?.selector).map(x => [String(x.selector), x]));
+  return {
+    scope: "selected",
+    selectors: clean,
+    selection: clean.map(selector => {
+      const row = metadata.get(selector) || {};
+      return {
+        selector,
+        label: String(row.label || selector).slice(0, 180),
+        kind: String(row.kind || "Selected").slice(0, 60),
+        family: String(row.family || "Components").slice(0, 60),
+      };
+    }),
+  };
 }
 
-export async function generateReferenceDesignMd({ url, scope = "whole", selectors = [] }) {
+export async function generateReferenceDesignMd({ url, scope = "whole", selectors = [], selection = [] }) {
   const safeUrl = await assertPublicReferenceUrl(url);
-  const chosen = normalizeSelection(scope, selectors);
+  const chosen = normalizeSelection(scope, selectors, selection);
   const browser = await connectBrowser();
   try {
     const page = await pageForBrowser(browser);
