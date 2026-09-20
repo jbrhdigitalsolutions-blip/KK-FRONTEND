@@ -14,7 +14,7 @@
       <span><b>KK-FRONTEND</b><small>Design Explorer</small></span>
     </a>
     <div class="rdTopActions">
-      <span class="rdVersion">v0.9.0</span>
+      <span class="rdVersion">v0.9.1</span>
       <a class="rdBack" href="/index.html">Main workspace</a>
     </div>
   </header>
@@ -109,6 +109,15 @@
         <a id="openReference" class="rdTextLink" target="_blank" rel="noreferrer">Open reference ↗</a>
       </div>
 
+      <section id="referenceIntentPanel" class="rdIntentPanel" hidden>
+        <div class="rdIntentHead">
+          <div><span class="rdIntentBadge">Collection detected</span><b>This reference contains multiple designs</b><small id="referenceIntentReason">Choose whether you want the collection page itself or one design inside it.</small></div>
+          <button id="useCollectionButton" class="rdSecondary" type="button">Use entire collection page</button>
+        </div>
+        <div id="referenceIntentItems" class="rdIntentItems"></div>
+        <div class="rdIntentFoot">For a specific design, choose one detected item below or paste its direct URL in the Reference URL field above.</div>
+      </section>
+
       <div class="rdControlDeck">
         <div class="rdScopeToggle" role="radiogroup" aria-label="Reference scope">
           <label><input type="radio" name="scope" value="whole" checked/><span><b>Whole page</b><small>Capture everything</small></span></label>
@@ -192,7 +201,7 @@
             <span class="rdStep">4</span>
             <div>
               <h2 id="buildTitle">Build this design</h2>
-              <p>Compile the verified design evidence into a working frontend. No coding agent, prompt, or source editing required.</p>
+              <p>Compile the verified design evidence into a project patch when source is connected, or a standalone replacement when only the live website is available.</p>
             </div>
           </div>
           <span class="rdCompilerBadge">Project-aware compiler</span>
@@ -245,7 +254,7 @@
                 <div class="rdSourceCardHead"><span>03</span><div><b>Current website</b><small>Captures the project's live content, assets and runtime UI evidence.</small></div></div>
                 <label class="rdSourceField"><span>Website URL</span><input id="projectWebsiteUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://your-project.com"/></label>
                 <div class="rdSourceActionRow"><button id="scanWebsiteButton" class="rdSecondary" type="button">Scan website</button><span id="projectWebsiteStatus">Not scanned</span></div>
-                <small class="rdSourceFoot">Public website by default. Reference authentication is never reused automatically.</small>
+                <small class="rdSourceFoot">Website-only is supported: KK-FRONTEND can generate a standalone replacement. Add GitHub/local source to patch the real project files automatically.</small>
               </section>
             </div>
           </div>
@@ -283,6 +292,7 @@
               <div><span>Styling</span><b id="fitDetectedStyling">—</b></div>
               <div><span>Target</span><b id="fitDetectedTarget">—</b></div>
             </div>
+            <div id="fitTargetMapping" class="rdTargetMapping"></div>
             <div id="fitBlockers" class="rdFitBlockers"></div>
             <div id="fitQuestions" class="rdFitQuestions"></div>
             <div class="rdRequirements">
