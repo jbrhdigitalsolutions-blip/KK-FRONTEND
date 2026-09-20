@@ -77,7 +77,8 @@ test("no-code compiler builds standalone HTML from verified evidence without an 
   assert.equal(result.schema,"kk-no-code-design-build/v1");
   assert.equal(result.output,"html");
   assert.match(result.previewHtml,/<!doctype html>/i);
-  assert.match(result.previewHtml,/Launch your idea/);\n  assert.equal(result.summary.renderer,"pixel-reference");
+  assert.match(result.previewHtml,/Launch your idea/);
+  assert.equal(result.summary.renderer,"pixel-reference");
   const hero=result.model.regions.find(x=>x.kind==="Hero");
   assert.ok(hero);
   assert.ok(hero.children.some(x=>x.kind==="Button"),"measured child controls should be attached to their containing region");
