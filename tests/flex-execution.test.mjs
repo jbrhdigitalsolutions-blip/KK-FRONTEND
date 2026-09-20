@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { prepareExecutionWorkspace, compareTrees } from "../src/execution/workspace.mjs";
 
 test("non-Git project receives isolated safe-copy workspace",async()=>{
@@ -16,7 +17,7 @@ test("non-Git project receives isolated safe-copy workspace",async()=>{
 });
 
 test("UI exposes handoff, safe implementation and apply-back controls",async()=>{
-  const root=path.resolve(path.dirname(new URL(import.meta.url).pathname),"..");
+  const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
   const html=await fs.readFile(path.join(root,"src","web","index.html"),"utf8");
   const js=await fs.readFile(path.join(root,"src","web","app.js"),"utf8");
   assert.match(html,/id="handoffBtn"/);assert.match(html,/id="applyLocalBtn"/);assert.match(html,/Git optional/);
