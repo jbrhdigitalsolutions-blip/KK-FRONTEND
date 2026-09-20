@@ -19,6 +19,8 @@ const state = {
   currentDevice: "desktop",
   previewScaleMode: "fit",
   referenceIntentChoice: null,
+  autoTargetPath: "",
+  autoTargetRoute: "",
 };
 
 function notice(message, kind = "error") {
@@ -203,8 +205,8 @@ function collectProjectContext() {
     mode: projectMode(),
     projectName: $("fitProjectName").value.trim(),
     stack: $("fitStack").value,
-    targetRoute: $("fitTargetRoute").value.trim(),
-    targetPath: $("fitTargetPath").value.trim(),
+    targetRoute: state.autoTargetRoute && $("fitTargetRoute").value.trim()===state.autoTargetRoute ? "" : $("fitTargetRoute").value.trim(),
+    targetPath: state.autoTargetPath && $("fitTargetPath").value.trim()===state.autoTargetPath ? "" : $("fitTargetPath").value.trim(),
     brand: $("fitBrand").value.trim(),
     navItems: $("fitNav").value.trim(),
     heroTitle: $("fitHeroTitle").value.trim(),
@@ -275,6 +277,7 @@ function renderTargetMapping(profile) {
     <em>${escapeHtml(resolution.confidence||"")}</em>
   </div>${candidateHtml?`<div class="rdTargetCandidates">${candidateHtml}</div>`:""}`;
   host.querySelectorAll("[data-target-path]").forEach(button=>button.addEventListener("click",async()=>{
+    state.autoTargetPath="";
     $("fitTargetPath").value=button.dataset.targetPath;
     invalidateProjectFit();
     await analyzeProjectFit({quiet:true});
@@ -293,8 +296,17 @@ function renderProjectFit(profile) {
   $("fitDetectedStyling").textContent=(profile.styling||[]).join(", ") || "—";
   $("fitDetectedTarget").textContent=profile.deliveryMode==="standalone-replacement" ? "Standalone index.html" : (profile.targetPath || "—");
   if (!$("fitProjectName").value.trim() && profile.projectName) $("fitProjectName").value=profile.projectName;
-  if (!$("fitTargetRoute").value.trim() && profile.targetRoute) $("fitTargetRoute").value=profile.targetRoute;
-  if (!$("fitTargetPath").value.trim() && profile.targetPath) $("fitTargetPath").value=profile.targetPath;
+  const routeField=$("fitTargetRoute"), pathField=$("fitTargetPath");
+  const routeCanAuto=!routeField.value.trim() || (state.autoTargetRoute && routeField.value.trim()===state.autoTargetRoute);
+  const pathCanAuto=!pathField.value.trim() || (state.autoTargetPath && pathField.value.trim()===state.autoTargetPath);
+  if (routeCanAuto && profile.targetRoute) {
+    routeField.value=profile.targetRoute;
+    state.autoTargetRoute=profile.targetRoute;
+  }
+  if (pathCanAuto && profile.targetPath) {
+    pathField.value=profile.targetPath;
+    state.autoTargetPath=profile.targetPath;
+  }
   const pc=profile.content||{};
   if (!$("fitBrand").value.trim() && pc.brand) $("fitBrand").value=pc.brand;
   if (!$("fitHeroTitle").value.trim() && pc.heroTitle) $("fitHeroTitle").value=pc.heroTitle;
@@ -304,11 +316,6 @@ function renderProjectFit(profile) {
   if (!$("fitNav").value.trim() && pc.navItems?.length) $("fitNav").value=pc.navItems.join(", ");
   if (!$("fitLogoAsset").value.trim() && profile.assetMap?.logoAsset) $("fitLogoAsset").value=profile.assetMap.logoAsset;
   if (!$("fitHeroAsset").value.trim() && profile.assetMap?.heroAsset) $("fitHeroAsset").value=profile.assetMap.heroAsset;
-  if ($("fitStack").value==="auto" && profile.stack && profile.stack!=="unknown") {
-    const option=[...$("fitStack").options].find(x=>x.value===profile.stack);
-    if (option) option.selected=true;
-  }
-
   renderTargetMapping(profile);
 
   const blockers=profile.readiness?.blockers||[];
@@ -546,6 +553,8 @@ function resetResult() {
   state.evidenceJson = "";
   state.build = null;
   state.referenceIntentChoice = null;
+  state.autoTargetPath = "";
+  state.autoTargetRoute = "";
   if($("referenceIntentPanel")) $("referenceIntentPanel").hidden=true;
   $("resultStage").hidden = true;
   $("buildStage").hidden = true;
@@ -626,10 +635,12 @@ document.querySelectorAll("input[name='projectMode']").forEach(input => input.ad
   $("existingProjectUpload").hidden=projectMode()!=="existing";
   invalidateProjectFit();
 }));
-for (const id of ["fitProjectName","fitStack","fitTargetRoute","fitTargetPath","fitBrand","fitNav","fitHeroTitle","fitHeroBody","fitPrimaryCta","fitSecondaryCta","fitLogoAsset","fitHeroAsset"]) {
+for (const id of ["fitProjectName","fitStack","fitBrand","fitNav","fitHeroTitle","fitHeroBody","fitPrimaryCta","fitSecondaryCta","fitLogoAsset","fitHeroAsset"]) {
   $(id).addEventListener("input", invalidateProjectFit);
   $(id).addEventListener("change", invalidateProjectFit);
 }
+$("fitTargetRoute").addEventListener("input",()=>{state.autoTargetRoute="";invalidateProjectFit();});
+$("fitTargetPath").addEventListener("input",()=>{state.autoTargetPath="";invalidateProjectFit();});
 $("analyzeProjectButton").addEventListener("click",()=>analyzeProjectFit());
 updateSourceSummary();
 updateAccurateAvailability();
