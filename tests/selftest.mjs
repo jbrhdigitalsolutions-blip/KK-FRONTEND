@@ -17,7 +17,7 @@ assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","web","index.html")))
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","browser","scanner.mjs")));
 const pkg=JSON.parse(fs.readFileSync(path.join(CONFIG.packageRoot,"package.json"),"utf8"));
 assert.equal(pkg.name,"kk-frontend");
-assert.equal(pkg.version,"0.4.1");
+assert.equal(pkg.version,"0.5.1");
 assert.equal(pkg.packageManager,"pnpm@10.28.0");
 assert.ok(pkg.dependencies.playwright);
 const scanner=fs.readFileSync(path.join(CONFIG.packageRoot,"src","browser","scanner.mjs"),"utf8");
@@ -53,4 +53,4 @@ const web=fs.readFileSync(path.join(CONFIG.packageRoot,"src","web","index.html")
 for(const marker of ["Reference Design Picker","Generate Source Code","pickerOverlay"]) assert.ok(web.includes(marker),`design picker marker missing: ${marker}`);
 assert.ok(web.includes("Reference → DESIGN.md"),"web-only DESIGN.md page link missing");
 assert.ok(web.includes("verifyAfterBtn"),"post-change visual verification UI missing");
-console.log("KK-FRONTEND v0.4.1 selftest PASS");
+console.log("KK-FRONTEND v0.5.1 selftest PASS");
