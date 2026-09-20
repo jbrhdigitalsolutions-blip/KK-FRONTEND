@@ -1,3 +1,13 @@
+# KK-FRONTEND v0.9.3 — LARGE BUILD TRANSPORT
+
+v0.9.3 removes the practical Vercel Build Page ceiling for text-heavy Whole Page evidence. Requests above the direct 3.8 MB safety budget are gzip-compressed in the browser. If a payload still does not fit, KK-FRONTEND can spill it through a private Cloudflare R2 overflow transport in 2 MB chunks. Oversized ZIP responses can also be downloaded through a short-lived R2 presigned URL.
+
+The normal small-build path remains unchanged. Cloudflare R2 is optional for payloads that gzip can already bring below the safe Vercel budget.
+
+Setup: `docs/CLOUDFLARE-R2-LARGE-BUILDS.md`
+
+---
+
 # KK-FRONTEND v0.9.2 — VERCEL BUILD PAYLOAD HARDENING
 
 v0.9.2 fixes production Build Page failures where `POST /api/reference-design/build` could exceed Vercel's Function payload budget and return HTTP 413 before the application handler ran.

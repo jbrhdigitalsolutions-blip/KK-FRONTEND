@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
 const MAX_CUSTOM_SELECTION = 30;
-const BUILD_REQUEST_MAX_BYTES = 4_000_000;
+const BUILD_DIRECT_REQUEST_MAX_BYTES = 3_800_000;
 const FAMILY_ORDER = ["All", "Structure", "Controls", "Content", "Media", "Motion", "Components"];
 const state = {
   inspection: null,
@@ -42,7 +42,13 @@ function busy(button, yes, label) {
   }
 }
 async function api(path, options = {}) {
-  const response = await fetch(path, { cache:"no-store", credentials:"same-origin", headers: { "Content-Type": "application/json" }, ...options });
+  const {headers={},...rest}=options;
+  const response = await fetch(path, {
+    cache:"no-store",
+    credentials:"same-origin",
+    ...rest,
+    headers:{ "Content-Type":"application/json", ...headers },
+  });
   let body = {};
   try { body = await response.json(); } catch {}
   if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
@@ -265,6 +271,71 @@ function buildRequestPayload(profile) {
     projectProfile:profile,
     projectContext:collectBuildProjectContext(profile),
   };
+}
+async function gzipBytes(bytes) {
+  if(typeof CompressionStream==="undefined") return null;
+  const compressedStream=new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"));
+  return new Uint8Array(await new Response(compressedStream).arrayBuffer());
+}
+async function uploadLargeBuildChunks(bytes,{encoding,originalBytes}) {
+  const start=await api("/api/reference-design/transport/start",{
+    method:"POST",
+    body:JSON.stringify({requestBytes:originalBytes,transferBytes:bytes.byteLength,encoding}),
+  });
+  const chunkBytes=Number(start.chunkBytes)||2_000_000;
+  const chunks=Math.ceil(bytes.byteLength/chunkBytes);
+  if(chunks<1 || chunks>Number(start.maxChunks||25)){
+    throw new Error(`Large build needs ${chunks} chunks, above the configured overflow transport limit.`);
+  }
+  for(let index=0;index<chunks;index++){
+    const from=index*chunkBytes;
+    const to=Math.min(bytes.byteLength,from+chunkBytes);
+    const response=await fetch(`/api/reference-design/transport/chunk/${encodeURIComponent(start.sessionId)}/${index}`,{
+      method:"PUT",
+      cache:"no-store",
+      credentials:"same-origin",
+      headers:{
+        "Content-Type":"application/octet-stream",
+        "x-kk-transport-ticket":start.ticket,
+      },
+      body:bytes.slice(from,to),
+    });
+    let result={};
+    try{result=await response.json();}catch{}
+    if(!response.ok)throw new Error(result.error||`Large-build chunk ${index+1}/${chunks} failed (${response.status}).`);
+  }
+  return api("/api/reference-design/build",{
+    method:"POST",
+    body:JSON.stringify({
+      payloadRef:{
+        provider:"cloudflare-r2",
+        sessionId:start.sessionId,
+        ticket:start.ticket,
+        chunks,
+        encoding,
+      },
+    }),
+  });
+}
+async function submitBuildPayload(payload) {
+  const body=JSON.stringify(payload);
+  const raw=new TextEncoder().encode(body);
+  if(raw.byteLength<=BUILD_DIRECT_REQUEST_MAX_BYTES){
+    return api("/api/reference-design/build",{method:"POST",body});
+  }
+
+  const gzip=await gzipBytes(raw);
+  if(gzip && gzip.byteLength<=BUILD_DIRECT_REQUEST_MAX_BYTES){
+    return api("/api/reference-design/build",{
+      method:"POST",
+      headers:{"Content-Type":"application/vnd.kk-frontend.build+gzip"},
+      body:gzip,
+    });
+  }
+
+  const transfer=gzip||raw;
+  const encoding=gzip?"gzip":"identity";
+  return uploadLargeBuildChunks(transfer,{encoding,originalBytes:raw.byteLength});
 }
 function sourceCount() {
   return Number(state.projectFiles.length>0)+Number(Boolean(state.githubScan))+Number(Boolean(state.websiteEvidence));
@@ -959,6 +1030,15 @@ async function setBuildView(view) {
     btn.classList.toggle("active", btn.dataset.buildView === view)
   );
 }
+function triggerDownload(url,filename) {
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=filename||"";
+  a.rel="noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
 function downloadBase64(base64, filename, type = "application/zip") {
   if (!base64) return;
   const binary = atob(base64);
@@ -966,12 +1046,7 @@ function downloadBase64(base64, filename, type = "application/zip") {
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   const blob = new Blob([bytes], { type });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  triggerDownload(url,filename);
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 function renderBuildResult(data) {
@@ -1021,15 +1096,7 @@ $("buildPageButton").addEventListener("click", async () => {
   busy($("buildPageButton"), true, "Compiling project-fit source…");
   try {
     const payload=buildRequestPayload(profile);
-    const body=JSON.stringify(payload);
-    const requestBytes=new TextEncoder().encode(body).byteLength;
-    if(requestBytes>BUILD_REQUEST_MAX_BYTES){
-      throw new Error(`Build request is ${(requestBytes/1_000_000).toFixed(2)} MB, above the safe 4 MB Vercel budget. Use a smaller custom reference selection or remove large portable assets.`);
-    }
-    const data = await api("/api/reference-design/build", {
-      method:"POST",
-      body,
-    });
+    const data=await submitBuildPayload(payload);
     renderBuildResult(data);
   } catch (error) {
     notice(error.message);
@@ -1059,6 +1126,10 @@ $("overlayOpacity").addEventListener("input",event=>{
 });
 $("downloadProjectButton").addEventListener("click", () => {
   if (!state.build) return;
+  if(state.build.download?.url){
+    triggerDownload(state.build.download.url,state.build.filename);
+    return;
+  }
   downloadBase64(state.build.zipBase64, state.build.filename);
 });
 
