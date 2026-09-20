@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const state = { inspection: null, selected: new Set(), markdown: "", filename: "DESIGN.md" };
+const state = { inspection: null, selected: new Set(), markdown: "", filename: "DESIGN.md", evidenceJson: "", evidenceFilename: "DESIGN-EVIDENCE.json" };
 
 function notice(message, kind = "error") {
   const el = $("notice");
@@ -48,7 +48,11 @@ function escapeHtml(value) { return String(value || "").replace(/[&<>'"]/g, x =>
 function renderCandidates() {
   const q = $("candidateSearch").value.trim().toLowerCase();
   const rows = (state.inspection?.candidates || []).filter(c => !q || `${c.kind} ${c.label} ${c.selector}`.toLowerCase().includes(q));
-  $("candidateList").innerHTML = rows.map(c => `<button class="rdCandidate ${state.selected.has(c.id) ? "selected" : ""}" data-id="${c.id}" type="button"><span class="rdKind">${escapeHtml(c.kind)}</span><span><b>${escapeHtml(c.label || c.kind)}</b><small>${escapeHtml(c.selector)}</small></span></button>`).join("") || `<div style="padding:18px;color:#8995a7;font-size:12px">No matching regions.</div>`;
+  $("candidateList").innerHTML = rows.map(c => {
+    const motion = c.animation ? '<span class="rdMotion">Motion</span>' : "";
+    const selector = escapeHtml(c.selector);
+    return `<button class="rdCandidate ${state.selected.has(c.id) ? "selected" : ""}" data-id="${c.id}" type="button"><span class="rdKind">${escapeHtml(c.kind)}</span><span class="rdCandidateText"><span class="rdCandidateTitle"><b>${escapeHtml(c.label || c.kind)}</b>${motion}</span><small title="${selector}">${selector}</small></span></button>`;
+  }).join("") || `<div style="padding:18px;color:#8995a7;font-size:12px">No matching regions.</div>`;
   $("candidateList").querySelectorAll("[data-id]").forEach(btn => btn.addEventListener("click", () => toggleCandidate(btn.dataset.id)));
 }
 function renderOverlays() {
@@ -60,7 +64,7 @@ function renderOverlays() {
   }).join("");
   $("overlayLayer").querySelectorAll("[data-id]").forEach(btn => btn.addEventListener("click", () => toggleCandidate(btn.dataset.id)));
 }
-function resetResult() { state.markdown = ""; $("resultStage").hidden = true; }
+function resetResult() { state.markdown = ""; state.evidenceJson = ""; $("resultStage").hidden = true; }
 
 async function checkProvider() {
   try {
@@ -101,11 +105,12 @@ $("generateButton").addEventListener("click", async () => {
   try {
     const data = await api("/api/reference-design/generate", { method: "POST", body: JSON.stringify({ url: state.inspection.finalUrl, scope, selectors: selected.map(x => x.selector) }) });
     state.markdown = data.markdown; state.filename = data.filename || "DESIGN.md";
-    $("confidencePill").textContent = `${data.summary.confidence}% evidence confidence`;
+    state.evidenceJson = data.evidenceJson || ""; state.evidenceFilename = data.evidenceFilename || "DESIGN-EVIDENCE.json";
+    $("confidencePill").textContent = `${data.summary.confidence}% evidence confidence · ${data.summary.viewportVerified ? "viewports verified" : "viewport warning"}`;
     const facts = [
       [data.summary.selectedCount, "Scope selectors"],
-      [data.summary.componentCount, "Measured components"],
-      [data.summary.interactionSamples, "Interaction samples"],
+      [data.summary.componentCount, "Measured regions"],
+      [data.summary.meaningfulInteractionCount ?? data.summary.interactionSamples, "Observable state changes"],
       [data.summary.animationCount, "Runtime animations"],
     ];
     $("resultFacts").innerHTML = facts.map(([v,l]) => `<div class="rdFact"><b>${escapeHtml(v)}</b><span>${escapeHtml(l)}</span></div>`).join("");
@@ -116,19 +121,21 @@ $("generateButton").addEventListener("click", async () => {
   finally { busy($("generateButton"), false); }
 });
 
-$("downloadButton").addEventListener("click", () => {
-  if (!state.markdown) return;
-  const blob = new Blob([state.markdown], { type: "text/markdown;charset=utf-8" });
+function downloadText(content, filename, type) {
+  if (!content) return;
+  const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob); const a = document.createElement("a");
-  a.href = url; a.download = state.filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-});
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+$("downloadButton").addEventListener("click", () => downloadText(state.markdown, state.filename, "text/markdown;charset=utf-8"));
+$("downloadEvidenceButton").addEventListener("click", () => downloadText(state.evidenceJson, state.evidenceFilename, "application/json;charset=utf-8"));
 $("copyButton").addEventListener("click", async () => {
   if (!state.markdown) return;
   await navigator.clipboard.writeText(state.markdown);
   const button = $("copyButton"); const old = button.textContent; button.textContent = "Copied"; setTimeout(() => button.textContent = old, 1200);
 });
 $("newButton").addEventListener("click", () => {
-  state.inspection = null; state.selected.clear(); state.markdown = ""; $("selectionStage").hidden = true; $("resultStage").hidden = true; $("referenceUrl").focus(); window.scrollTo({ top: 0, behavior: "smooth" });
+  state.inspection = null; state.selected.clear(); state.markdown = ""; state.evidenceJson = ""; $("selectionStage").hidden = true; $("resultStage").hidden = true; $("referenceUrl").focus(); window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
 checkProvider();

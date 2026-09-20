@@ -1,4 +1,4 @@
-# DEISGN.md
+# DESIGN.md
 
 > Complete Frontend Visual, Layout, Responsive, Interaction and Behaviour Specification.
 

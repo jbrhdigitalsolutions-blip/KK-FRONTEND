@@ -15,7 +15,6 @@ export function classifyCandidate({ tag = "", role = "", className = "", animati
   const t = String(tag).toLowerCase();
   const r = String(role).toLowerCase();
   const c = String(className).toLowerCase();
-  if (animation) return "Animation";
   if (t === "header" || r === "banner" || /(^|[-_ ])header/.test(c)) return "Header";
   if (t === "footer" || r === "contentinfo" || /(^|[-_ ])footer/.test(c)) return "Footer";
   if (t === "nav" || r === "navigation" || /(^|[-_ ])nav/.test(c)) return "Navigation";
@@ -24,6 +23,7 @@ export function classifyCandidate({ tag = "", role = "", className = "", animati
   if (t === "section" || /hero|section|feature|pricing|testimonial|gallery/.test(c)) return "Section";
   if (t === "form" || r === "form") return "Form";
   if (t === "dialog" || r === "dialog" || /modal|drawer|sheet|popover/.test(c)) return "Overlay";
+  if (animation) return "Animation";
   return "Component";
 }
 
@@ -87,38 +87,36 @@ function commonValues(evidence) {
   const desktop = firstViewport(evidence, "desktop");
   const tablet = firstViewport(evidence, "tablet");
   const mobile = firstViewport(evidence, "mobile");
-  const body = representativeBy(evidence, e => e.tag === "body") || desktop.scopes?.[0] || {};
-  const button = buttonRep(evidence) || {};
-  const input = inputRep(evidence) || {};
-  const card = cardRep(evidence) || {};
-  const nav = navRep(evidence) || {};
-  const side = sidebarRep(evidence) || {};
-  const header = headerRep(evidence) || {};
-  const footer = footerRep(evidence) || {};
-  const hero = heroRep(evidence) || {};
-  const anim = firstAnimation(evidence) || {};
-  const breakpoints = mediaBreakpoints(evidence?.mediaQueries);
-  const colors = dominantStyle(evidence, "color", 16).map(x => x.value);
-  const backgrounds = dominantStyle(evidence, "backgroundColor", 16).map(x => x.value).filter(v => !/rgba?\(0,\s*0,\s*0,\s*0\)/.test(v));
+  const desktopNodes = [...arr(desktop.scopes), ...arr(desktop.elements)];
+  const body = desktopNodes.find(e => e.tag === "body") || desktop.scopes?.[0] || {};
+  const nav = desktopNodes.find(e => e.tag === "nav" || e.role === "navigation") || {};
+  const header = desktopNodes.find(e => e.tag === "header" || e.role === "banner") || {};
+  const footer = desktopNodes.find(e => e.tag === "footer" || e.role === "contentinfo") || {};
+  const interactions = arr(evidence?.interactions);
+  const meaningfulState = interactions.find(row => Object.keys(row.hover || {}).length || Object.keys(row.focus || {}).length) || {};
+  const animations = arr(evidence?.animations).filter(a => num(a?.timing?.duration) > 0);
+  const durations = uniq(animations.map(a => num(a?.timing?.duration)).filter(v => v != null));
+  const easings = uniq(animations.map(a => a?.timing?.easing).filter(Boolean));
+  const stableDuration = animations.length >= 2 && durations.length === 1 ? durations[0] : null;
+  const stableEasing = animations.length >= 2 && easings.length === 1 ? easings[0] : null;
   const fontFamilies = dominantStyle(evidence, "fontFamily", 8).map(x => x.value);
-  const fontSizes = dominantStyle(evidence, "fontSize", 16).map(x => x.value);
   const fontWeights = dominantStyle(evidence, "fontWeight", 10).map(x => x.value);
-  const radii = dominantStyle(evidence, "borderRadius", 12).map(x => x.value);
-  const shadows = dominantStyle(evidence, "boxShadow", 10).map(x => x.value);
-  const gaps = dominantStyle(evidence, "gap", 12).map(x => x.value);
-  const state = arr(evidence?.interactions)[0] || {};
   const observedTouch = observedMinInteractive(evidence);
+  const viewportVerified = arr(evidence?.viewports).length >= 3 && arr(evidence.viewports).every(v =>
+    !v.targetViewport || (v.targetViewport.width === v.viewport?.width && v.targetViewport.height === v.viewport?.height)
+  );
+  const responsiveRules = [viewportRule(desktop), viewportRule(tablet), viewportRule(mobile)].filter(Boolean).join(" | ");
+  const primaryLayout = [
+    styleOf(body, "display") ? "display " + styleOf(body, "display") : null,
+    styleOf(body, "flexDirection") && String(styleOf(body, "display")).includes("flex") ? "flex-direction " + styleOf(body, "flexDirection") : null,
+    styleOf(body, "gridTemplateColumns") && styleOf(body, "gridTemplateColumns") !== "none" ? "grid " + styleOf(body, "gridTemplateColumns") : null,
+  ].filter(Boolean).join("; ") || null;
 
-  const m = {
-    BACKGROUND_COLOR: styleOf(body, "backgroundColor") || backgrounds[0],
-    SURFACE_COLOR: backgrounds[1] || backgrounds[0],
-    ELEVATED_SURFACE_COLOR: backgrounds[2] || backgrounds[1],
-    TEXT_PRIMARY: styleOf(body, "color") || colors[0],
-    TEXT_SECONDARY: colors[1],
-    TEXT_MUTED: colors[2],
-    BRAND_COLORS: colors.slice(0, 8).join(", "),
+  return {
+    BACKGROUND_COLOR: styleOf(body, "backgroundColor"),
+    SURFACE_COLOR: styleOf(body, "backgroundColor"),
+    TEXT_PRIMARY: styleOf(body, "color"),
     PRIMARY_FONT: styleOf(body, "fontFamily") || fontFamilies[0],
-    SECONDARY_FONT: fontFamilies[1],
     BASE_FONT_SIZE_PX: px(styleOf(body, "fontSize")),
     H1_SIZE_PX: px(styleOf(headingRep(evidence, 1), "fontSize")),
     H2_SIZE_PX: px(styleOf(headingRep(evidence, 2), "fontSize")),
@@ -133,91 +131,62 @@ function commonValues(evidence) {
     FONT_WEIGHT_BOLD: fontWeights.find(x => /700|bold/.test(x)),
     BODY_LINE_HEIGHT: styleOf(body, "lineHeight"),
     LETTER_SPACING_PX: px(styleOf(body, "letterSpacing")),
-    MAX_CONTENT_WIDTH_PX: px(desktop.document?.width || desktop.viewport?.width),
-    MIN_CONTENT_WIDTH_PX: px(mobile.viewport?.width),
+    MAX_CONTENT_WIDTH_PX: px(desktop.scopes?.[0]?.rect?.width || desktop.document?.width),
+    MIN_CONTENT_WIDTH_PX: px(mobile.scopes?.[0]?.rect?.width || mobile.viewport?.width),
     HEADER_HEIGHT_PX: px(rectOf(header, "height")),
     FOOTER_HEIGHT_PX: px(rectOf(footer, "height")),
-    SIDEBAR_EXPANDED_PX: px(rectOf(side, "width")),
-    HERO_MIN_HEIGHT_PX: px(rectOf(hero, "height")),
-    HERO_MAX_WIDTH_PX: px(rectOf(hero, "width")),
-    BUTTON_MD_HEIGHT_PX: px(rectOf(button, "height")),
-    BUTTON_RADIUS_PX: px(styleOf(button, "borderRadius")),
-    BUTTON_TRANSITION_MS: durationFromTransition(styleOf(button, "transitionDuration")),
-    BUTTON_PRIMARY_STYLE: compactStyle(button),
-    INPUT_HEIGHT_PX: px(rectOf(input, "height")),
-    INPUT_RADIUS_PX: px(styleOf(input, "borderRadius")),
-    CARD_RADIUS_PX: px(styleOf(card, "borderRadius")),
-    CARD_SHADOW: styleOf(card, "boxShadow"),
     NAV_TYPE: nav.tag || nav.role || (nav.selector ? "navigation" : null),
-    NAV_HOVER_STATE: state.hover ? JSON.stringify(state.hover) : null,
-    FOCUS_INDICATOR: state.focus ? JSON.stringify(state.focus) : null,
     MIN_TOUCH_TARGET_PX: observedTouch == null ? null : px(observedTouch),
-    DEFAULT_EASING: anim.timing?.easing,
-    ANIMATION_NORMAL_MS: anim.timing?.duration,
-    HOVER_FEEDBACK: state.hover ? JSON.stringify(state.hover) : null,
-    FOCUS_STATE: state.focus ? JSON.stringify(state.focus) : null,
-    CURSOR_INTERACTIVE: dominantStyle(evidence, "cursor", 3).map(x => x.value).find(v => v !== "auto") || "pointer",
-    BREAKPOINT_XS_PX: breakpoints[0],
-    BREAKPOINT_SM_PX: breakpoints[1],
-    BREAKPOINT_MD_PX: breakpoints[2],
-    BREAKPOINT_LG_PX: breakpoints[3],
-    BREAKPOINT_XL_PX: breakpoints[4],
-    BREAKPOINT_XXL_PX: breakpoints[5],
+    DEFAULT_EASING: stableEasing,
+    ANIMATION_NORMAL_MS: stableDuration,
+    HOVER_FEEDBACK: Object.keys(meaningfulState.hover || {}).length ? JSON.stringify(meaningfulState.hover) : null,
+    FOCUS_STATE: Object.keys(meaningfulState.focus || {}).length ? JSON.stringify(meaningfulState.focus) : null,
+    CURSOR_INTERACTIVE: dominantStyle(evidence, "cursor", 6).map(x => x.value).find(v => v && v !== "auto"),
     DESKTOP_LAYOUT_RULES: viewportRule(desktop),
     TABLET_LAYOUT_RULES: viewportRule(tablet),
     MOBILE_LAYOUT_RULES: viewportRule(mobile),
     HEADER_DESKTOP: elementAtViewport(desktop, header?.selector),
     HEADER_TABLET: elementAtViewport(tablet, header?.selector),
     HEADER_MOBILE: elementAtViewport(mobile, header?.selector),
-    SIDEBAR_DESKTOP: elementAtViewport(desktop, side?.selector),
-    SIDEBAR_TABLET: elementAtViewport(tablet, side?.selector),
-    SIDEBAR_MOBILE: elementAtViewport(mobile, side?.selector),
-    HERO_DESKTOP: elementAtViewport(desktop, hero?.selector),
-    HERO_TABLET: elementAtViewport(tablet, hero?.selector),
-    HERO_MOBILE: elementAtViewport(mobile, hero?.selector),
     ICON_LIBRARY: inferIconLibrary(evidence),
-    IMAGE_OBJECT_FIT: dominantValue(evidence, "objectFit"),
     SCROLL_BEHAVIOUR: evidence?.scroll?.behavior,
-    HORIZONTAL_SCROLL_RULE: desktop.document?.horizontalOverflow ? "Horizontal overflow observed" : "No horizontal overflow observed at captured desktop anchor",
+    HORIZONTAL_SCROLL_RULE: desktop.document?.horizontalOverflow ? "Horizontal overflow observed at desktop anchor" : "No horizontal overflow observed at desktop anchor",
     REDUCED_MOTION_RULES: evidence?.reducedMotion || null,
     LIGHT_THEME_SPEC: evidence?.themes?.light ? JSON.stringify(evidence.themes.light) : null,
     DARK_THEME_SPEC: evidence?.themes?.dark ? JSON.stringify(evidence.themes.dark) : null,
     PAGE_ROUTE: evidence?.url,
     PAGE_NAME: evidence?.title,
+    REFERENCE_WIDTH_PX: px(desktop.viewport?.width),
+    REFERENCE_HEIGHT_PX: px(desktop.viewport?.height),
+    CONTENT_WIDTH_PX: px(desktop.scopes?.[0]?.rect?.width || desktop.document?.width),
     PAGE_PADDING_PX: px(styleOf(body, "paddingLeft")),
-    SECTION_COUNT: allElements(evidence).filter(e => e.tag === "section").length,
-    PAGE_INTERACTIONS: arr(evidence?.interactions).length ? `${arr(evidence.interactions).length} measured hover/focus interaction samples` : null,
-    PAGE_ANIMATIONS: arr(evidence?.animations).length ? `${arr(evidence.animations).length} runtime animations captured` : null,
-    TARGET_RESPONSIVE_COVERAGE_PERCENT: arr(evidence?.viewports).length >= 3 ? 100 : null,
+    PRIMARY_LAYOUT: primaryLayout,
+    RESPONSIVE_BEHAVIOUR: responsiveRules,
+    PAGE_INTERACTIONS: interactions.length ? interactions.length + " desktop hover/focus samples; " + (evidence?.coverage?.meaningfulInteractionCount ?? 0) + " produced observable style changes" : null,
+    PAGE_ANIMATIONS: animations.length ? animations.length + " runtime Web Animations API records captured at desktop anchor" : null,
+    PAGE_STATES: interactions.length ? "Hover/focus only; destructive/click/submit states intentionally not triggered" : null,
+    PAGE_MOBILE_TRANSFORMATION: mobile.viewport ? "Verified at " + mobile.viewport.width + "×" + mobile.viewport.height + "; see Responsive Region Matrix" : null,
+    TARGET_RESPONSIVE_COVERAGE_PERCENT: viewportVerified ? 100 : evidence?.coverage?.responsiveCoveragePercent,
     TARGET_COMPONENT_COVERAGE_PERCENT: evidence?.coverage?.componentCoveragePercent,
     TARGET_INTERACTION_COVERAGE_PERCENT: evidence?.coverage?.interactionCoveragePercent,
     TARGET_CONFIDENCE_PERCENT: evidence?.confidence,
-    TARGET_VISUAL_MATCH_PERCENT: evidence?.confidence,
-    MAX_VISUAL_DEVIATION: evidence?.confidence ? `Evidence confidence ${evidence.confidence}%; unverified values remain UNKNOWN` : null,
-    COMPONENT_NAMING: "Use semantic names derived from verified roles/labels/selectors in the evidence appendix",
-    DESIGN_TOKEN_STRUCTURE: "Generate tokens only from repeated VERIFIED colors, typography, spacing, radius, border and shadow values in the evidence appendix",
-    CSS_VARIABLE_STRUCTURE: "Map repeated VERIFIED values to CSS custom properties; do not create semantic meanings that were not observed",
-    SHARED_COMPONENT_STRUCTURE: "Create shared components for repeated VERIFIED structures only",
-    ASSET_NAMING_RULE: "Preserve project-owned asset naming; reference asset URLs are evidence only unless reuse is authorized",
-    IMAGE_RESERVED_DIMENSIONS: "Use captured width/height/aspect-ratio values from the evidence appendix",
-    MAX_LAYOUT_SHIFT: UNKNOWN,
-    CHROME_SUPPORT: "Captured with remote Chromium",
-    EDGE_SUPPORT: "Chromium-compatible behavior expected; not independently verified",
-    SAFARI_SUPPORT: UNKNOWN,
-    FIREFOX_SUPPORT: UNKNOWN,
-    IOS_SAFARI_SUPPORT: UNKNOWN,
-    ANDROID_CHROME_SUPPORT: "Responsive Chromium evidence captured; physical Android device not independently verified",
+    TARGET_VISUAL_MATCH_PERCENT: null,
+    MAX_VISUAL_DEVIATION: "Not measured — this extractor records evidence confidence, not a pixel-similarity score",
+    COMPONENT_NAMING: "Use semantic names derived from verified roles, labels, selectors, and the Responsive Region Matrix",
+    DESIGN_TOKEN_STRUCTURE: "Create tokens only from repeated values listed under Observed Design Tokens; do not assign semantic brand meaning unless the reference exposes it",
+    CSS_VARIABLE_STRUCTURE: "Map repeated VERIFIED values to CSS custom properties without inventing semantic roles",
+    SHARED_COMPONENT_STRUCTURE: "Create shared components only for repeated VERIFIED structures",
+    ASSET_NAMING_RULE: "Reference asset URLs are evidence only; preserve target-project ownership/licensing and naming",
+    IMAGE_RESERVED_DIMENSIONS: "Use measured image dimensions/aspect ratios from DESIGN-EVIDENCE.json",
+    CHROME_SUPPORT: "Verified in remote Chromium",
+    ANDROID_CHROME_SUPPORT: "Responsive Chromium emulation captured; physical Android device not independently verified",
     MIN_VIEWPORT_WIDTH_PX: px(Math.min(...arr(evidence?.viewports).map(v => v.viewport?.width).filter(Boolean))),
-    MAX_TESTED_WIDTH_PX: px(Math.max(...arr(evidence?.viewports).map(v => v.viewport?.width).filter(Boolean))),
-    HIGH_DPI_RULES: UNKNOWN,
-    ORIENTATION_RULES: UNKNOWN,
+    MAX_VIEWPORT_WIDTH_PX: px(Math.max(...arr(evidence?.viewports).map(v => v.viewport?.width).filter(Boolean))),
+    SOURCE: "Rendered-browser evidence captured by Browserless + Playwright CDP",
+    CONFIDENCE_PERCENT: evidence?.confidence,
+    RESPONSIVE_DERIVATION: "Use exact captured viewport matrix plus source CSS media/container query conditions; do not infer semantic breakpoint names",
+    REQUIRED_EVIDENCE: "See Verified Evidence Summary and optional DESIGN-EVIDENCE.json",
   };
-
-  if (radii[0]) m.RADIUS_MD_PX = px(radii[0]);
-  if (shadows[0]) m.SHADOW_MEDIUM = shadows[0];
-  if (gaps[0]) m.COMPONENT_GAP_PX = px(gaps[0]);
-  if (fontSizes[0]) m.BODY_LARGE_PX = px(fontSizes[0]);
-  return m;
 }
 
 function durationFromTransition(value) {
@@ -253,57 +222,305 @@ function inferIconLibrary(evidence) {
 
 function replaceUnknownUnits(markdown) {
   return markdown
-    .replaceAll(`${UNKNOWN}px`, UNKNOWN)
-    .replaceAll(`${UNKNOWN}ms`, UNKNOWN)
-    .replaceAll(`${UNKNOWN}%`, UNKNOWN)
-    .replaceAll(`${UNKNOWN}KB`, UNKNOWN)
-    .replaceAll(`${UNKNOWN}deg`, UNKNOWN)
-    .replaceAll(`${UNKNOWN}ch`, UNKNOWN);
+    .replaceAll(UNKNOWN + "px", UNKNOWN)
+    .replaceAll(UNKNOWN + "ms", UNKNOWN)
+    .replaceAll(UNKNOWN + "%", UNKNOWN)
+    .replaceAll(UNKNOWN + "KB", UNKNOWN)
+    .replaceAll(UNKNOWN + "deg", UNKNOWN)
+    .replaceAll(UNKNOWN + "ch", UNKNOWN);
 }
-function json(v) { return JSON.stringify(v, null, 2); }
-function evidenceAppendix(evidence) {
-  const lines = [];
-  lines.push("# Verified Reference Evidence", "");
-  lines.push("> This appendix is generated from rendered browser evidence. `VERIFIED` means directly observed. `DERIVED` means calculated from observed values. `UNKNOWN — DO NOT INVENT` means the reference did not expose enough evidence.", "");
-  lines.push("## Capture", "");
-  lines.push(`- Reference URL: \`${text(evidence?.url)}\``);
-  lines.push(`- Final URL after navigation: \`${text(evidence?.finalUrl)}\``);
-  lines.push(`- Page title: ${text(evidence?.title)}`);
-  lines.push(`- Selected scope: **${selectedLabel(evidence)}**`);
-  lines.push(`- Captured at: ${text(evidence?.capturedAt)}`);
-  lines.push(`- Browser: ${text(evidence?.browser)}`);
-  lines.push(`- Evidence confidence: ${text(evidence?.confidence)}%`, "");
-  lines.push("## Selected Scope Locators", "", "```json", json(evidence?.selection || [{ label: "Whole Page", selector: "body" }]), "```", "");
-  lines.push("## Responsive Measurements", "");
-  for (const vp of arr(evidence?.viewports)) {
-    lines.push(`### ${vp.name} — ${vp.viewport?.width}×${vp.viewport?.height}`, "", "```json", json({
-      document: vp.document,
-      scopes: vp.scopes,
-      representativeElements: vp.elements,
-    }), "```", "");
+function mdCell(value) {
+  return String(value ?? UNKNOWN).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+}
+function cleanLabel(value) {
+  const v = String(value || "").replace(/\s+/g, " ").trim();
+  if (!v || /requestAnimationFrame|function\s*\(/i.test(v)) return "";
+  return v.slice(0, 80);
+}
+function compactStateDiff(diff) {
+  const entries = Object.entries(diff || {});
+  if (!entries.length) return "—";
+  return entries.slice(0, 5).map(([key, value]) =>
+    key + ": " + (value?.before ?? "?") + " → " + (value?.after ?? "?")
+  ).join("; ");
+}
+function observedTokens(evidence) {
+  const take = (key, limit = 10) => dominantStyle(evidence, key, limit).map(x => ({ value: x.value, count: x.count }));
+  return {
+    colors: take("color", 12),
+    backgrounds: take("backgroundColor", 12).filter(x => !/rgba?\(0,\s*0,\s*0,\s*0\)/.test(x.value)),
+    fonts: take("fontFamily", 8),
+    fontSizes: take("fontSize", 12),
+    fontWeights: take("fontWeight", 10),
+    lineHeights: take("lineHeight", 10),
+    radii: take("borderRadius", 10),
+    gaps: take("gap", 10),
+    shadows: take("boxShadow", 8),
+  };
+}
+function compactRegionRows(evidence) {
+  const desktop = firstViewport(evidence, "desktop");
+  const tablet = firstViewport(evidence, "tablet");
+  const mobile = firstViewport(evidence, "mobile");
+  const usefulTags = new Set(["header","nav","main","aside","footer","section","form","dialog","button","input","textarea","select","img","video"]);
+  const useful = e => e && (e.interactive || /^h[1-6]$/.test(e.tag || "") || usefulTags.has(e.tag) || ["fixed","sticky"].includes(e.style?.position));
+  const rows = [];
+  const seen = new Set();
+  for (const e of [...arr(desktop.scopes), ...arr(desktop.elements)]) {
+    if (!useful(e) || !e.selector || seen.has(e.selector)) continue;
+    seen.add(e.selector);
+    const find = vp => [...arr(vp.scopes), ...arr(vp.elements)].find(x => x.selector === e.selector);
+    const format = x => x
+      ? Math.round(x.rect?.width || 0) + "×" + Math.round(x.rect?.height || 0) + "; " + (x.style?.display || "?") + "; " + (x.style?.position || "?")
+      : "not observed";
+    rows.push({
+      kind: classifyCandidate({ tag: e.tag, role: e.role, className: e.className, animation: e.style?.animationName && e.style.animationName !== "none" }),
+      selector: e.selector,
+      label: cleanLabel(e.label) || e.tag || e.selector,
+      desktop: format(e),
+      tablet: format(find(tablet)),
+      mobile: format(find(mobile)),
+    });
+    if (rows.length >= 48) break;
   }
-  lines.push("## Interaction State Measurements", "", "```json", json(evidence?.interactions || []), "```", "");
-  lines.push("## Animation / Transition Evidence", "", "```json", json(evidence?.animations || []), "```", "");
-  lines.push("## Responsive CSS Evidence", "", "```json", json({ mediaQueries: evidence?.mediaQueries || [], containerQueries: evidence?.containerQueries || [] }), "```", "");
-  lines.push("## Font Evidence", "", "```json", json(evidence?.fonts || []), "```", "");
-  lines.push("## Asset / SVG / Media Evidence", "", "```json", json(evidence?.assets || {}), "```", "");
-  lines.push("## Scroll / Sticky Evidence", "", "```json", json(evidence?.scroll || {}), "```", "");
-  lines.push("## Known Restrictions", "");
-  for (const item of arr(evidence?.restrictions)) lines.push(`- ${item}`);
-  if (!arr(evidence?.restrictions).length) lines.push("- No extractor restriction was reported for the captured scope.");
+  return rows;
+}
+function evidenceSummary(evidence) {
+  const lines = [];
+  const bt = String.fromCharCode(96);
+  const tokens = observedTokens(evidence);
+  const regionRows = compactRegionRows(evidence);
+  const meaningful = arr(evidence?.interactions).filter(row => Object.keys(row.hover || {}).length || Object.keys(row.focus || {}).length);
+
+  lines.push("## Verified Evidence Summary", "");
+  lines.push("> Machine rule: use only verified/derived evidence below or explicit values in this specification. Any " + bt + UNKNOWN + bt + " value must remain unresolved until new evidence is captured.", "");
+
+  lines.push("### Capture provenance", "");
+  lines.push("| Field | Value |", "|---|---|");
+  lines.push("| Reference | " + bt + mdCell(evidence?.url) + bt + " |");
+  lines.push("| Final URL | " + bt + mdCell(evidence?.finalUrl) + bt + " |");
+  lines.push("| Page | " + mdCell(evidence?.title) + " |");
+  lines.push("| Scope | " + mdCell(selectedLabel(evidence)) + " |");
+  lines.push("| Captured | " + mdCell(evidence?.capturedAt) + " |");
+  lines.push("| Browser | " + mdCell(evidence?.browser) + " |");
+  lines.push("| Evidence confidence | " + mdCell(evidence?.confidence) + "% |");
+  lines.push("| Component coverage | " + mdCell(evidence?.coverage?.componentCoverageClaim || UNKNOWN) + " |", "");
+
+  lines.push("### Viewport verification", "");
+  lines.push("| Mode | Requested | Browser-reported | Document | Horizontal overflow | Status |", "|---|---:|---:|---:|---|---|");
+  for (const vp of arr(evidence?.viewports)) {
+    const target = vp.targetViewport || vp.viewport || {};
+    const actual = vp.viewport || {};
+    const match = target.width === actual.width && target.height === actual.height;
+    lines.push("| " + mdCell(vp.name) + " | " + target.width + "×" + target.height + " | " + actual.width + "×" + actual.height + " | " +
+      (vp.document?.width ?? "?") + "×" + (vp.document?.height ?? "?") + " | " + (vp.document?.horizontalOverflow ? "yes" : "no") + " | " + (match ? "VERIFIED" : "MISMATCH") + " |");
+  }
+  lines.push("");
+
+  lines.push("### Exact responsive CSS conditions", "");
+  if (arr(evidence?.mediaQueries).length) {
+    for (const q of arr(evidence.mediaQueries)) lines.push("- Media: " + bt + String(q).replace(/\x60/g, "\\x60") + bt);
+  } else lines.push("- Media queries: " + bt + UNKNOWN + bt);
+  if (arr(evidence?.containerQueries).length) {
+    for (const q of arr(evidence.containerQueries)) lines.push("- Container: " + bt + String(q).replace(/\x60/g, "\\x60") + bt);
+  } else lines.push("- Container queries: none directly observed/readable");
+  lines.push("", "> Breakpoint names such as XS/SM/MD/LG are not inferred. Preserve source query conditions exactly.", "");
+
+  lines.push("### Responsive region matrix", "");
+  lines.push("| Kind | Region | Selector | Desktop | Tablet | Mobile |", "|---|---|---|---|---|---|");
+  if (regionRows.length) {
+    for (const r of regionRows) {
+      lines.push("| " + mdCell(r.kind) + " | " + mdCell(r.label) + " | " + bt + mdCell(r.selector) + bt + " | " + mdCell(r.desktop) + " | " + mdCell(r.tablet) + " | " + mdCell(r.mobile) + " |");
+    }
+  } else lines.push("| — | No semantic region rows captured | — | — | — | — |");
+  lines.push("");
+
+  lines.push("### Observed design tokens", "");
+  lines.push("> Frequency-ranked observed values only. They are not automatically assigned brand semantics.", "");
+  for (const [name, values] of Object.entries(tokens)) {
+    const rendered = values.length ? values.map(x => bt + x.value + bt + " ×" + x.count).join(", ") : UNKNOWN;
+    lines.push("- **" + name + ":** " + rendered);
+  }
+  lines.push("");
+
+  lines.push("### Interaction states", "");
+  lines.push("- Captured desktop interaction samples: **" + arr(evidence?.interactions).length + "**");
+  lines.push("- Samples with observable hover/focus changes: **" + meaningful.length + "**");
+  if (evidence?.coverage?.interactionCoveragePercent != null) lines.push("- Sampling coverage of captured desktop interactive elements: **" + evidence.coverage.interactionCoveragePercent + "%**");
+  if (meaningful.length) {
+    lines.push("", "| Selector | Hover change | Focus change |", "|---|---|---|");
+    for (const row of meaningful.slice(0, 24)) {
+      lines.push("| " + bt + mdCell(row.selector) + bt + " | " + mdCell(compactStateDiff(row.hover)) + " | " + mdCell(compactStateDiff(row.focus)) + " |");
+    }
+  }
+  lines.push("");
+
+  lines.push("### Motion evidence", "");
+  if (arr(evidence?.animations).length) {
+    lines.push("| Selector | Duration | Easing | Iterations | Keyframes |", "|---|---:|---|---:|---:|");
+    for (const a of arr(evidence.animations).slice(0, 30)) {
+      lines.push("| " + bt + mdCell(a.selector || "unknown") + bt + " | " + mdCell(a.timing?.duration) + "ms | " + mdCell(a.timing?.easing) + " | " + mdCell(a.timing?.iterations) + " | " + arr(a.keyframes).length + " |");
+    }
+  } else lines.push("- No runtime Web Animations API records were observed in the selected scope.");
+  lines.push("", "> A captured animation duration/easing is not promoted to a global design-system default unless repeated evidence proves consistency.", "");
+
+  lines.push("### Assets and browser evidence", "");
+  lines.push("- Fonts observed: **" + arr(evidence?.fonts).length + "**");
+  lines.push("- SVGs observed: **" + arr(evidence?.assets?.svgs).length + "**");
+  lines.push("- Images observed: **" + arr(evidence?.assets?.images).length + "**");
+  lines.push("- Videos observed: **" + arr(evidence?.assets?.videos).length + "**");
+  lines.push("- Canvas elements: **" + (evidence?.assets?.canvasCount ?? 0) + "**");
+  lines.push("- Stylesheets readable/total: **" + (evidence?.styleSheets?.readable ?? "?") + "/" + (evidence?.styleSheets?.total ?? "?") + "**");
+  lines.push("- Fixed/sticky elements observed: **" + arr(evidence?.scroll?.sticky).length + "**", "");
+
+  lines.push("### Confidence and restrictions", "");
+  for (const reason of arr(evidence?.confidenceReasons)) lines.push("- Confidence: " + reason);
+  for (const item of arr(evidence?.restrictions)) lines.push("- Restriction: " + item);
+
+  lines.push("", "### Machine implementation contract", "");
+  lines.push("1. Trust viewport dimensions only when Viewport verification is VERIFIED.");
+  lines.push("2. Use exact media/container query conditions; do not rename breakpoints by convention.");
+  lines.push("3. Use observed design tokens as raw evidence; assign semantic token names only when the reference exposes that semantic meaning.");
+  lines.push("4. Never convert evidence confidence into a visual-match score; visual similarity requires an independent screenshot-diff loop.");
+  lines.push("5. " + bt + "DESIGN-EVIDENCE.json" + bt + " is the detailed evidence companion; " + bt + "DESIGN.md" + bt + " is the concise implementation contract.");
   return lines.join("\n");
+}
+function yaml(value) {
+  return JSON.stringify(String(value ?? ""));
 }
 
 export function renderDesignMd({ template, evidence }) {
   if (!template || typeof template !== "string") throw new Error("DESIGN.md template is required.");
   if (!evidence?.url) throw new Error("Reference evidence is required.");
   const values = commonValues(evidence);
-  let rendered = template.replace(/\{\{([A-Z0-9_]+)\}\}/g, (_, key) => {
+  let rendered = template.replace(/^#\s+DEISGN\.md\s*$/m, "# DESIGN.md");
+  rendered = rendered.replace(/\{\{([A-Z0-9_]+)\}\}/g, (_, key) => {
     const value = values[key];
     return value == null || value === "" || (typeof value === "number" && !Number.isFinite(value)) ? UNKNOWN : String(value);
   });
   rendered = replaceUnknownUnits(rendered);
-  return `${evidenceAppendix(evidence)}\n\n---\n\n${rendered}`;
+  const withoutHeading = rendered.replace(/^#\s+DESIGN\.md\s*\n+/, "");
+  const frontmatter = [
+    "---",
+    "schema: kk-reference-design-md/v2",
+    "reference_url: " + yaml(evidence.url),
+    "final_url: " + yaml(evidence.finalUrl),
+    "page_title: " + yaml(evidence.title),
+    "scope: " + yaml(selectedLabel(evidence)),
+    "captured_at: " + yaml(evidence.capturedAt),
+    "browser: " + yaml(evidence.browser),
+    "evidence_confidence_percent: " + (Number(evidence.confidence) || 0),
+    "measurement_policy: \"VERIFIED | DERIVED | UNKNOWN — DO NOT INVENT\"",
+    "---",
+  ].join("\n");
+  return frontmatter + "\n\n# DESIGN.md\n\n" + evidenceSummary(evidence) + "\n\n---\n\n" + withoutHeading;
+}
+
+
+function evidenceNodeUseful(e) {
+  if (!e) return false;
+  const usefulTags = new Set(["body","header","nav","main","aside","footer","section","form","dialog","button","input","textarea","select","img","svg","video"]);
+  return Boolean(
+    e.interactive ||
+    /^h[1-6]$/.test(e.tag || "") ||
+    usefulTags.has(e.tag) ||
+    ["fixed","sticky"].includes(e.style?.position) ||
+    (e.style?.animationName && e.style.animationName !== "none")
+  );
+}
+
+function slimEvidenceStyle(style = {}) {
+  const keys = [
+    "display","position","top","right","bottom","left","width","height","minWidth","maxWidth","minHeight","maxHeight",
+    "marginTop","marginRight","marginBottom","marginLeft","paddingTop","paddingRight","paddingBottom","paddingLeft",
+    "gap","rowGap","columnGap","gridTemplateColumns","gridTemplateRows","gridAutoFlow","justifyContent","alignItems",
+    "flexDirection","flexWrap","color","backgroundColor","backgroundImage","opacity","border","borderRadius","boxShadow",
+    "outline","outlineOffset","fontFamily","fontSize","fontWeight","fontStyle","lineHeight","letterSpacing","textAlign",
+    "textTransform","whiteSpace","transform","transformOrigin","transitionProperty","transitionDuration",
+    "transitionTimingFunction","animationName","animationDuration","animationTimingFunction","animationIterationCount",
+    "overflow","overflowX","overflowY","scrollSnapType","scrollBehavior","zIndex","cursor","pointerEvents","filter",
+    "backdropFilter","objectFit","objectPosition","aspectRatio"
+  ];
+  const out = {};
+  for (const key of keys) {
+    const value = style?.[key];
+    if (value != null && value !== "") out[key] = value;
+  }
+  return out;
+}
+
+function slimEvidenceNode(node = {}) {
+  return {
+    selector: node.selector || null,
+    tag: node.tag || null,
+    role: node.role || null,
+    className: node.className || "",
+    label: cleanLabel(node.label) || node.tag || "",
+    interactive: Boolean(node.interactive),
+    rect: node.rect || null,
+    style: slimEvidenceStyle(node.style),
+    attrs: node.attrs || undefined,
+    pseudoBefore: node.pseudoBefore || undefined,
+    pseudoAfter: node.pseudoAfter || undefined,
+  };
+}
+
+export function buildEvidenceCompanion(evidence) {
+  const viewports = arr(evidence?.viewports).map(vp => {
+    const semantic = arr(vp.elements).filter(evidenceNodeUseful).slice(0, 180);
+    return {
+      name: vp.name,
+      targetViewport: vp.targetViewport || vp.viewport || null,
+      viewport: vp.viewport || null,
+      runtimeViewport: vp.runtimeViewport || null,
+      document: vp.document || null,
+      scopes: arr(vp.scopes).map(slimEvidenceNode),
+      representativeElements: semantic.map(slimEvidenceNode),
+      representativeElementPolicy: "Semantic, interactive, media, fixed/sticky, and animated elements; capped at 180 per viewport.",
+    };
+  });
+
+  return {
+    schema: "kk-reference-design-evidence-compact/v2",
+    capture: {
+      referenceUrl: evidence?.url || null,
+      finalUrl: evidence?.finalUrl || null,
+      title: evidence?.title || null,
+      capturedAt: evidence?.capturedAt || null,
+      browser: evidence?.browser || null,
+      scope: evidence?.scope || null,
+      selection: evidence?.selection || [],
+    },
+    coverage: evidence?.coverage || {},
+    confidence: evidence?.confidence ?? null,
+    confidenceReasons: arr(evidence?.confidenceReasons),
+    viewports,
+    responsiveCss: {
+      mediaQueries: arr(evidence?.mediaQueries),
+      containerQueries: arr(evidence?.containerQueries),
+      stylesheetAccess: evidence?.styleSheets || null,
+    },
+    interactions: arr(evidence?.interactions).slice(0, 36),
+    animations: arr(evidence?.animations).slice(0, 80),
+    fonts: arr(evidence?.fonts).slice(0, 80),
+    assets: {
+      svgCount: arr(evidence?.assets?.svgs).length,
+      imageCount: arr(evidence?.assets?.images).length,
+      videoCount: arr(evidence?.assets?.videos).length,
+      canvasCount: evidence?.assets?.canvasCount ?? 0,
+      svgs: arr(evidence?.assets?.svgs).slice(0, 80),
+      images: arr(evidence?.assets?.images).slice(0, 100),
+      videos: arr(evidence?.assets?.videos).slice(0, 30),
+    },
+    scroll: evidence?.scroll || {},
+    restrictions: arr(evidence?.restrictions),
+    implementationPolicy: {
+      unknown: UNKNOWN,
+      breakpointRule: "Use exact media/container query conditions; do not infer semantic breakpoint names.",
+      semanticTokenRule: "Observed values are evidence; semantic brand roles require reference evidence.",
+      visualMatchRule: "Evidence confidence is not a screenshot-similarity score.",
+    },
+  };
 }
 
 export { UNKNOWN };
