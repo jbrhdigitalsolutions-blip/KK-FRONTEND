@@ -857,6 +857,7 @@ const snapshotScript = ({ selectors, maxElements }) => {
       className: typeof el.className === "string" ? el.className.slice(0,220) : "",
       label: label(el),
       text: (el.textContent || "").replace(/\s+/g," ").trim().slice(0,420),
+      directText: [...el.childNodes].filter(node=>node.nodeType===Node.TEXT_NODE).map(node=>node.textContent||"").join(" ").replace(/\s+/g," ").trim().slice(0,420),
       interactive,
       rect: r,
       style: s,
