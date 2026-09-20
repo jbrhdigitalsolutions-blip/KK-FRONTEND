@@ -92,7 +92,7 @@ function structureProfile(files){
   const findRoot=(names)=>names.find(root=>paths.some(p=>p===root||p.startsWith(root+"/")))||null;
   const sourceRoot=findRoot(["src","app","pages","client","frontend","web"]);
   const componentRoot=findRoot(["src/components","app/components","components","src/ui","ui"]);
-  const routeRoot=findRoot(["app","pages","src/pages","src/routes","routes"]);
+  const routeRoot=findRoot(["src/app","app","src/pages","pages","src/routes","routes"]);
   const styleFiles=files.filter(f=>[".css",".scss",".sass",".less"].includes(f.extension)).map(f=>f.path);
   const designFiles=files.filter(f=>/design|theme|token|style|tailwind|brand/i.test(f.path)).map(f=>f.path);
   const configFiles=files.filter(f=>/config|package\.json|tsconfig|jsconfig/i.test(f.path)).map(f=>f.path);
@@ -101,8 +101,9 @@ function structureProfile(files){
 }
 
 function contentProfile(files){
-  const source=files.filter(f=>[".jsx",".tsx",".vue",".svelte",".astro",".html"].includes(f.extension)).slice(0,60);
+  const source=files.filter(f=>[".jsx",".tsx",".vue",".svelte",".astro",".html",".js",".ts"].includes(f.extension)).slice(0,60);
   const snippets=[];
+  const assetRefs=[];
   for(const file of source){
     const text=file.content.replace(/\s+/g," ");
     const matches=[...text.matchAll(/>([^<>]{3,120})</g)].slice(0,8);
@@ -111,9 +112,11 @@ function contentProfile(files){
       if(value && !/[{};]/.test(value)) snippets.push({file:file.path,text:value.slice(0,120)});
       if(snippets.length>=40) break;
     }
-    if(snippets.length>=40) break;
+    const refs=[...text.matchAll(/(?:src=|url\(|from\s+|import\s+)[^"'()]*["']([^"']+\.(?:png|jpe?g|webp|svg|gif|avif|mp4|webm))["']/gi)].slice(0,10);
+    for(const ref of refs) assetRefs.push({file:file.path,path:ref[1].slice(0,240)});
+    if(snippets.length>=40 && assetRefs.length>=40) break;
   }
-  return {snippets};
+  return {snippets,assetRefs:assetRefs.slice(0,60)};
 }
 
 function evidenceNeeds(evidence){
@@ -164,8 +167,23 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
   }
 
   add("contentStrategy","Text/content source",contentStrategy?"complete":"missing","Choose project text, supplied text, reference labels, or placeholders.");
+  if(contentStrategy==="project"){
+    add("projectContent","Current target-page text",content.snippets.length?"complete":"missing","Project content mode needs the current page/component source so real text can be reused.");
+  }
+  if(contentStrategy==="provided" && needs.hasTypography){
+    add("providedHeadline","Main page text",str(answers?.content?.["text-1"])?"complete":"missing","The selected design contains typography; provide the main headline/text to place into the measured layout.");
+  }
+  if(contentStrategy==="provided" && needs.hasForms){
+    add("providedAction","Primary action text",str(answers?.content?.["action-1"])?"complete":"missing","The selected design contains controls; provide the primary action label.");
+  }
   if(needs.hasImages||needs.hasVideo){
-    add("assetStrategy","Image/video assets",assetStrategy?"complete":"missing","Reference contains media; choose uploaded project assets, provided assets, or placeholders.");
+    add("assetStrategy","Image/video assets",assetStrategy?"complete":"missing","Reference contains media; choose existing project assets, provide asset paths, or explicitly use placeholders.");
+    if(assetStrategy==="project"){
+      add("projectAssets","Existing asset references",content.assetRefs.length?"complete":"missing","Project asset mode needs source files that reference the images/video used by the target page.");
+    }
+    if(assetStrategy==="provided"){
+      add("assetMap","Asset path mapping",str(answers?.assetMap)?"complete":"missing","List the project/public asset paths that should fill the measured media slots.");
+    }
   }
   add("targetPlatforms","Target PC platform",targetPlatforms.length?"complete":"missing","Generates correct Windows/macOS install and run helpers.");
   add("designFiles","Existing design system",structure.designFiles.length||structure.designMd?"complete":"recommended","Existing DESIGN.md/theme/token/style files improve project fit.",false);
@@ -180,7 +198,7 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
   if(projectMode==="existing"&&!fileByName(files,"package.json")) recommendations.push("Upload package.json and the matching lockfile.");
   if(projectMode==="existing"&&structure.styleFiles.length===0) recommendations.push("Upload the page/component CSS, CSS module, Tailwind/theme, or global stylesheet files.");
   if(content.snippets.length===0&&contentStrategy==="project") recommendations.push("Upload the current target page/component files so project text can be reused.");
-  if((needs.hasImages||needs.hasVideo)&&assetStrategy==="project"&&!files.some(f=>/asset|image|public|media|static/i.test(f.path))) recommendations.push("Upload asset references or a manifest for the images/video used by the target page.");
+  if((needs.hasImages||needs.hasVideo)&&assetStrategy==="project"&&!content.assetRefs.length) recommendations.push("Upload the current page/component source that references its images/video, or switch to Provided asset paths.");
 
   return {
     schema:"kk-project-intake/v1",
@@ -218,6 +236,7 @@ export function analyzeProjectIntake({evidence,files:rawFiles=[],answers={}}={})
       projectMode,
       contentStrategy:contentStrategy||null,
       assetStrategy:assetStrategy||null,
+      assetMap:str(answers?.assetMap)||null,
       targetPlatforms,
       existingDependencies:pkg.dependencies,
     }
