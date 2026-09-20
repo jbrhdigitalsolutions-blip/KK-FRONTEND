@@ -65,6 +65,6 @@ const browserless=fs.readFileSync(path.join(CONFIG.packageRoot,"src","reference-
 for(const marker of ["setExactViewport","installNetworkGuard","kk-reference-design-evidence/v2","kk-reference-design-inspection/v2","familyCounts","establishReferenceSession","performFormLogin"]) assert.ok(browserless.includes(marker),`browserless hardening marker missing: ${marker}`);
 const web=fs.readFileSync(path.join(CONFIG.packageRoot,"src","web","index.html"),"utf8");
 for(const marker of ["Reference Design Picker","Generate Source Code","pickerOverlay"]) assert.ok(web.includes(marker),`design picker marker missing: ${marker}`);
-assert.ok(web.includes("Design Explorer → Build Page"),"no-code Design Explorer page link missing");
+assert.ok(web.includes("Design Explorer → Project Fit → Build"),"project-aware Design Explorer page link missing");
 assert.ok(web.includes("verifyAfterBtn"),"post-change visual verification UI missing");
 console.log("KK-FRONTEND v0.8.0 selftest PASS");
