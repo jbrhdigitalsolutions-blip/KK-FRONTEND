@@ -923,7 +923,7 @@ const pageEvidenceScript = ({ selectors }) => {
       try {
         if (rule.constructor?.name === "CSSMediaRule") media.add(rule.conditionText || rule.media?.mediaText || "");
         if (rule.constructor?.name === "CSSContainerRule") containers.add(rule.conditionText || "");
-        if (rule.constructor?.name === "CSSFontFaceRule" && rule.cssText) fontFaces.add(String(rule.cssText).slice(0,12000));
+        if (rule.constructor?.name === "CSSFontFaceRule" && rule.cssText && !/data:/i.test(String(rule.cssText))) fontFaces.add(String(rule.cssText).slice(0,12000));
         if (rule.cssRules) walkRules(rule.cssRules);
       } catch {}
     }
