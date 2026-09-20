@@ -181,6 +181,7 @@ function targetContentPool(project={}){
     buttons:[content.primaryCta,content.secondaryCta,...arr(web.buttons)].filter(Boolean),
     nav:arr(content.navItems).length?arr(content.navItems):arr(web.navItems),
     images:[project.assetMap?.heroAsset,project.assetMap?.logoAsset,...arr(web.images).map(x=>x?.src),...arr(source.assetReferences)].filter(Boolean),
+    generic:[...arr(web.headings),...arr(web.paragraphs),...arr(web.buttons),...arr(source.contentStrings)].filter(Boolean),
   };
 }
 function closestIncludedAncestor(node,included){
@@ -240,13 +241,13 @@ function renderTreeNode(node,ctx){
   const role=node.role?String(node.role):"";
   if(role)attrs.push(`role="${esc(role)}"`);
   let content="";
-  if(tag==="h1")content=esc(ctx.project?.content?.heroTitle||nextPool(ctx.pool,"headings",ctx.heading++ ,node.text||node.label));
-  else if(/^h[2-6]$/.test(tag))content=esc(nextPool(ctx.pool,"headings",ctx.heading++,node.text||node.label));
-  else if(tag==="p")content=esc(nextPool(ctx.pool,"paragraphs",ctx.paragraph++,node.text||""));
-  else if(tag==="button")content=esc(nextPool(ctx.pool,"buttons",ctx.button++,node.text||node.label||"Action"));
+  if(tag==="h1")content=esc(ctx.project?.content?.heroTitle||nextPool(ctx.pool,"headings",ctx.heading++ ,"Heading"));
+  else if(/^h[2-6]$/.test(tag))content=esc(nextPool(ctx.pool,"headings",ctx.heading++,"Heading"));
+  else if(tag==="p")content=esc(nextPool(ctx.pool,"paragraphs",ctx.paragraph++,""));
+  else if(tag==="button")content=esc(nextPool(ctx.pool,"buttons",ctx.button++,"Action"));
   else if(tag==="a"){
     const isNav=node.ancestorSelectors?.some?.(x=>/nav/i.test(x))||node.parentSelector?.includes("nav");
-    content=esc(isNav?nextPool(ctx.pool,"nav",ctx.nav++,node.text||node.label):node.text||node.label||"Link");
+    content=esc(isNav?nextPool(ctx.pool,"nav",ctx.nav++,"Link"):nextPool(ctx.pool,"generic",ctx.generic++,"Link"));
     attrs.push('href="#"');
   } else if(tag==="img"){
     const src=nextPool(ctx.pool,"images",ctx.image++,ctx.project?.assetMap?.heroAsset||"");
@@ -258,8 +259,8 @@ function renderTreeNode(node,ctx){
     if(ph)attrs.push(`placeholder="${esc(ph)}"`);
   } else if(tag==="textarea"){
     const ph=node.attrs?.placeholder||""; if(ph)attrs.push(`placeholder="${esc(ph)}"`);
-  } else if(node.children.length===0 && node.text && node.text.length<180){
-    content=esc(node.text);
+  } else if(node.children.length===0 && ["div","span","label","li"].includes(tag)){
+    content=esc(nextPool(ctx.pool,"generic",ctx.generic++,""));
   }
   const children=node.children.map(child=>renderTreeNode(child,ctx)).join("");
   if(["img","input"].includes(tag))return `<${tag} ${attrs.join(" ")} />`;
@@ -268,7 +269,7 @@ function renderTreeNode(node,ctx){
 function referenceTreeMarkup(model){
   const tree=model.referenceTree;
   if(!tree?.roots?.length)return"";
-  const ctx={pool:tree.pool||{},project:model.project||{},heading:0,paragraph:0,button:0,nav:0,image:0};
+  const ctx={pool:tree.pool||{},project:model.project||{},heading:0,paragraph:0,button:0,nav:0,image:0,generic:0};
   return tree.roots.map(node=>renderTreeNode(node,ctx)).join("\n");
 }
 const EXACT_STYLE_KEYS=[
@@ -283,7 +284,7 @@ const EXACT_STYLE_KEYS=[
 function cssName(key){return key.replace(/[A-Z]/g,m=>"-"+m.toLowerCase())}
 function exactDeclarations(style={}){
   return EXACT_STYLE_KEYS.map(key=>[key,style?.[key]]).filter(([,v])=>v!=null&&v!==""&&v!=="auto"&&v!=="normal")
-    .filter(([key,v])=>!(key==="backgroundImage"&&String(v).includes("data:")))
+    .filter(([key,v])=>!(key==="backgroundImage"&&/url\s*\(/i.test(String(v))))
     .map(([key,v])=>`${cssName(key)}:${cssEsc(v)}`).join(";");
 }
 function referenceTreeCss(model){
@@ -511,6 +512,16 @@ function outputFiles(model,css,output,html,bodyOverride=""){
   return [{path:"index.html",content:html}];
 }
 
+function preservedOriginalSource(projectContext,profile){
+  if(profile?.mode!=="existing" || !profile.targetPath)return[];
+  const original=arr(projectContext?.files).find(file=>String(file?.path||"").replaceAll("\\","/")===profile.targetPath && typeof file?.text==="string" && file.text);
+  if(!original)return[];
+  return [{
+    path:"ORIGINAL-SOURCE/"+profile.targetPath,
+    content:original.text,
+  }];
+}
+
 function portableProjectAssets(projectContext, profile){
   if(profile?.mode!=="new") return [];
   const rows=arr(projectContext?.files);
@@ -606,6 +617,7 @@ export function compileNoCodeDesign({evidence:inputEvidence,markdown="",options=
   const files=projectProfile?.mode==="existing"
     ? [
         ...patchFiles.map(file=>({path:"project-patch/"+file.path,content:file.content})),
+        ...preservedOriginalSource(projectContext,projectProfile),
         ...integrationSupportFiles(projectProfile,patchFiles),
       ]
     : [
