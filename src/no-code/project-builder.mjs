@@ -231,8 +231,8 @@ function zipStore(files){
 export function compileProjectAwareDesign({evidence:inputEvidence,files=[],answers={},options={}}={}){
   const evidence=parseEvidence(inputEvidence),normalized=normalizeProjectFiles(files);
   const intake=analyzeProjectIntake({evidence,files:normalized,answers});
-  if(!intake.ready&&!options.allowPrototype){
-    const error=new Error("Project information is incomplete. Resolve required Project Fit items before generating an accurate project package.");
+  if(!intake.exactReady&&!options.allowPrototype){
+    const error=new Error("Project information is not ready for an exact build. Resolve required Project Fit items and replace placeholder-only content/assets.");
     error.code="PROJECT_INTAKE_INCOMPLETE";error.intake=intake;throw error;
   }
   const model=buildModel(evidence,intake,answers),rendered=render(model),generated=sourceFiles(model,rendered);
