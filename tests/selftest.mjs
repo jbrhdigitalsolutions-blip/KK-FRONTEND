@@ -17,7 +17,7 @@ assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","web","index.html")))
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","browser","scanner.mjs")));
 const pkg=JSON.parse(fs.readFileSync(path.join(CONFIG.packageRoot,"package.json"),"utf8"));
 assert.equal(pkg.name,"kk-frontend");
-assert.equal(pkg.version,"0.9.2");
+assert.equal(pkg.version,"0.9.3");
 assert.equal(pkg.packageManager,"pnpm@10.28.0");
 assert.ok(pkg.dependencies.playwright);
 const scanner=fs.readFileSync(path.join(CONFIG.packageRoot,"src","browser","scanner.mjs"),"utf8");
@@ -47,6 +47,7 @@ const referenceAuth=fs.readFileSync(path.join(CONFIG.packageRoot,"src","referenc
 for(const marker of ["normalizeReferenceAuth","referenceAuthSummary","parseCookieHeader","containsReferenceAuthSecret"]) assert.ok(referenceAuth.includes(marker),`reference auth marker missing: ${marker}`);
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","reference-design","DESIGN-TEMPLATE.md")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","no-code","compiler.mjs")));
+assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","storage","r2-transport.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","no-code","project-fit.mjs")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","no-code","project-sources.mjs")));
 const projectSources=fs.readFileSync(path.join(CONFIG.packageRoot,"src","no-code","project-sources.mjs"),"utf8");
@@ -67,4 +68,4 @@ const web=fs.readFileSync(path.join(CONFIG.packageRoot,"src","web","index.html")
 for(const marker of ["Reference Design Picker","Generate Source Code","pickerOverlay"]) assert.ok(web.includes(marker),`design picker marker missing: ${marker}`);
 assert.ok(web.includes("Design Explorer → Build Page"),"no-code Design Explorer page link missing");
 assert.ok(web.includes("verifyAfterBtn"),"post-change visual verification UI missing");
-console.log("KK-FRONTEND v0.9.2 selftest PASS");
+console.log("KK-FRONTEND v0.9.3 selftest PASS");
