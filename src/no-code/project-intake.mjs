@@ -35,6 +35,9 @@ export function normalizeProjectFiles(input=[]){
   for(const raw of arr(input).slice(0,160)){
     const path=safePath(raw?.path || raw?.name);
     const name=path.split("/").pop();
+    if (/(^|\/)\.env($|\.)|secret|credentials?|private[-_.]?key|\.pem$|\.key$|id_rsa|id_ed25519/i.test(path)) {
+      throw new Error("Sensitive project file names are not accepted. Remove env/credential/private-key files before upload.");
+    }
     const extension=ext(path);
     const important=IMPORTANT_NAMES.has(name.toLowerCase());
     if(!important && !TEXT_EXTENSIONS.has(extension)) continue;
@@ -42,7 +45,7 @@ export function normalizeProjectFiles(input=[]){
     const size=bytes(content);
     if(size>900_000) throw new Error(`Project file is too large for web analysis: ${path}`);
     total+=size;
-    if(total>8_000_000) throw new Error("Uploaded project text exceeds the 8 MB analysis budget. Upload only frontend/design-related files.");
+    if(total>3_000_000) throw new Error("Uploaded project text exceeds the 3 MB analysis budget. Upload only the frontend/design files needed for project fit.");
     files.push({path,name,extension,size,content});
   }
   return files;
