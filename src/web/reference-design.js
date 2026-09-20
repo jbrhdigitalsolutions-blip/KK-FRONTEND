@@ -725,9 +725,22 @@ async function loadReferencePreview(device) {
     if(label && label.textContent.startsWith("Loading ")) label.textContent=old;
   }
 }
+function renderCertification(device) {
+  const row=state.certifications[device];
+  $("visualCertification").hidden=!row;
+  if(!row)return;
+  $("pixelSimilarity").textContent=`${row.metrics.rawPixelSimilarityPct}%`;
+  $("structuralSimilarity").textContent=`${row.metrics.structuralSimilarityPct}%`;
+  $("certifiedViewport").textContent=`${row.width}×${row.height}`;
+  $("certificationNote").textContent=row.metrics.note;
+  $("overlayReferenceImage").src=state.referencePreviews[device] || state.inspection?.screenshot || "";
+  $("overlayBuildImage").src=row.buildScreenshot;
+  $("buildDiffImage").src=row.diffScreenshot;
+}
 async function setBuildDevice(device) {
   const shell = $("buildFrameShell");
   if (!shell) return;
+  state.currentDevice=device;
   const size = buildDeviceSize(device);
   shell.dataset.device = device;
   shell.style.width = `${size.width}px`;
@@ -736,8 +749,40 @@ async function setBuildDevice(device) {
     btn.classList.toggle("active", btn.dataset.device === device)
   );
   await loadReferencePreview(device);
+  renderCertification(device);
 }
-function setBuildView(view) {
+async function certifyCurrentBuild() {
+  if(!state.build || !state.inspection?.finalUrl){
+    notice("Build the page before running visual analysis.");
+    return null;
+  }
+  const button=$("certifyBuildButton");
+  busy(button,true,"Analyzing pixels…");
+  try{
+    const result=await api("/api/reference-design/certify",{
+      method:"POST",
+      body:JSON.stringify({
+        url:state.inspection.finalUrl,
+        html:state.build.previewHtml,
+        viewport:state.currentDevice,
+        auth:currentAuth(),
+        baseUrl:$("projectWebsiteUrl")?.value.trim() || "",
+      }),
+    });
+    state.certifications[state.currentDevice]=result;
+    renderCertification(state.currentDevice);
+    notice(`Visual analysis complete: ${result.metrics.structuralSimilarityPct}% structural similarity at ${result.width}×${result.height}.`,"info");
+    return result;
+  }catch(error){
+    notice(error.message);
+    return null;
+  }finally{busy(button,false);}
+}
+async function setBuildView(view) {
+  if(["overlay","diff"].includes(view) && !state.certifications[state.currentDevice]){
+    const result=await certifyCurrentBuild();
+    if(!result)return;
+  }
   $("buildCompare").dataset.view = view;
   document.querySelectorAll("[data-build-view]").forEach(btn =>
     btn.classList.toggle("active", btn.dataset.buildView === view)
@@ -760,14 +805,17 @@ function downloadBase64(base64, filename, type = "application/zip") {
 }
 function renderBuildResult(data) {
   state.build = data;
+  state.certifications={};
+  state.currentDevice="desktop";
+  $("visualCertification").hidden=true;
   $("buildReferenceImage").src = state.referencePreviews.desktop || state.inspection?.screenshot || "";
   $("buildFrame").srcdoc = data.previewHtml;
-  $("buildSummary").textContent = `${data.output.toUpperCase()} · ${data.summary.regions} compiled regions · ${data.summary.projectFiles} project files`;
+  $("buildSummary").textContent = `${data.output.toUpperCase()} · ${data.summary.renderer || "semantic"} renderer · ${data.summary.hierarchyNodes || data.summary.regions} measured nodes · ${data.summary.projectFiles} ZIP files`;
   $("projectName").textContent = data.filename;
   $("projectFiles").textContent = data.files.map(file => file.path).join(" · ");
 
   const facts = [
-    [data.summary.regions, "Compiled regions"],
+    [data.summary.renderer==="hierarchy-exact" ? data.summary.hierarchyNodes : data.summary.regions, data.summary.renderer==="hierarchy-exact" ? "Hierarchy nodes" : "Compiled regions"],
     [`${data.summary.evidenceConfidence ?? "—"}%`, "Reference evidence"],
     [data.summary.projectFitScore == null ? "—" : `${data.summary.projectFitScore}%`, "Project fit"],
     [data.summary.projectStack || data.output, "Target stack"],
@@ -822,11 +870,17 @@ $("buildPageButton").addEventListener("click", async () => {
 });
 
 document.querySelectorAll("[data-build-view]").forEach(button =>
-  button.addEventListener("click", () => setBuildView(button.dataset.buildView))
+  button.addEventListener("click", () => void setBuildView(button.dataset.buildView))
 );
 document.querySelectorAll("[data-device]").forEach(button =>
-  button.addEventListener("click", () => setBuildDevice(button.dataset.device))
+  button.addEventListener("click", () => void setBuildDevice(button.dataset.device))
 );
+$("certifyBuildButton").addEventListener("click",()=>void certifyCurrentBuild());
+$("overlayOpacity").addEventListener("input",event=>{
+  const value=Number(event.target.value)||0;
+  $("overlayValue").textContent=value+"%";
+  $("overlayBuildImage").style.opacity=String(value/100);
+});
 $("downloadProjectButton").addEventListener("click", () => {
   if (!state.build) return;
   downloadBase64(state.build.zipBase64, state.build.filename);
@@ -869,8 +923,18 @@ $("newButton").addEventListener("click", () => {
   state.evidenceJson = "";
   state.build = null;
   state.referencePreviews = {};
+  state.certifications = {};
+  state.currentDevice = "desktop";
   state.projectProfile = null;
   state.projectFiles = [];
+  state.githubScan = null;
+  state.websiteEvidence = null;
+  if($("githubRepoUrl")) $("githubRepoUrl").value="";
+  if($("githubRepoRef")) $("githubRepoRef").value="";
+  if($("githubRepoToken")) $("githubRepoToken").value="";
+  if($("projectWebsiteUrl")) $("projectWebsiteUrl").value="";
+  if($("githubRepoStatus")) $("githubRepoStatus").textContent="Not scanned";
+  if($("projectWebsiteStatus")) $("projectWebsiteStatus").textContent="Not scanned";
   renderProjectFileSummary();
   $("selectionStage").hidden = true;
   $("resultStage").hidden = true;
