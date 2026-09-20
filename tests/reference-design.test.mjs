@@ -209,8 +209,8 @@ test("large whole-page evidence uses lossless gzip transport instead of a 400 re
       name,
       representativeElements:Array.from({length:480},(_,index)=>({
         selector:`main > section:nth-child(${index+1}) > div[data-viewport="${viewportIndex}"]`,
-        text:"Reference content ".repeat(36),
-        directText:"Reference content ".repeat(18),
+        text:"Reference content ".repeat(80),
+        directText:"Reference content ".repeat(40),
         rect:{x:index%12*80,y:index*12,width:760,height:64},
         styleRef:index%24,
       }))
