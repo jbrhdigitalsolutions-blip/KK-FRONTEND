@@ -286,7 +286,7 @@ ${profile.packageManager!=="none" ? `if(Test-Path -LiteralPath (Join-Path $Proje
 `;
   const mac=`#!/usr/bin/env bash
 set -euo pipefail
-PROJECT_ROOT="${1:-$PWD}"
+PROJECT_ROOT="\${1:-$PWD}"
 PATCH_ROOT="$(cd "$(dirname "$0")" && pwd)/project-patch"
 BACKUP_ROOT="$PROJECT_ROOT/.kk-frontend-backup/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$BACKUP_ROOT"
