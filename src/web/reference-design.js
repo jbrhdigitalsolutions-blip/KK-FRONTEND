@@ -506,8 +506,57 @@ async function handleProjectFiles(files) {
   renderProjectFileSummary();
   invalidateProjectFit();
 }
+async function scanGithubProject() {
+  const url=$("githubRepoUrl").value.trim();
+  if(!url){notice("Enter the GitHub repository URL.");return;}
+  busy($("scanGithubButton"),true,"Scanning source…");
+  $("githubRepoStatus").textContent="Reading repository tree and source…";
+  try{
+    const token=$("githubRepoToken").value;
+    const result=await api("/api/reference-design/project-github",{
+      method:"POST",
+      body:JSON.stringify({url,ref:$("githubRepoRef").value.trim(),token}),
+    });
+    // Credentials are single-use in the browser too.
+    $("githubRepoToken").value="";
+    state.githubScan=result;
+    $("githubRepoStatus").textContent=`${result.coverage.textFilesRead} source files · ${result.coverage.assetFilesIndexed} assets · ${result.repository.branch}`;
+    updateSourceSummary();
+    invalidateProjectFit();
+    notice("GitHub repository source indexed. Combine it with local files and/or the live website for stronger project fit.","info");
+  }catch(error){
+    $("githubRepoToken").value="";
+    $("githubRepoStatus").textContent="Scan failed";
+    notice(error.message);
+  }finally{busy($("scanGithubButton"),false);}
+}
+async function scanProjectWebsite() {
+  const url=$("projectWebsiteUrl").value.trim();
+  if(!url){notice("Enter the current project website URL.");return;}
+  busy($("scanWebsiteButton"),true,"Scanning website…");
+  $("projectWebsiteStatus").textContent="Capturing live content and assets…";
+  try{
+    const result=await api("/api/reference-design/project-website",{
+      method:"POST",
+      body:JSON.stringify({url,auth:{mode:"public"}}),
+    });
+    state.websiteEvidence=result;
+    $("projectWebsiteStatus").textContent=`${result.headings?.length||0} headings · ${result.buttons?.length||0} actions · ${result.images?.length||0} images`;
+    updateSourceSummary();
+    invalidateProjectFit();
+    notice("Current website evidence captured. Empty project-content fields can now be filled from live content.","info");
+  }catch(error){
+    $("projectWebsiteStatus").textContent="Scan failed";
+    notice(error.message);
+  }finally{busy($("scanWebsiteButton"),false);}
+}
 $("projectFiles").addEventListener("change", event => handleProjectFiles(event.target.files));
 $("projectFolder").addEventListener("change", event => handleProjectFiles(event.target.files));
+$("scanGithubButton").addEventListener("click",scanGithubProject);
+$("scanWebsiteButton").addEventListener("click",scanProjectWebsite);
+for(const id of ["githubRepoUrl","githubRepoRef","projectWebsiteUrl"]){
+  $(id).addEventListener("input",()=>{ if(id==="githubRepoUrl"||id==="githubRepoRef")state.githubScan=null; else state.websiteEvidence=null; updateSourceSummary(); invalidateProjectFit(); });
+}
 document.querySelectorAll("input[name='projectMode']").forEach(input => input.addEventListener("change",()=>{
   $("existingProjectUpload").hidden=projectMode()!=="existing";
   invalidateProjectFit();
@@ -517,6 +566,7 @@ for (const id of ["fitProjectName","fitStack","fitTargetRoute","fitTargetPath","
   $(id).addEventListener("change", invalidateProjectFit);
 }
 $("analyzeProjectButton").addEventListener("click",()=>analyzeProjectFit());
+updateSourceSummary();
 updateAccurateAvailability();
 
 $("inspectForm").addEventListener("submit", async event => {
