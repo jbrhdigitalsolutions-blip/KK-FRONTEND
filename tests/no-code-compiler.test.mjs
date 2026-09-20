@@ -359,3 +359,45 @@ test("generated project ZIP uses DEFLATE for compressible source entries",()=>{
   assert.equal(result.summary.zipBytes,zip.length);
 });
 
+test("Pixel Accurate preserves reference SVG, media URLs, pseudo-elements, fonts and interaction states",()=>{
+  const e=evidence();
+  const desktop=e.viewports.find(v=>v.name==="desktop");
+  const hero=desktop.representativeElements.find(x=>x.selector==="section.hero");
+  hero.style.backgroundImage='url("https://example.com/hero-bg.webp")';
+  hero.pseudoBefore={content:'""',display:"block",position:"absolute",width:"20px",height:"20px",backgroundColor:"rgb(255, 0, 0)"};
+  const image=desktop.representativeElements.find(x=>x.tag==="img");
+  image.attrs={...image.attrs,src:"https://example.com/reference-hero.webp",srcset:"https://example.com/reference-hero@2x.webp 2x",sizes:"100vw",alt:"Reference hero"};
+  desktop.representativeElements.push({
+    selector:"section.hero svg",parentSelector:"section.hero",ancestorSelectors:["section.hero"],childIndex:3,depth:2,
+    tag:"svg",className:"brand-mark",label:"brand mark",text:"",directText:"",rect:{x:100,y:120,width:40,height:40},
+    style:{display:"block",position:"static",width:"40px",height:"40px",color:"rgb(0, 0, 0)",backgroundColor:"rgba(0, 0, 0, 0)"},
+    interactive:false
+  });
+  e.assets.svgs=[{
+    selector:"section.hero svg",
+    markup:'<svg viewBox="0 0 40 40"><path d="M0 0h40v40H0z" fill="#123456"/></svg>'
+  }];
+  e.fontFaces=['@font-face{font-family:"ReferenceFont";src:url("https://example.com/reference.woff2") format("woff2");font-weight:400}'];
+  e.interactions=[{selector:"section.hero button",hover:{backgroundColor:{before:"rgb(0,0,0)",after:"rgb(1, 2, 3)"}},focus:{outline:{before:"none",after:"2px solid rgb(4, 5, 6)"}}}];
+
+  const result=compileNoCodeDesign({
+    evidence:e,
+    markdown:"# DESIGN.md",
+    options:{output:"html",contentMode:"placeholders",fidelity:"accurate"}
+  });
+
+  assert.equal(result.contentMode,"reference-exact");
+  assert.equal(result.summary.renderer,"pixel-reference");
+  assert.match(result.previewHtml,/<base href="https:\/\/example\.com\/"/);
+  assert.match(result.previewHtml,/reference-hero\.webp/);
+  assert.match(result.previewHtml,/reference-hero@2x\.webp 2x/);
+  assert.match(result.previewHtml,/<svg[^>]*kk-node-[^>]*brand-mark|<svg[^>]*brand-mark[^>]*kk-node-/);
+  assert.match(result.previewHtml,/M0 0h40v40H0z/);
+  assert.match(result.previewHtml,/background-image:url\("https:\/\/example\.com\/hero-bg\.webp"\)/);
+  assert.match(result.previewHtml,/::before\{/);
+  assert.match(result.previewHtml,/@font-face/);
+  assert.match(result.previewHtml,/reference\.woff2/);
+  assert.match(result.previewHtml,/:hover\{background-color:rgb\(1, 2, 3\)\}/);
+  assert.match(result.previewHtml,/:focus\{outline:2px solid rgb\(4, 5, 6\)\}/);
+});
+
