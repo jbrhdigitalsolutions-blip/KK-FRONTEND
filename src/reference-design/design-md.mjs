@@ -15,7 +15,6 @@ export function classifyCandidate({ tag = "", role = "", className = "", animati
   const t = String(tag).toLowerCase();
   const r = String(role).toLowerCase();
   const c = String(className).toLowerCase();
-  if (animation) return "Animation";
   if (t === "header" || r === "banner" || /(^|[-_ ])header/.test(c)) return "Header";
   if (t === "footer" || r === "contentinfo" || /(^|[-_ ])footer/.test(c)) return "Footer";
   if (t === "nav" || r === "navigation" || /(^|[-_ ])nav/.test(c)) return "Navigation";
@@ -24,6 +23,7 @@ export function classifyCandidate({ tag = "", role = "", className = "", animati
   if (t === "section" || /hero|section|feature|pricing|testimonial|gallery/.test(c)) return "Section";
   if (t === "form" || r === "form") return "Form";
   if (t === "dialog" || r === "dialog" || /modal|drawer|sheet|popover/.test(c)) return "Overlay";
+  if (animation) return "Animation";
   return "Component";
 }
 
@@ -87,38 +87,36 @@ function commonValues(evidence) {
   const desktop = firstViewport(evidence, "desktop");
   const tablet = firstViewport(evidence, "tablet");
   const mobile = firstViewport(evidence, "mobile");
-  const body = representativeBy(evidence, e => e.tag === "body") || desktop.scopes?.[0] || {};
-  const button = buttonRep(evidence) || {};
-  const input = inputRep(evidence) || {};
-  const card = cardRep(evidence) || {};
-  const nav = navRep(evidence) || {};
-  const side = sidebarRep(evidence) || {};
-  const header = headerRep(evidence) || {};
-  const footer = footerRep(evidence) || {};
-  const hero = heroRep(evidence) || {};
-  const anim = firstAnimation(evidence) || {};
-  const breakpoints = mediaBreakpoints(evidence?.mediaQueries);
-  const colors = dominantStyle(evidence, "color", 16).map(x => x.value);
-  const backgrounds = dominantStyle(evidence, "backgroundColor", 16).map(x => x.value).filter(v => !/rgba?\(0,\s*0,\s*0,\s*0\)/.test(v));
+  const desktopNodes = [...arr(desktop.scopes), ...arr(desktop.elements)];
+  const body = desktopNodes.find(e => e.tag === "body") || desktop.scopes?.[0] || {};
+  const nav = desktopNodes.find(e => e.tag === "nav" || e.role === "navigation") || {};
+  const header = desktopNodes.find(e => e.tag === "header" || e.role === "banner") || {};
+  const footer = desktopNodes.find(e => e.tag === "footer" || e.role === "contentinfo") || {};
+  const interactions = arr(evidence?.interactions);
+  const meaningfulState = interactions.find(row => Object.keys(row.hover || {}).length || Object.keys(row.focus || {}).length) || {};
+  const animations = arr(evidence?.animations).filter(a => num(a?.timing?.duration) > 0);
+  const durations = uniq(animations.map(a => num(a?.timing?.duration)).filter(v => v != null));
+  const easings = uniq(animations.map(a => a?.timing?.easing).filter(Boolean));
+  const stableDuration = animations.length >= 2 && durations.length === 1 ? durations[0] : null;
+  const stableEasing = animations.length >= 2 && easings.length === 1 ? easings[0] : null;
   const fontFamilies = dominantStyle(evidence, "fontFamily", 8).map(x => x.value);
-  const fontSizes = dominantStyle(evidence, "fontSize", 16).map(x => x.value);
   const fontWeights = dominantStyle(evidence, "fontWeight", 10).map(x => x.value);
-  const radii = dominantStyle(evidence, "borderRadius", 12).map(x => x.value);
-  const shadows = dominantStyle(evidence, "boxShadow", 10).map(x => x.value);
-  const gaps = dominantStyle(evidence, "gap", 12).map(x => x.value);
-  const state = arr(evidence?.interactions)[0] || {};
   const observedTouch = observedMinInteractive(evidence);
+  const viewportVerified = arr(evidence?.viewports).length >= 3 && arr(evidence.viewports).every(v =>
+    !v.targetViewport || (v.targetViewport.width === v.viewport?.width && v.targetViewport.height === v.viewport?.height)
+  );
+  const responsiveRules = [viewportRule(desktop), viewportRule(tablet), viewportRule(mobile)].filter(Boolean).join(" | ");
+  const primaryLayout = [
+    styleOf(body, "display") ? "display " + styleOf(body, "display") : null,
+    styleOf(body, "flexDirection") && String(styleOf(body, "display")).includes("flex") ? "flex-direction " + styleOf(body, "flexDirection") : null,
+    styleOf(body, "gridTemplateColumns") && styleOf(body, "gridTemplateColumns") !== "none" ? "grid " + styleOf(body, "gridTemplateColumns") : null,
+  ].filter(Boolean).join("; ") || null;
 
-  const m = {
-    BACKGROUND_COLOR: styleOf(body, "backgroundColor") || backgrounds[0],
-    SURFACE_COLOR: backgrounds[1] || backgrounds[0],
-    ELEVATED_SURFACE_COLOR: backgrounds[2] || backgrounds[1],
-    TEXT_PRIMARY: styleOf(body, "color") || colors[0],
-    TEXT_SECONDARY: colors[1],
-    TEXT_MUTED: colors[2],
-    BRAND_COLORS: colors.slice(0, 8).join(", "),
+  return {
+    BACKGROUND_COLOR: styleOf(body, "backgroundColor"),
+    SURFACE_COLOR: styleOf(body, "backgroundColor"),
+    TEXT_PRIMARY: styleOf(body, "color"),
     PRIMARY_FONT: styleOf(body, "fontFamily") || fontFamilies[0],
-    SECONDARY_FONT: fontFamilies[1],
     BASE_FONT_SIZE_PX: px(styleOf(body, "fontSize")),
     H1_SIZE_PX: px(styleOf(headingRep(evidence, 1), "fontSize")),
     H2_SIZE_PX: px(styleOf(headingRep(evidence, 2), "fontSize")),
@@ -133,91 +131,62 @@ function commonValues(evidence) {
     FONT_WEIGHT_BOLD: fontWeights.find(x => /700|bold/.test(x)),
     BODY_LINE_HEIGHT: styleOf(body, "lineHeight"),
     LETTER_SPACING_PX: px(styleOf(body, "letterSpacing")),
-    MAX_CONTENT_WIDTH_PX: px(desktop.document?.width || desktop.viewport?.width),
-    MIN_CONTENT_WIDTH_PX: px(mobile.viewport?.width),
+    MAX_CONTENT_WIDTH_PX: px(desktop.scopes?.[0]?.rect?.width || desktop.document?.width),
+    MIN_CONTENT_WIDTH_PX: px(mobile.scopes?.[0]?.rect?.width || mobile.viewport?.width),
     HEADER_HEIGHT_PX: px(rectOf(header, "height")),
     FOOTER_HEIGHT_PX: px(rectOf(footer, "height")),
-    SIDEBAR_EXPANDED_PX: px(rectOf(side, "width")),
-    HERO_MIN_HEIGHT_PX: px(rectOf(hero, "height")),
-    HERO_MAX_WIDTH_PX: px(rectOf(hero, "width")),
-    BUTTON_MD_HEIGHT_PX: px(rectOf(button, "height")),
-    BUTTON_RADIUS_PX: px(styleOf(button, "borderRadius")),
-    BUTTON_TRANSITION_MS: durationFromTransition(styleOf(button, "transitionDuration")),
-    BUTTON_PRIMARY_STYLE: compactStyle(button),
-    INPUT_HEIGHT_PX: px(rectOf(input, "height")),
-    INPUT_RADIUS_PX: px(styleOf(input, "borderRadius")),
-    CARD_RADIUS_PX: px(styleOf(card, "borderRadius")),
-    CARD_SHADOW: styleOf(card, "boxShadow"),
     NAV_TYPE: nav.tag || nav.role || (nav.selector ? "navigation" : null),
-    NAV_HOVER_STATE: state.hover ? JSON.stringify(state.hover) : null,
-    FOCUS_INDICATOR: state.focus ? JSON.stringify(state.focus) : null,
     MIN_TOUCH_TARGET_PX: observedTouch == null ? null : px(observedTouch),
-    DEFAULT_EASING: anim.timing?.easing,
-    ANIMATION_NORMAL_MS: anim.timing?.duration,
-    HOVER_FEEDBACK: state.hover ? JSON.stringify(state.hover) : null,
-    FOCUS_STATE: state.focus ? JSON.stringify(state.focus) : null,
-    CURSOR_INTERACTIVE: dominantStyle(evidence, "cursor", 3).map(x => x.value).find(v => v !== "auto") || "pointer",
-    BREAKPOINT_XS_PX: breakpoints[0],
-    BREAKPOINT_SM_PX: breakpoints[1],
-    BREAKPOINT_MD_PX: breakpoints[2],
-    BREAKPOINT_LG_PX: breakpoints[3],
-    BREAKPOINT_XL_PX: breakpoints[4],
-    BREAKPOINT_XXL_PX: breakpoints[5],
+    DEFAULT_EASING: stableEasing,
+    ANIMATION_NORMAL_MS: stableDuration,
+    HOVER_FEEDBACK: Object.keys(meaningfulState.hover || {}).length ? JSON.stringify(meaningfulState.hover) : null,
+    FOCUS_STATE: Object.keys(meaningfulState.focus || {}).length ? JSON.stringify(meaningfulState.focus) : null,
+    CURSOR_INTERACTIVE: dominantStyle(evidence, "cursor", 6).map(x => x.value).find(v => v && v !== "auto"),
     DESKTOP_LAYOUT_RULES: viewportRule(desktop),
     TABLET_LAYOUT_RULES: viewportRule(tablet),
     MOBILE_LAYOUT_RULES: viewportRule(mobile),
     HEADER_DESKTOP: elementAtViewport(desktop, header?.selector),
     HEADER_TABLET: elementAtViewport(tablet, header?.selector),
     HEADER_MOBILE: elementAtViewport(mobile, header?.selector),
-    SIDEBAR_DESKTOP: elementAtViewport(desktop, side?.selector),
-    SIDEBAR_TABLET: elementAtViewport(tablet, side?.selector),
-    SIDEBAR_MOBILE: elementAtViewport(mobile, side?.selector),
-    HERO_DESKTOP: elementAtViewport(desktop, hero?.selector),
-    HERO_TABLET: elementAtViewport(tablet, hero?.selector),
-    HERO_MOBILE: elementAtViewport(mobile, hero?.selector),
     ICON_LIBRARY: inferIconLibrary(evidence),
-    IMAGE_OBJECT_FIT: dominantValue(evidence, "objectFit"),
     SCROLL_BEHAVIOUR: evidence?.scroll?.behavior,
-    HORIZONTAL_SCROLL_RULE: desktop.document?.horizontalOverflow ? "Horizontal overflow observed" : "No horizontal overflow observed at captured desktop anchor",
+    HORIZONTAL_SCROLL_RULE: desktop.document?.horizontalOverflow ? "Horizontal overflow observed at desktop anchor" : "No horizontal overflow observed at desktop anchor",
     REDUCED_MOTION_RULES: evidence?.reducedMotion || null,
     LIGHT_THEME_SPEC: evidence?.themes?.light ? JSON.stringify(evidence.themes.light) : null,
     DARK_THEME_SPEC: evidence?.themes?.dark ? JSON.stringify(evidence.themes.dark) : null,
     PAGE_ROUTE: evidence?.url,
     PAGE_NAME: evidence?.title,
+    REFERENCE_WIDTH_PX: px(desktop.viewport?.width),
+    REFERENCE_HEIGHT_PX: px(desktop.viewport?.height),
+    CONTENT_WIDTH_PX: px(desktop.scopes?.[0]?.rect?.width || desktop.document?.width),
     PAGE_PADDING_PX: px(styleOf(body, "paddingLeft")),
-    SECTION_COUNT: allElements(evidence).filter(e => e.tag === "section").length,
-    PAGE_INTERACTIONS: arr(evidence?.interactions).length ? `${arr(evidence.interactions).length} measured hover/focus interaction samples` : null,
-    PAGE_ANIMATIONS: arr(evidence?.animations).length ? `${arr(evidence.animations).length} runtime animations captured` : null,
-    TARGET_RESPONSIVE_COVERAGE_PERCENT: arr(evidence?.viewports).length >= 3 ? 100 : null,
+    PRIMARY_LAYOUT: primaryLayout,
+    RESPONSIVE_BEHAVIOUR: responsiveRules,
+    PAGE_INTERACTIONS: interactions.length ? interactions.length + " desktop hover/focus samples; " + (evidence?.coverage?.meaningfulInteractionCount ?? 0) + " produced observable style changes" : null,
+    PAGE_ANIMATIONS: animations.length ? animations.length + " runtime Web Animations API records captured at desktop anchor" : null,
+    PAGE_STATES: interactions.length ? "Hover/focus only; destructive/click/submit states intentionally not triggered" : null,
+    PAGE_MOBILE_TRANSFORMATION: mobile.viewport ? "Verified at " + mobile.viewport.width + "×" + mobile.viewport.height + "; see Responsive Region Matrix" : null,
+    TARGET_RESPONSIVE_COVERAGE_PERCENT: viewportVerified ? 100 : evidence?.coverage?.responsiveCoveragePercent,
     TARGET_COMPONENT_COVERAGE_PERCENT: evidence?.coverage?.componentCoveragePercent,
     TARGET_INTERACTION_COVERAGE_PERCENT: evidence?.coverage?.interactionCoveragePercent,
     TARGET_CONFIDENCE_PERCENT: evidence?.confidence,
-    TARGET_VISUAL_MATCH_PERCENT: evidence?.confidence,
-    MAX_VISUAL_DEVIATION: evidence?.confidence ? `Evidence confidence ${evidence.confidence}%; unverified values remain UNKNOWN` : null,
-    COMPONENT_NAMING: "Use semantic names derived from verified roles/labels/selectors in the evidence appendix",
-    DESIGN_TOKEN_STRUCTURE: "Generate tokens only from repeated VERIFIED colors, typography, spacing, radius, border and shadow values in the evidence appendix",
-    CSS_VARIABLE_STRUCTURE: "Map repeated VERIFIED values to CSS custom properties; do not create semantic meanings that were not observed",
-    SHARED_COMPONENT_STRUCTURE: "Create shared components for repeated VERIFIED structures only",
-    ASSET_NAMING_RULE: "Preserve project-owned asset naming; reference asset URLs are evidence only unless reuse is authorized",
-    IMAGE_RESERVED_DIMENSIONS: "Use captured width/height/aspect-ratio values from the evidence appendix",
-    MAX_LAYOUT_SHIFT: UNKNOWN,
-    CHROME_SUPPORT: "Captured with remote Chromium",
-    EDGE_SUPPORT: "Chromium-compatible behavior expected; not independently verified",
-    SAFARI_SUPPORT: UNKNOWN,
-    FIREFOX_SUPPORT: UNKNOWN,
-    IOS_SAFARI_SUPPORT: UNKNOWN,
-    ANDROID_CHROME_SUPPORT: "Responsive Chromium evidence captured; physical Android device not independently verified",
+    TARGET_VISUAL_MATCH_PERCENT: null,
+    MAX_VISUAL_DEVIATION: "Not measured — this extractor records evidence confidence, not a pixel-similarity score",
+    COMPONENT_NAMING: "Use semantic names derived from verified roles, labels, selectors, and the Responsive Region Matrix",
+    DESIGN_TOKEN_STRUCTURE: "Create tokens only from repeated values listed under Observed Design Tokens; do not assign semantic brand meaning unless the reference exposes it",
+    CSS_VARIABLE_STRUCTURE: "Map repeated VERIFIED values to CSS custom properties without inventing semantic roles",
+    SHARED_COMPONENT_STRUCTURE: "Create shared components only for repeated VERIFIED structures",
+    ASSET_NAMING_RULE: "Reference asset URLs are evidence only; preserve target-project ownership/licensing and naming",
+    IMAGE_RESERVED_DIMENSIONS: "Use measured image dimensions/aspect ratios from DESIGN-EVIDENCE.json",
+    CHROME_SUPPORT: "Verified in remote Chromium",
+    ANDROID_CHROME_SUPPORT: "Responsive Chromium emulation captured; physical Android device not independently verified",
     MIN_VIEWPORT_WIDTH_PX: px(Math.min(...arr(evidence?.viewports).map(v => v.viewport?.width).filter(Boolean))),
-    MAX_TESTED_WIDTH_PX: px(Math.max(...arr(evidence?.viewports).map(v => v.viewport?.width).filter(Boolean))),
-    HIGH_DPI_RULES: UNKNOWN,
-    ORIENTATION_RULES: UNKNOWN,
+    MAX_VIEWPORT_WIDTH_PX: px(Math.max(...arr(evidence?.viewports).map(v => v.viewport?.width).filter(Boolean))),
+    SOURCE: "Rendered-browser evidence captured by Browserless + Playwright CDP",
+    CONFIDENCE_PERCENT: evidence?.confidence,
+    RESPONSIVE_DERIVATION: "Use exact captured viewport matrix plus source CSS media/container query conditions; do not infer semantic breakpoint names",
+    REQUIRED_EVIDENCE: "See Verified Evidence Summary and optional DESIGN-EVIDENCE.json",
   };
-
-  if (radii[0]) m.RADIUS_MD_PX = px(radii[0]);
-  if (shadows[0]) m.SHADOW_MEDIUM = shadows[0];
-  if (gaps[0]) m.COMPONENT_GAP_PX = px(gaps[0]);
-  if (fontSizes[0]) m.BODY_LARGE_PX = px(fontSizes[0]);
-  return m;
 }
 
 function durationFromTransition(value) {
