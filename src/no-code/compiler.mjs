@@ -272,7 +272,7 @@ function renderTreeNode(node){
   if(node.attrs?.id && /^[A-Za-z][\w:.-]*$/.test(node.attrs.id))attrs.push(`id="${esc(node.attrs.id)}"`);
 
   if(tag==="svg" && node.markup){
-    const markup=injectSvgClass(node.markup,kkClass);
+    const markup=injectSvgClass(node.markup,classes.join(" "));
     if(markup)return markup;
   }
 
