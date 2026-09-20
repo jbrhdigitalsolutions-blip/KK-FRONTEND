@@ -13,6 +13,10 @@ const state = {
   projectFiles: [],
   projectProfile: null,
   referencePreviews: {},
+  githubScan: null,
+  websiteEvidence: null,
+  certifications: {},
+  currentDevice: "desktop",
 };
 
 function notice(message, kind = "error") {
@@ -155,7 +159,21 @@ async function readProjectFiles(fileList) {
 function projectMode() {
   return document.querySelector("input[name='projectMode']:checked")?.value || "existing";
 }
+function mergedProjectFiles() {
+  const rows=[];
+  const byPath=new Map();
+  for (const file of state.githubScan?.files || []) {
+    if(file?.path) byPath.set(file.path,file);
+  }
+  // Local files intentionally win over repository copies because they may contain newer work.
+  for (const file of state.projectFiles || []) {
+    if(file?.path) byPath.set(file.path,file);
+  }
+  for (const row of byPath.values()) rows.push(row);
+  return rows.slice(0,500);
+}
 function collectProjectContext() {
+  const files=projectMode()==="existing" ? mergedProjectFiles() : state.projectFiles;
   return {
     mode: projectMode(),
     projectName: $("fitProjectName").value.trim(),
@@ -170,8 +188,25 @@ function collectProjectContext() {
     secondaryCta: $("fitSecondaryCta").value.trim(),
     logoAsset: $("fitLogoAsset").value.trim(),
     heroAsset: $("fitHeroAsset").value.trim(),
-    files: projectMode()==="existing" ? state.projectFiles : [],
+    files,
+    websiteEvidence: state.websiteEvidence,
+    githubEvidence: state.githubScan ? {
+      schema:state.githubScan.schema,
+      repository:state.githubScan.repository,
+      coverage:state.githubScan.coverage,
+    } : null,
+    sourceSummary:{
+      localFiles:state.projectFiles.length,
+      githubFiles:state.githubScan?.files?.length || 0,
+      website:Boolean(state.websiteEvidence),
+    },
   };
+}
+function sourceCount() {
+  return Number(state.projectFiles.length>0)+Number(Boolean(state.githubScan))+Number(Boolean(state.websiteEvidence));
+}
+function updateSourceSummary() {
+  if($("sourceEvidenceScore")) $("sourceEvidenceScore").textContent=`${sourceCount()} source${sourceCount()===1?"":"s"}`;
 }
 function invalidateProjectFit() {
   state.projectProfile=null;
@@ -204,6 +239,15 @@ function renderProjectFit(profile) {
   if (!$("fitProjectName").value.trim() && profile.projectName) $("fitProjectName").value=profile.projectName;
   if (!$("fitTargetRoute").value.trim() && profile.targetRoute) $("fitTargetRoute").value=profile.targetRoute;
   if (!$("fitTargetPath").value.trim() && profile.targetPath) $("fitTargetPath").value=profile.targetPath;
+  const pc=profile.content||{};
+  if (!$("fitBrand").value.trim() && pc.brand) $("fitBrand").value=pc.brand;
+  if (!$("fitHeroTitle").value.trim() && pc.heroTitle) $("fitHeroTitle").value=pc.heroTitle;
+  if (!$("fitHeroBody").value.trim() && pc.heroBody) $("fitHeroBody").value=pc.heroBody;
+  if (!$("fitPrimaryCta").value.trim() && pc.primaryCta) $("fitPrimaryCta").value=pc.primaryCta;
+  if (!$("fitSecondaryCta").value.trim() && pc.secondaryCta) $("fitSecondaryCta").value=pc.secondaryCta;
+  if (!$("fitNav").value.trim() && pc.navItems?.length) $("fitNav").value=pc.navItems.join(", ");
+  if (!$("fitLogoAsset").value.trim() && profile.assetMap?.logoAsset) $("fitLogoAsset").value=profile.assetMap.logoAsset;
+  if (!$("fitHeroAsset").value.trim() && profile.assetMap?.heroAsset) $("fitHeroAsset").value=profile.assetMap.heroAsset;
   if ($("fitStack").value==="auto" && profile.stack && profile.stack!=="unknown") {
     const option=[...$("fitStack").options].find(x=>x.value===profile.stack);
     if (option) option.selected=true;
@@ -243,13 +287,15 @@ async function analyzeProjectFit({quiet=false}={}) {
 function renderProjectFileSummary() {
   const rows=state.projectFiles;
   if (!rows.length) {
-    $("projectFileSummary").textContent="No project files selected.";
+    $("projectFileSummary").textContent="No local project files selected.";
+    updateSourceSummary();
     return;
   }
   const withText=rows.filter(x=>x.text).length;
   const assets=rows.filter(x=>/\.(png|jpe?g|webp|avif|gif|svg|mp4|webm|woff2?|ttf|otf)$/i.test(x.path)).length;
   const portable=rows.filter(x=>x.base64).length;
-  $("projectFileSummary").textContent=`${rows.length} files · ${withText} readable source/design files · ${assets} asset filenames · ${portable} portable assets included · secret/config-private files excluded`;
+  $("projectFileSummary").textContent=`${rows.length} local files · ${withText} readable source/design files · ${assets} asset filenames · ${portable} portable assets included · secret/config-private files excluded`;
+  updateSourceSummary();
 }
 
 function scopeMode() {
