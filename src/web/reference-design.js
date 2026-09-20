@@ -71,7 +71,7 @@ function setScopeUi() {
   $("candidateSearch").disabled = !selected;
   $("selectFiltered").disabled = !selected;
   $("clearSelection").disabled = !selected;
-  document.querySelectorAll(".rdFamilyFilter,.rdPreset").forEach(el => { el.disabled = !selected && el.dataset.preset !== "essential"; });
+  document.querySelectorAll(".rdFamilyFilter").forEach(el => { el.disabled = !selected; });
   updateSelectionUi();
   renderOverlays();
 }
