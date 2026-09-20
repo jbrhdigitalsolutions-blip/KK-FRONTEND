@@ -181,6 +181,19 @@ function render(model){
   return {body,cssText,html};
 }
 function frameworkKey(v){const x=str(v).toLowerCase();return x.includes("next")?"next":x.includes("react")?"react":"html";}
+function cleanTarget(value){
+  const x=str(value).replaceAll("\\","/").replace(/^\/+|\/+$/g,"");
+  if(!x||x.split("/").some(p=>p===".."||p===".")) return "";
+  return x;
+}
+function dirname(value){
+  const x=cleanTarget(value),i=x.lastIndexOf("/");
+  return i>=0?x.slice(0,i):"";
+}
+function basename(value){
+  const x=cleanTarget(value),p=x.split("/").pop()||"page";
+  return p.replace(/\.[^.]+$/,"")||"page";
+}
 function sourceFiles(model,r){
   const fw=frameworkKey(model.framework),jsx=r.body.replaceAll("class=","className=");
   const routeRoot=str(model.projectProfile?.routeRoot);
@@ -195,9 +208,17 @@ function sourceFiles(model,r){
       ];
     }
     const root=routeRoot&&/app$/.test(routeRoot)?routeRoot:"app";
+    const target=cleanTarget(model.projectProfile?.targetPage);
+    let dir=root;
+    if(target){
+      if(/\/page\.[a-z0-9]+$/i.test(target)) dir=dirname(target);
+      else if(!/\.[a-z0-9]+$/i.test(target)) dir=root+"/"+target.replace(/^app\//,"");
+      else dir=dirname(target)||root;
+    }
+    const outDir=dir+"/kk-generated";
     return [
-      {path:root+"/kk-generated/page.jsx",content:'import "./page.css";export default function GeneratedDesignPage(){return <main className="kkx-page">'+jsx+'</main>}'},
-      {path:root+"/kk-generated/page.css",content:r.cssText}
+      {path:outDir+"/page.jsx",content:'import "./page.css";export default function GeneratedDesignPage(){return <main className="kkx-page">'+jsx+'</main>}'},
+      {path:outDir+"/page.css",content:r.cssText}
     ];
   }
   if(fw==="react"){
@@ -211,9 +232,13 @@ function sourceFiles(model,r){
       ];
     }
     const root=str(model.projectProfile?.sourceRoot,"src");
+    const target=cleanTarget(model.projectProfile?.targetPage);
+    const dir=target&&/\.[a-z0-9]+$/i.test(target)?dirname(target):root;
+    const base=target&&/\.[a-z0-9]+$/i.test(target)?basename(target):slug(target||"ExactDesignPage");
+    const outDir=(dir||root)+"/kk-generated";
     return [
-      {path:root+"/kk-generated/ExactDesignPage.jsx",content:'import "./ExactDesignPage.css";export default function ExactDesignPage(){return <main className="kkx-page">'+jsx+'</main>}'},
-      {path:root+"/kk-generated/ExactDesignPage.css",content:r.cssText}
+      {path:outDir+"/"+base+".generated.jsx",content:'import "./'+base+'.generated.css";export default function GeneratedDesignPage(){return <main className="kkx-page">'+jsx+'</main>}'},
+      {path:outDir+"/"+base+".generated.css",content:r.cssText}
     ];
   }
   if(isNew){
