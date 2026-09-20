@@ -106,3 +106,19 @@ test("unsupported target stack blocks accurate-ready claim",()=>{
   assert.equal(profile.readiness.accurateReady,false);
   assert.ok(profile.readiness.blockers.some(x=>/vue/i.test(x)));
 });
+
+
+test("new standalone HTML support does not require Node or package installation",()=>{
+  const profile=analyzeProjectContext({
+    mode:"new",stack:"html",projectName:"Static",
+    brand:"Static",heroTitle:"Hero",heroBody:"Body",primaryCta:"Open",navItems:"One,Two",
+    heroAsset:"/hero.webp"
+  });
+  const files=newProjectSupportFiles(profile);
+  const paths=files.map(x=>x.path);
+  assert.ok(paths.includes("START-WINDOWS.ps1"));
+  assert.ok(paths.includes("START-MAC.command"));
+  assert.ok(paths.includes("RUN.md"));
+  assert.equal(paths.includes("SETUP-WINDOWS.ps1"),false);
+  assert.match(files.find(x=>x.path==="RUN.md").content,/modern browser/i);
+});
