@@ -160,6 +160,57 @@ function defaultTargetPath(stack,isTs,route,files=[],packageRoot=""){
   return html?.path || joinRoot(packageRoot,"reference-design.html");
 }
 
+function sourceIntelligence(files,packageRoot=""){
+  const source=files.filter(x=>/\.(?:js|jsx|ts|tsx|vue|svelte|html)$/i.test(x.path)&&x.text);
+  const components=[],imports={},strings=[],assetRefs=[],hrefs=[];
+  for(const file of source){
+    const body=String(file.text||"");
+    const exports=[...body.matchAll(/\bexport\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var)\s+([A-Za-z_$][\w$]*)/g)].map(m=>m[1]);
+    const imported=[...body.matchAll(/\bimport\s+(?:[^"'\n]+?\s+from\s+)?["']([^"']+)["']/g)].map(m=>m[1]);
+    if(imported.length)imports[file.path]=unique(imported).slice(0,80);
+    if(/\.(?:jsx|tsx|vue|svelte)$/.test(file.path)){
+      const roles=[
+        /header|topbar/i.test(body)?"header":null,
+        /sidebar|sidenav/i.test(body)?"sidebar":null,
+        /\bnav\b|navigation|menu/i.test(body)?"navigation":null,
+        /form|input|textarea/i.test(body)?"form":null,
+        /dashboard|workspace/i.test(body)?"workspace":null,
+        /hero/i.test(body)?"hero":null
+      ].filter(Boolean);
+      components.push({path:file.path,exports:unique(exports).slice(0,30),roles});
+    }
+    for(const m of body.matchAll(/["'`]([^"'\`{}<>]{3,120})["'`]/g)){
+      const v=m[1].trim();
+      if(/[A-Za-z]{2}/.test(v)&&!/^https?:|^\.|^\/|^[A-Za-z0-9_-]+\.[A-Za-z]{2,5}$/.test(v))strings.push(v);
+      if(strings.length>=400)break;
+    }
+    for(const m of body.matchAll(/(?:src|poster)\s*=\s*["'`]([^"'\`]+)["'`]/g))assetRefs.push(m[1]);
+    for(const m of body.matchAll(/href\s*=\s*["'`]([^"'\`]+)["'`]/g))hrefs.push(m[1]);
+  }
+  return{
+    scannedFiles:source.length,
+    components:components.slice(0,160),
+    imports,
+    contentStrings:unique(strings).slice(0,240),
+    assetReferences:unique(assetRefs).slice(0,200),
+    hrefs:unique(hrefs).slice(0,200),
+  };
+}
+function websiteContent(input={}){
+  const w=input.websiteEvidence||{};
+  return{
+    title:text(w.title).slice(0,160),
+    description:text(w.description).slice(0,400),
+    headings:arr(w.headings).map(x=>text(x)).filter(Boolean).slice(0,80),
+    buttons:arr(w.buttons).map(x=>text(x)).filter(Boolean).slice(0,80),
+    navItems:arr(w.navItems).map(x=>text(x)).filter(Boolean).slice(0,40),
+    paragraphs:arr(w.paragraphs).map(x=>text(x)).filter(Boolean).slice(0,80),
+    images:arr(w.images).slice(0,120),
+    url:text(w.url).slice(0,500),
+    scanned:Boolean(w.schema),
+  };
+}
+
 function question(id,label,reason,kind="text",required=true){
   return {id,label,reason,kind,required};
 }
