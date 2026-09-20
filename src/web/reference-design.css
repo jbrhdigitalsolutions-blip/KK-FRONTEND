@@ -304,3 +304,57 @@ a{color:inherit}
   .rdAuthFields,.rdAuthSelectorGrid{grid-template-columns:1fr}
   .rdAuthFields label.wide,.rdAuthAdvanced.wide{grid-column:auto}
 }
+
+
+/* v0.8.0 Project-Aware Design Builder */
+.rdProjectFit{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:rgba(4,7,11,.38)}
+.rdProjectFitHead{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.rdProjectFitHead>div:first-child{display:flex;align-items:flex-start;gap:9px;min-width:0}
+.rdMiniStep{display:grid;place-items:center;flex:0 0 auto;width:24px;height:24px;border-radius:8px;border:1px solid rgba(126,151,255,.25);background:rgba(126,151,255,.07);color:#bac6f5;font-size:8px;font-weight:900}
+.rdProjectFitHead>div:first-child>div{display:grid;gap:2px}
+.rdProjectFitHead b{font-size:10px}
+.rdProjectFitHead small{max-width:720px;color:var(--muted);font-size:8px;line-height:1.45}
+.rdReadinessScore{flex:0 0 auto;min-width:74px;padding:7px 9px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02);display:grid;text-align:right}
+.rdReadinessScore b{font-size:14px}.rdReadinessScore span{font-size:7px;color:var(--muted)}
+.rdReadinessScore[data-state="ready"]{border-color:rgba(120,215,170,.28);background:rgba(120,215,170,.055)}.rdReadinessScore[data-state="ready"] b{color:#91ddb3}
+.rdReadinessScore[data-state="partial"]{border-color:rgba(255,196,107,.22);background:rgba(255,196,107,.045)}.rdReadinessScore[data-state="partial"] b{color:#e7c18b}
+.rdReadinessScore[data-state="low"] b{color:#cf8895}
+
+.rdProjectMode{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:11px}
+.rdProjectMode label{position:relative}.rdProjectMode input{position:absolute;opacity:0;pointer-events:none}
+.rdProjectMode span{display:grid;gap:1px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.016);cursor:pointer}
+.rdProjectMode b{font-size:9px}.rdProjectMode small{font-size:7px;color:var(--muted)}
+.rdProjectMode input:checked+span{border-color:rgba(126,151,255,.32);background:rgba(126,151,255,.065);color:#eef2ff}
+
+.rdProjectUpload{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:8px;padding:9px;border:1px dashed rgba(149,164,193,.2);border-radius:10px;background:rgba(255,255,255,.012)}
+.rdUploadCopy{display:grid;gap:2px;min-width:0}.rdUploadCopy b{font-size:9px}.rdUploadCopy span{font-size:7px;color:var(--muted);line-height:1.45}.rdUploadCopy code{font-size:7px;color:#aebce9}
+.rdUploadActions{display:flex;gap:6px;flex:0 0 auto}.rdFileButton{position:relative;overflow:hidden;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.025);color:#b7c2d0;font-size:8px;cursor:pointer}.rdFileButton:hover{background:rgba(255,255,255,.05);color:#fff}.rdFileButton input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.rdFileSummary{margin-top:5px;color:#738196;font-size:7px}
+
+.rdProjectFields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px}
+.rdProjectFields label{display:grid;gap:4px;min-width:0}.rdProjectFields label.wide{grid-column:span 2}
+.rdProjectFields label>span{font-size:7px;color:#8997aa;text-transform:uppercase;letter-spacing:.05em}.rdProjectFields label>span small{font-size:6px;color:var(--muted-2);text-transform:none;letter-spacing:0}
+.rdProjectFields input,.rdProjectFields select,.rdProjectFields textarea{width:100%;border:1px solid var(--line);border-radius:8px;background:#070a0f;color:var(--text);outline:none;font-size:9px}
+.rdProjectFields input,.rdProjectFields select{height:35px;padding:0 9px}.rdProjectFields textarea{min-height:70px;padding:8px 9px;resize:vertical;line-height:1.45}
+.rdProjectFields input:focus,.rdProjectFields select:focus,.rdProjectFields textarea:focus{border-color:rgba(126,151,255,.55);box-shadow:0 0 0 3px rgba(126,151,255,.055)}
+.rdProjectContent{margin-top:8px;border-top:1px solid var(--line);padding-top:8px}.rdProjectContent summary{cursor:pointer;font-size:8px;color:#aab7c8}.rdProjectContent summary small{margin-left:5px;color:var(--muted-2)}
+
+.rdProjectFitActions{display:flex;align-items:center;gap:9px;margin-top:10px}.rdProjectFitActions span{font-size:7px;color:#7c899b}.rdProjectFitActions span[data-ready="true"]{color:#8fd8ae}
+.rdProjectFitResult{margin-top:9px;border-top:1px solid var(--line);padding-top:9px}
+.rdDetectedGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.rdDetectedGrid>div{padding:7px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.016);min-width:0}.rdDetectedGrid span{display:block;font-size:6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.rdDetectedGrid b{display:block;margin-top:2px;font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rdFitBlockers{display:grid;gap:5px;margin-top:7px}.rdFitBlocker,.rdFitPass{display:grid;gap:1px;padding:7px 8px;border-radius:8px;font-size:7px}.rdFitBlocker{border:1px solid rgba(255,152,166,.17);background:rgba(255,152,166,.035)}.rdFitBlocker b{color:#e8a8b1}.rdFitBlocker span{color:#987780}.rdFitPass{border:1px solid rgba(120,215,170,.16);background:rgba(120,215,170,.035)}.rdFitPass b{color:#9bdcb8}.rdFitPass span{color:#718f80}
+.rdFitQuestions{margin-top:8px}.rdFitQuestions>b{display:block;margin-bottom:5px;font-size:8px}.rdFitQuestions>div{display:grid;grid-template-columns:minmax(120px,.7fr) minmax(0,1.6fr) auto;gap:7px;align-items:center;padding:6px 0;border-top:1px solid rgba(255,255,255,.035)}.rdFitQuestions span{font-size:8px}.rdFitQuestions small{font-size:7px;color:var(--muted)}.rdFitQuestions em{font-style:normal;font-size:6px;padding:3px 5px;border-radius:999px;color:#e8adb4;background:rgba(255,152,166,.06);border:1px solid rgba(255,152,166,.14)}.rdFitQuestions em.optional{color:#a2b0c3;background:rgba(255,255,255,.025);border-color:var(--line)}
+.rdRequirements{display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:7px;border-top:1px solid var(--line)}.rdRequirements b{font-size:7px;color:#aab7c9}.rdRequirements span{font-size:7px;color:var(--muted)}
+
+@media(max-width:980px){
+  .rdProjectFields{grid-template-columns:1fr 1fr}
+  .rdDetectedGrid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:700px){
+  .rdProjectFitHead,.rdProjectUpload,.rdProjectFitActions{align-items:stretch;flex-direction:column}
+  .rdProjectMode,.rdProjectFields,.rdDetectedGrid{grid-template-columns:1fr}
+  .rdProjectFields label.wide{grid-column:auto}
+  .rdUploadActions{display:grid;grid-template-columns:1fr 1fr}
+  .rdFileButton{text-align:center}
+  .rdFitQuestions>div{grid-template-columns:1fr}
+}
