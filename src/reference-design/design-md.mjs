@@ -508,7 +508,7 @@ function slimEvidenceNode(node = {}) {
 
 export function buildEvidenceCompanion(evidence) {
   const viewports = arr(evidence?.viewports).map(vp => {
-    const semantic = arr(vp.elements).filter(evidenceNodeUseful).slice(0, 180);
+    const semantic = arr(vp.elements).filter(evidenceNodeUseful).slice(0, 300);
     return {
       name: vp.name,
       targetViewport: vp.targetViewport || vp.viewport || null,
