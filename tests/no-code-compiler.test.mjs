@@ -77,11 +77,12 @@ test("no-code compiler builds standalone HTML from verified evidence without an 
   assert.equal(result.schema,"kk-no-code-design-build/v1");
   assert.equal(result.output,"html");
   assert.match(result.previewHtml,/<!doctype html>/i);
-  assert.match(result.previewHtml,/VERIFIED DESIGN/);
+  assert.match(result.previewHtml,/Launch your idea/);
+  assert.equal(result.summary.renderer,"pixel-reference");
   const hero=result.model.regions.find(x=>x.kind==="Hero");
   assert.ok(hero);
   assert.ok(hero.children.some(x=>x.kind==="Button"),"measured child controls should be attached to their containing region");
-  assert.match(result.previewHtml,/min-height:620px/);
+  assert.match(result.previewHtml,/kk-node-3/);
   assert.equal(result.model.viewports.desktop.width,1440);
   assert.equal(result.model.viewports.tablet.width,820);
   assert.equal(result.model.viewports.mobile.width,390);
@@ -134,7 +135,7 @@ test("compiler rejects non-evidence input instead of guessing",()=>{
 });
 
 
-test("project-aware accurate build uses real content and exports a safe React patch",()=>{
+test("project-aware Pixel Accurate build preserves reference content and exports a safe React patch",()=>{
   const projectFiles=[
     {path:"package.json",name:"package.json",text:JSON.stringify({
       name:"acme-app",
@@ -170,13 +171,13 @@ test("project-aware accurate build uses real content and exports a safe React pa
     }
   });
   assert.equal(result.output,"react");
-  assert.match(result.previewHtml,/Operate faster with Acme/);
-  assert.match(result.previewHtml,/Start free/);
-  assert.match(result.previewHtml,/\/hero\.webp/);
+  assert.match(result.previewHtml,/Launch your idea/);
+  assert.match(result.previewHtml,/Start/);
+  assert.equal(result.previewHtml.includes("Operate faster with Acme"),false);
   assert.equal(result.summary.projectStack,"react");
   assert.ok(result.summary.projectFitScore>=85);
   assert.equal(result.summary.accurateReady,true);
-  assert.equal(result.summary.renderer,"hierarchy-exact");
+  assert.equal(result.summary.renderer,"pixel-reference");
   assert.ok(result.summary.hierarchyNodes>=6);
   assert.equal(result.previewHtml.includes("Replace this placeholder content"),false);
   assert.equal(result.previewHtml.includes(">Typography<"),false);
@@ -228,7 +229,7 @@ test("new project ZIP carries small uploaded portable assets",()=>{
   const result=compileNoCodeDesign({
     evidence:evidence(),
     markdown:"# DESIGN.md",
-    options:{output:"auto",contentMode:"placeholders",fidelity:"accurate"},
+    options:{output:"auto",contentMode:"placeholders",fidelity:"balanced"},
     projectContext:{
       mode:"new",
       stack:"react",
@@ -250,7 +251,7 @@ test("new project ZIP carries small uploaded portable assets",()=>{
 });
 
 
-test("Accurate renderer preserves measured hierarchy while substituting target-owned content",()=>{
+test("Pixel Accurate renderer preserves measured hierarchy and reference-owned content",()=>{
   const projectFiles=[
     {path:"package.json",name:"package.json",text:JSON.stringify({name:"deep-app",packageManager:"pnpm@10.28.0",dependencies:{react:"19.0.0",vite:"7.0.0"}})},
     ...["App","Header","Hero","Nav","Card","Footer","Form","CTA"].map(name=>({path:`src/${name}.jsx`,name:`${name}.jsx`,text:`export default function ${name}(){return <div>${name} project content</div>}`})),
@@ -265,11 +266,11 @@ test("Accurate renderer preserves measured hierarchy while substituting target-o
       heroTitle:"Target headline",heroBody:"Target body",primaryCta:"Target action",navItems:"Workspace, Pricing"
     }
   });
-  assert.equal(result.summary.renderer,"hierarchy-exact");
+  assert.equal(result.summary.renderer,"pixel-reference");
   assert.match(result.previewHtml,/kk-node-/);
-  assert.match(result.previewHtml,/Target headline/);
-  assert.match(result.previewHtml,/Target action/);
-  assert.equal(result.previewHtml.includes("Launch your idea"),false,"reference literal copy must not become target content");
+  assert.match(result.previewHtml,/Launch your idea/);
+  assert.match(result.previewHtml,/Start/);
+  assert.equal(result.previewHtml.includes("Target headline"),false,"Pixel Accurate mode must not substitute target copy before visual certification");
   assert.equal(result.previewHtml.includes("Evidence-led content placeholder"),false);
 });
 
@@ -356,5 +357,47 @@ test("generated project ZIP uses DEFLATE for compressible source entries",()=>{
   assert.equal(zip.readUInt32LE(0),0x04034b50);
   assert.equal(zip.readUInt16LE(8),8,"first generated source entry should use ZIP DEFLATE");
   assert.equal(result.summary.zipBytes,zip.length);
+});
+
+test("Pixel Accurate preserves reference SVG, media URLs, pseudo-elements, fonts and interaction states",()=>{
+  const e=evidence();
+  const desktop=e.viewports.find(v=>v.name==="desktop");
+  const hero=desktop.representativeElements.find(x=>x.selector==="section.hero");
+  hero.style.backgroundImage='url("https://example.com/hero-bg.webp")';
+  hero.pseudoBefore={content:'""',display:"block",position:"absolute",width:"20px",height:"20px",backgroundColor:"rgb(255, 0, 0)"};
+  const image=desktop.representativeElements.find(x=>x.tag==="img");
+  image.attrs={...image.attrs,src:"https://example.com/reference-hero.webp",srcset:"https://example.com/reference-hero@2x.webp 2x",sizes:"100vw",alt:"Reference hero"};
+  desktop.representativeElements.push({
+    selector:"section.hero svg",parentSelector:"section.hero",ancestorSelectors:["section.hero"],childIndex:3,depth:2,
+    tag:"svg",className:"brand-mark",label:"brand mark",text:"",directText:"",rect:{x:100,y:120,width:40,height:40},
+    style:{display:"block",position:"static",width:"40px",height:"40px",color:"rgb(0, 0, 0)",backgroundColor:"rgba(0, 0, 0, 0)"},
+    interactive:false
+  });
+  e.assets.svgs=[{
+    selector:"section.hero svg",
+    markup:'<svg viewBox="0 0 40 40"><path d="M0 0h40v40H0z" fill="#123456"/></svg>'
+  }];
+  e.fontFaces=['@font-face{font-family:"ReferenceFont";src:url("https://example.com/reference.woff2") format("woff2");font-weight:400}'];
+  e.interactions=[{selector:"section.hero button",hover:{backgroundColor:{before:"rgb(0,0,0)",after:"rgb(1, 2, 3)"}},focus:{outline:{before:"none",after:"2px solid rgb(4, 5, 6)"}}}];
+
+  const result=compileNoCodeDesign({
+    evidence:e,
+    markdown:"# DESIGN.md",
+    options:{output:"html",contentMode:"placeholders",fidelity:"accurate"}
+  });
+
+  assert.equal(result.contentMode,"reference-exact");
+  assert.equal(result.summary.renderer,"pixel-reference");
+  assert.match(result.previewHtml,/<base href="https:\/\/example\.com\/"/);
+  assert.match(result.previewHtml,/reference-hero\.webp/);
+  assert.match(result.previewHtml,/reference-hero@2x\.webp 2x/);
+  assert.match(result.previewHtml,/<svg[^>]*kk-node-[^>]*brand-mark|<svg[^>]*brand-mark[^>]*kk-node-/);
+  assert.match(result.previewHtml,/M0 0h40v40H0z/);
+  assert.match(result.previewHtml,/background-image:url\("https:\/\/example\.com\/hero-bg\.webp"\)/);
+  assert.match(result.previewHtml,/::before\{/);
+  assert.match(result.previewHtml,/@font-face/);
+  assert.match(result.previewHtml,/reference\.woff2/);
+  assert.match(result.previewHtml,/:hover\{background-color:rgb\(1, 2, 3\)\}/);
+  assert.match(result.previewHtml,/:focus\{outline:2px solid rgb\(4, 5, 6\)\}/);
 });
 

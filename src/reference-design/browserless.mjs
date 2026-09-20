@@ -791,7 +791,27 @@ const snapshotScript = ({ selectors, maxElements }) => {
   function pseudo(el, which) {
     const s = getComputedStyle(el, which);
     if (!s || !s.content || s.content === "none") return null;
-    return { content: s.content, color: s.color, backgroundColor: s.backgroundColor, width: s.width, height: s.height, position: s.position, transform: s.transform };
+    return {
+      content: compactCssValue(s.content),
+      display:s.display, position:s.position, top:s.top, right:s.right, bottom:s.bottom, left:s.left,
+      color:s.color, backgroundColor:s.backgroundColor, backgroundImage:compactCssValue(s.backgroundImage),
+      width:s.width, height:s.height, opacity:s.opacity, border:s.border, borderRadius:s.borderRadius,
+      fontFamily:s.fontFamily, fontSize:s.fontSize, fontWeight:s.fontWeight, lineHeight:s.lineHeight,
+      transform:s.transform, transformOrigin:s.transformOrigin, zIndex:s.zIndex, pointerEvents:s.pointerEvents
+    };
+  }
+  function safeSvgMarkup(el) {
+    if (el?.tagName?.toLowerCase() !== "svg") return "";
+    const clone=el.cloneNode(true);
+    clone.querySelectorAll("script,foreignObject").forEach(node=>node.remove());
+    for(const node of [clone,...clone.querySelectorAll("*")]){
+      for(const attr of [...node.attributes]){
+        const name=attr.name.toLowerCase(), value=String(attr.value||"").trim();
+        if(name.startsWith("on"))node.removeAttribute(attr.name);
+        else if(["href","xlink:href"].includes(name) && /^\s*javascript:/i.test(value))node.removeAttribute(attr.name);
+      }
+    }
+    return clone.outerHTML.slice(0,16000);
   }
   function role(el) { return el.getAttribute("role") || null; }
   function label(el) {
@@ -818,8 +838,10 @@ const snapshotScript = ({ selectors, maxElements }) => {
     seen.add(selector);
     const s = style(el);
     const interactive = el.matches("a,button,input,select,textarea,summary,[role='button'],[role='link'],[role='tab'],[role='menuitem'],[tabindex]");
-    const semanticallyUseful = interactive || /^h[1-6]$/.test(el.tagName.toLowerCase()) || ["header","nav","main","aside","footer","section","form","dialog","img","svg","video","p"].includes(el.tagName.toLowerCase()) || s.position === "fixed" || s.position === "sticky" || s.animationName !== "none" || parseFloat(s.transitionDuration) > 0;
-    if (!semanticallyUseful && elements.length > 220) continue;
+    const semanticallyUseful = interactive || /^h[1-6]$/.test(el.tagName.toLowerCase()) || ["header","nav","main","aside","footer","section","article","form","dialog","img","picture","source","svg","video","p","ul","ol","li"].includes(el.tagName.toLowerCase()) || s.position === "fixed" || s.position === "sticky" || s.animationName !== "none" || parseFloat(s.transitionDuration) > 0;
+    // Keep measured wrappers in the raw snapshot. The compact-evidence stage
+    // later retains only useful nodes plus their required ancestors.
+    void semanticallyUseful;
     const ancestors=[]; let parent=el.parentElement; let depth=0;
     while(parent && depth<8){ const q=selectorFor(parent); if(q)ancestors.push(q); parent=parent.parentElement; depth++; }
     const parentSelector=selectorFor(el.parentElement);
@@ -835,20 +857,35 @@ const snapshotScript = ({ selectors, maxElements }) => {
       className: typeof el.className === "string" ? el.className.slice(0,220) : "",
       label: label(el),
       text: (el.textContent || "").replace(/\s+/g," ").trim().slice(0,420),
+      directText: [...el.childNodes].filter(node=>node.nodeType===Node.TEXT_NODE).map(node=>node.textContent||"").join(" ").replace(/\s+/g," ").trim().slice(0,420),
       interactive,
       rect: r,
       style: s,
       attrs: {
+        id: el.id || null,
         href: el.getAttribute("href"),
         src: compactCssValue(el.currentSrc || el.getAttribute("src") || ""),
+        srcset: compactCssValue(el.getAttribute("srcset") || ""),
+        sizes: el.getAttribute("sizes"),
         alt: el.getAttribute("alt"),
+        title: el.getAttribute("title"),
         placeholder: el.getAttribute("placeholder"),
         type: el.getAttribute("type"),
+        width: el.getAttribute("width"),
+        height: el.getAttribute("height"),
+        loading: el.getAttribute("loading"),
+        poster: compactCssValue(el.getAttribute("poster") || ""),
+        autoplay: el.hasAttribute("autoplay"),
+        loop: el.hasAttribute("loop"),
+        muted: el.hasAttribute("muted"),
+        controls: el.hasAttribute("controls"),
+        playsinline: el.hasAttribute("playsinline"),
         ariaExpanded: el.getAttribute("aria-expanded"),
         ariaSelected: el.getAttribute("aria-selected"),
         ariaChecked: el.getAttribute("aria-checked"),
         ariaDisabled: el.getAttribute("aria-disabled")
       },
+      markup: safeSvgMarkup(el) || undefined,
       pseudoBefore: pseudo(el,"::before"),
       pseudoAfter: pseudo(el,"::after")
     });
@@ -879,13 +916,14 @@ const pageEvidenceScript = ({ selectors }) => {
     }
     return parts.join(" > ");
   }
-  const media = new Set(), containers = new Set();
+  const media = new Set(), containers = new Set(), fontFaces = new Set();
   const styleSheets = { total: document.styleSheets.length, readable: 0, blocked: 0 };
   function walkRules(rules) {
     for (const rule of rules || []) {
       try {
         if (rule.constructor?.name === "CSSMediaRule") media.add(rule.conditionText || rule.media?.mediaText || "");
         if (rule.constructor?.name === "CSSContainerRule") containers.add(rule.conditionText || "");
+        if (rule.constructor?.name === "CSSFontFaceRule" && rule.cssText && !/data:/i.test(String(rule.cssText))) fontFaces.add(String(rule.cssText).slice(0,12000));
         if (rule.cssRules) walkRules(rule.cssRules);
       } catch {}
     }
@@ -908,7 +946,19 @@ const pageEvidenceScript = ({ selectors }) => {
   }
   const fonts=[];
   try { for(const f of document.fonts || []) fonts.push({family:f.family,style:f.style,weight:f.weight,stretch:f.stretch,status:f.status}); } catch {}
-  const svgs=[...document.querySelectorAll("svg")].slice(0,120).map(el=>({selector:selectorFor(el),className:typeof el.className?.baseVal==="string"?el.className.baseVal:"",viewBox:el.getAttribute("viewBox"),width:el.getAttribute("width"),height:el.getAttribute("height"),fill:el.getAttribute("fill"),stroke:el.getAttribute("stroke")}));
+  function safeSvgMarkup(el){
+    const clone=el.cloneNode(true);
+    clone.querySelectorAll("script,foreignObject").forEach(node=>node.remove());
+    for(const node of [clone,...clone.querySelectorAll("*")]){
+      for(const attr of [...node.attributes]){
+        const name=attr.name.toLowerCase(),value=String(attr.value||"").trim();
+        if(name.startsWith("on"))node.removeAttribute(attr.name);
+        else if(["href","xlink:href"].includes(name)&&/^\s*javascript:/i.test(value))node.removeAttribute(attr.name);
+      }
+    }
+    return clone.outerHTML.slice(0,16000);
+  }
+  const svgs=[...document.querySelectorAll("svg")].slice(0,100).map(el=>({selector:selectorFor(el),className:typeof el.className?.baseVal==="string"?el.className.baseVal:"",viewBox:el.getAttribute("viewBox"),width:el.getAttribute("width"),height:el.getAttribute("height"),fill:el.getAttribute("fill"),stroke:el.getAttribute("stroke"),markup:safeSvgMarkup(el)}));
   function assetUrl(value) {
     const v=String(value||"");
     return v.startsWith("data:") ? "data:[inline-asset-omitted]" : v;
@@ -921,6 +971,7 @@ const pageEvidenceScript = ({ selectors }) => {
     containerQueries:[...containers].filter(Boolean),
     animations,
     fonts,
+    fontFaces:[...fontFaces].slice(0,80),
     styleSheets,
     assets:{svgs,images,videos,canvasCount:document.querySelectorAll("canvas").length},
     scroll:{behavior:getComputedStyle(document.documentElement).scrollBehavior,sticky}

@@ -1,9 +1,9 @@
 {
   "name": "kk-frontend",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "private": true,
   "type": "module",
-  "description": "KK-FRONTEND — compressed large-build transport with optional Cloudflare R2 overflow, project-aware reconstruction and visual certification",
+  "description": "KK-FRONTEND — Pixel Accurate reference reconstruction, large-build transport, project-aware migration and visual certification",
   "engines": {
     "node": ">=22"
   },

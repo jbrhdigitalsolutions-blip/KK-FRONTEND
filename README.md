@@ -1,3 +1,11 @@
+# KK-FRONTEND v0.9.4 — PIXEL ACCURATE REFERENCE RENDERER
+
+v0.9.4 upgrades **Accurate** into an explicit reference-preserving visual mode. It uses measured hierarchy, reference text/media, inline SVG evidence, pseudo-elements, responsive computed styles, font-face evidence and sampled interaction/motion states so visual certification compares like-for-like pixels. Balanced and Inspired remain the target-content adaptation paths.
+
+Repeated computed styles are interned in DESIGN-EVIDENCE so Pixel Accurate can retain more hierarchy evidence without wasting the Vercel payload budget. This release builds on v0.9.3 large-build gzip/R2 transport.
+
+---
+
 # KK-FRONTEND v0.9.3 — LARGE BUILD TRANSPORT
 
 v0.9.3 removes the practical Vercel Build Page ceiling for text-heavy Whole Page evidence. Requests above the direct 3.8 MB safety budget are gzip-compressed in the browser. If a payload still does not fit, KK-FRONTEND can spill it through a private Cloudflare R2 overflow transport in 2 MB chunks. Oversized ZIP responses can also be downloaded through a short-lived R2 presigned URL.

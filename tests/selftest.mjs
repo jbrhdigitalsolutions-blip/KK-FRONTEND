@@ -17,7 +17,7 @@ assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","web","index.html")))
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","browser","scanner.mjs")));
 const pkg=JSON.parse(fs.readFileSync(path.join(CONFIG.packageRoot,"package.json"),"utf8"));
 assert.equal(pkg.name,"kk-frontend");
-assert.equal(pkg.version,"0.9.3");
+assert.equal(pkg.version,"0.9.4");
 assert.equal(pkg.packageManager,"pnpm@10.28.0");
 assert.ok(pkg.dependencies.playwright);
 const scanner=fs.readFileSync(path.join(CONFIG.packageRoot,"src","browser","scanner.mjs"),"utf8");
@@ -55,7 +55,7 @@ for(const marker of ["scanGitHubProject","parseGitHubRepoUrl","kk-project-github
 const projectFit=fs.readFileSync(path.join(CONFIG.packageRoot,"src","no-code","project-fit.mjs"),"utf8");
 for(const marker of ["analyzeProjectContext","sourceIntelligence","websiteContent","routeFromWebsitePath","targetSourceCandidates","deliveryMode","targetResolution","packageRoot","integrationSupportFiles","newProjectSupportFiles","kk-project-fit/v1","APPLY-WINDOWS.ps1","APPLY-MAC.command"]) assert.ok(projectFit.includes(marker),`project-fit marker missing: ${marker}`);
 const noCodeCompiler=fs.readFileSync(path.join(CONFIG.packageRoot,"src","no-code","compiler.mjs"),"utf8");
-for(const marker of ["kk-no-code-design-build/v1","compileNoCodeDesign","buildReferenceTree","referenceTreeMarkup","referenceTreeCss","hierarchy-exact","zipStore","standaloneHtml","reactFiles","nextFiles"]) assert.ok(noCodeCompiler.includes(marker),`no-code compiler marker missing: ${marker}`);
+for(const marker of ["kk-no-code-design-build/v1","compileNoCodeDesign","buildReferenceTree","referenceTreeMarkup","referenceTreeCss","pixel-reference","zipStore","standaloneHtml","reactFiles","nextFiles"]) assert.ok(noCodeCompiler.includes(marker),`no-code compiler marker missing: ${marker}`);
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","web","reference-design.html")));
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"public","reference-design.html")));
 const referenceDesign=fs.readFileSync(path.join(CONFIG.packageRoot,"src","reference-design","design-md.mjs"),"utf8");
@@ -68,4 +68,4 @@ const web=fs.readFileSync(path.join(CONFIG.packageRoot,"src","web","index.html")
 for(const marker of ["Reference Design Picker","Generate Source Code","pickerOverlay"]) assert.ok(web.includes(marker),`design picker marker missing: ${marker}`);
 assert.ok(web.includes("Design Explorer → Build Page"),"no-code Design Explorer page link missing");
 assert.ok(web.includes("verifyAfterBtn"),"post-change visual verification UI missing");
-console.log("KK-FRONTEND v0.9.3 selftest PASS");
+console.log("KK-FRONTEND v0.9.4 selftest PASS");

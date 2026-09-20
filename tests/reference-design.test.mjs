@@ -252,3 +252,26 @@ test("local and Vercel static copies stay byte-identical", async () => {
     assert.equal(a, b, name + " must stay in sync");
   }
 });
+
+test("compact evidence keeps fidelity-critical ancestors and reference font/SVG evidence",()=>{
+  const e=syntheticEvidence();
+  e.viewports[0].elements=[
+    {selector:"body",tag:"body",rect:{x:0,y:0,width:1440,height:1800},style:{display:"block"}},
+    {selector:"main > div",parentSelector:"body",ancestorSelectors:["body"],childIndex:0,depth:1,tag:"div",rect:{x:0,y:72,width:1440,height:600},style:{display:"block",backgroundColor:"rgba(0, 0, 0, 0)"}},
+    {selector:"main > div > h1",parentSelector:"main > div",ancestorSelectors:["main > div","body"],childIndex:0,depth:2,tag:"h1",text:"Reference heading",directText:"Reference heading",rect:{x:80,y:160,width:600,height:90},style:{display:"block",fontSize:"64px"}}
+  ];
+  e.fontFaces=['@font-face{font-family:"Reference";src:url("https://example.com/reference.woff2")}'];
+  e.assets.svgs=[{selector:"#logo",markup:'<svg viewBox="0 0 10 10"><path d="M0 0h10v10H0z"/></svg>'}];
+  const compact=buildEvidenceCompanion(e);
+  const selectors=compact.viewports[0].representativeElements.map(x=>x.selector);
+  assert.ok(selectors.includes("main > div"),"layout ancestor required by an h1 must be retained");
+  assert.ok(selectors.includes("main > div > h1"));
+  const compactHeading=compact.viewports[0].representativeElements.find(x=>x.tag==="h1");
+  assert.equal(compactHeading.directText,"Reference heading");
+  assert.equal(Number.isInteger(compactHeading.styleRef),true);
+  assert.equal(Object.hasOwn(compactHeading,"style"),false);
+  assert.ok(compact.styles.length>0);
+  assert.match(compact.fontFaces[0],/reference\.woff2/);
+  assert.match(compact.assets.svgs[0].markup,/<path/);
+});
+
