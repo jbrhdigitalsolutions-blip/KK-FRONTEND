@@ -1,5 +1,6 @@
 import { candidateFamily, classifyCandidate } from "../reference-design/design-md.mjs";
 import { analyzeProjectContext, integrationSupportFiles, newProjectSupportFiles } from "./project-fit.mjs";
+import { deflateRawSync } from "node:zlib";
 
 const ALLOWED_OUTPUTS = new Set(["html","react","next"]);
 const ALLOWED_CONTENT = new Set(["placeholders","reference-labels"]);
@@ -578,17 +579,20 @@ function zipStore(files){
   for(const file of files){
     const name=Buffer.from(file.path.replaceAll("\\","/"));
     const data=file.encoding==="base64" ? Buffer.from(file.content,"base64") : Buffer.from(file.content,"utf8");
+    const deflated=deflateRawSync(data,{level:6});
+    const method=deflated.length+16<data.length ? 8 : 0;
+    const stored=method===8 ? deflated : data;
     const crc=crc32(data);
     const local=Buffer.alloc(30+name.length);
-    local.writeUInt32LE(0x04034b50,0);local.writeUInt16LE(20,4);local.writeUInt16LE(0,6);local.writeUInt16LE(0,8);
-    local.writeUInt16LE(0,10);local.writeUInt16LE(0,12);local.writeUInt32LE(crc,14);local.writeUInt32LE(data.length,18);local.writeUInt32LE(data.length,22);local.writeUInt16LE(name.length,26);local.writeUInt16LE(0,28);name.copy(local,30);
-    locals.push(local,data);
+    local.writeUInt32LE(0x04034b50,0);local.writeUInt16LE(20,4);local.writeUInt16LE(0,6);local.writeUInt16LE(method,8);
+    local.writeUInt16LE(0,10);local.writeUInt16LE(0,12);local.writeUInt32LE(crc,14);local.writeUInt32LE(stored.length,18);local.writeUInt32LE(data.length,22);local.writeUInt16LE(name.length,26);local.writeUInt16LE(0,28);name.copy(local,30);
+    locals.push(local,stored);
     const central=Buffer.alloc(46+name.length);
-    central.writeUInt32LE(0x02014b50,0);central.writeUInt16LE(20,4);central.writeUInt16LE(20,6);central.writeUInt16LE(0,8);central.writeUInt16LE(0,10);
-    central.writeUInt16LE(0,12);central.writeUInt16LE(0,14);central.writeUInt32LE(crc,16);central.writeUInt32LE(data.length,20);central.writeUInt32LE(data.length,24);
+    central.writeUInt32LE(0x02014b50,0);central.writeUInt16LE(20,4);central.writeUInt16LE(20,6);central.writeUInt16LE(0,8);central.writeUInt16LE(method,10);
+    central.writeUInt16LE(0,12);central.writeUInt16LE(0,14);central.writeUInt32LE(crc,16);central.writeUInt32LE(stored.length,20);central.writeUInt32LE(data.length,24);
     central.writeUInt16LE(name.length,28);central.writeUInt16LE(0,30);central.writeUInt16LE(0,32);central.writeUInt16LE(0,34);central.writeUInt16LE(0,36);central.writeUInt32LE(0,38);central.writeUInt32LE(offset,42);name.copy(central,46);
     centrals.push(central);
-    offset+=local.length+data.length;
+    offset+=local.length+stored.length;
   }
   const centralSize=centrals.reduce((n,b)=>n+b.length,0);
   const end=Buffer.alloc(22);
