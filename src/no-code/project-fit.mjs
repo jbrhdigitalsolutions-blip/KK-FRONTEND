@@ -264,10 +264,12 @@ foreach($Rel in $Files){
   $Dst=Join-Path $ProjectRoot $Rel
   if(Test-Path -LiteralPath $Dst){
     $Backup=Join-Path $BackupRoot $Rel
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Backup) | Out-Null
+    $BackupParent=Split-Path -Parent $Backup
+    if($BackupParent){New-Item -ItemType Directory -Force -Path $BackupParent | Out-Null}
     Copy-Item -LiteralPath $Dst -Destination $Backup -Force
   }
-  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Dst) | Out-Null
+  $DstParent=Split-Path -Parent $Dst
+  if($DstParent){New-Item -ItemType Directory -Force -Path $DstParent | Out-Null}
   Copy-Item -LiteralPath $Src -Destination $Dst -Force
 }
 Write-Host "Design patch applied. Backup: $BackupRoot" -ForegroundColor Green
