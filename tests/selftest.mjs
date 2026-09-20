@@ -47,8 +47,10 @@ assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"src","web","reference-desi
 assert.ok(fs.existsSync(path.join(CONFIG.packageRoot,"public","reference-design.html")));
 const referenceDesign=fs.readFileSync(path.join(CONFIG.packageRoot,"src","reference-design","design-md.mjs"),"utf8");
 for(const marker of ["Verified Evidence Summary","buildEvidenceCompanion","kk-reference-design-md/v2"]) assert.ok(referenceDesign.includes(marker),`reference design marker missing: ${marker}`);
+const designExplorer=fs.readFileSync(path.join(CONFIG.packageRoot,"src","web","reference-design.html"),"utf8");
+for(const marker of ["familyFilters","selectFiltered","Essential design","No coding agent required"]) assert.ok(designExplorer.includes(marker),`Design Explorer marker missing: ${marker}`);
 const browserless=fs.readFileSync(path.join(CONFIG.packageRoot,"src","reference-design","browserless.mjs"),"utf8");
-for(const marker of ["setExactViewport","installNetworkGuard","kk-reference-design-evidence/v2"]) assert.ok(browserless.includes(marker),`browserless hardening marker missing: ${marker}`);
+for(const marker of ["setExactViewport","installNetworkGuard","kk-reference-design-evidence/v2","kk-reference-design-inspection/v2","familyCounts"]) assert.ok(browserless.includes(marker),`browserless hardening marker missing: ${marker}`);
 const web=fs.readFileSync(path.join(CONFIG.packageRoot,"src","web","index.html"),"utf8");
 for(const marker of ["Reference Design Picker","Generate Source Code","pickerOverlay"]) assert.ok(web.includes(marker),`design picker marker missing: ${marker}`);
 assert.ok(web.includes("Reference → DESIGN.md"),"web-only DESIGN.md page link missing");
