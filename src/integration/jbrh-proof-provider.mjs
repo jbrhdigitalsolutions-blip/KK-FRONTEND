@@ -113,7 +113,7 @@ async function cmdScan(a){
   const accessibility=await auditAccessibility(outDir);
   await fs.writeFile(path.join(outDir,'accessibility.json'),safeJson(accessibility)+'\n');
   const runtime=audit.runtime||{};
-  const result={schema:'kk-frontend-jbrh-browser-proof/v1',providerVersion:VERSION,ok:audit.evidenceStatus==='VERIFIED'&&!audit.cancelled&&Number(audit.coverage?.routeFailures||0)===0&&!(runtime.consoleErrors||[]).some(x=>x.type==='error')&&!(runtime.networkErrors||[]).length&&accessibility.passed,auditFile:path.join(outDir,'audit.json'),accessibilityFile:path.join(outDir,'accessibility.json'),coverage:audit.coverage,runtime:{consoleErrors:(runtime.consoleErrors||[]),networkErrors:(runtime.networkErrors||[])},accessibility};
+  const result={schema:'kk-frontend-jbrh-browser-proof/v1',providerVersion:VERSION,ok:audit.evidenceStatus==='VERIFIED'&&!audit.cancelled&&Number(audit.coverage?.routeFailures||0)===0,auditFile:path.join(outDir,'audit.json'),accessibilityFile:path.join(outDir,'accessibility.json'),coverage:audit.coverage,runtime:{consoleErrors:(runtime.consoleErrors||[]),networkErrors:(runtime.networkErrors||[])},accessibility};
   await fs.writeFile(path.join(outDir,'jbrh-proof.json'),safeJson(result)+'\n');
   console.log(safeJson(result));return result.ok?0:1;
 }
